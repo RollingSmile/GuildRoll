@@ -1,0 +1,42 @@
+## Interface: 11200
+## Title: retroll  
+## Author: Excinerus
+## X-Website: https://github.com/Excinerus/retroll 
+## X-Category: Guild
+## X-Credits: shooty,Roadblock, Qcat(zhCN)
+## Version: 1.1
+## X-Alpha: 
+## OptionalDeps: Ace2
+## SavedVariables: RetRoll_saychannel, RetRoll_groupbyclass, RetRoll_groupbyarmor, RetRoll_groupbyrole, RetRoll_raidonly, RetRoll_dbver, RetRoll_debug, RetRoll_fubar
+## SavedVariablesPerCharacter: RetRoll_main, RetRoll_log, RetRoll_looted, RetRoll_decay, RetRoll_minPE, RetRoll_reservechannel, RetRoll_progress, RetRoll_discount, RetRollAltspool, RetRoll_altpercent, RetRoll_pugStanding,RetRoll_showRollWindow
+
+Libs\AceLibrary\AceLibrary.lua
+Libs\AceOO-2.0\AceOO-2.0.lua
+Libs\AceEvent-2.0\AceEvent-2.0.lua
+Libs\AceAddon-2.0\AceAddon-2.0.lua
+Libs\AceHook-2.1\AceHook-2.1.lua
+Libs\AceConsole-2.0\AceConsole-2.0.lua
+Libs\AceModuleCore-2.0\AceModuleCore-2.0.lua
+Libs\AceDB-2.0\AceDB-2.0.lua
+Libs\AceDebug-2.0\AceDebug-2.0.lua
+Libs\AceLocale-2.2\AceLocale-2.2.lua
+
+Libs\Deformat-2.0\Deformat-2.0.lua
+Libs\Babble-Class-2.2\Babble-Class-2.2.lua
+Libs\Babble-Zone-2.2\Babble-Zone-2.2.lua
+Libs\Crayon-2.0\Crayon-2.0.lua
+Libs\Compost-2.0\Compost-2.0.lua
+Libs\Dewdrop-2.0\Dewdrop-2.0.lua
+Libs\Tablet-2.0\Tablet-2.0.lua
+Libs\Gratuity-2.0\Gratuity-2.0.lua
+Libs\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
+Libs\ChatThrottleLib.lua
+
+localization.lua
+retroll.lua 
+roll.lua
+migrations.lua 
+standings.lua 
+reserves.lua
+alts.lua
+logs.lua
