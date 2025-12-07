@@ -1,10 +1,10 @@
 ## Interface: 11200
-## Title: retroll  
-## Author: Excinerus
-## X-Website: https://github.com/Excinerus/retroll 
+## Title: GuildEP
+## Author: RollingSmile
+## X-Website: https://github.com/RollingSmile/GuildEP
 ## X-Category: Guild
-## X-Credits: shooty,Roadblock, Qcat(zhCN)
-## Version: 1.1
+## X-Credits: shooty,Roadblock, Qcat(zhCN), Excinerus
+## Version: 1.0
 ## X-Alpha: 
 ## OptionalDeps: Ace2
 ## SavedVariables: RetRoll_saychannel, RetRoll_groupbyclass, RetRoll_groupbyarmor, RetRoll_groupbyrole, RetRoll_raidonly, RetRoll_dbver, RetRoll_debug, RetRoll_fubar
