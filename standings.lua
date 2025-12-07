@@ -1,3 +1,4 @@
+-- FILE CONTENT START --
 local T = AceLibrary("Tablet-2.0")
 local D = AceLibrary("Dewdrop-2.0")
 local C = AceLibrary("Crayon-2.0")
@@ -10,7 +11,6 @@ RetRoll_standings = RetRoll:NewModule("RetRoll_standings", "AceDB-2.0")
 local groupings = {
   "RetRoll_groupbyclass",
   "RetRoll_groupbyarmor",
-  "RetRoll_groupbyrole",
 }
 local PLATE, MAIL, LEATHER, CLOTH = 4,3,2,1
 local DPS, CASTER, HEALER, TANK = 4,3,2,1
@@ -30,23 +30,6 @@ local armor_text = {
   [LEATHER] = L["LEATHER"],
   [MAIL] = L["MAIL"],
   [PLATE] = L["PLATE"],
-}
-local class_to_role = {
-  PALADIN = {HEALER,DPS,TANK,CASTER},
-  PRIEST = {HEALER,CASTER},
-  DRUID = {HEALER,TANK,DPS,CASTER},
-  SHAMAN = {HEALER,DPS,CASTER},
-  MAGE = {CASTER},
-  WARLOCK = {CASTER},
-  ROGUE = {DPS},
-  HUNTER = {DPS},
-  WARRIOR = {TANK,DPS},
-}
-local role_text = {
-  [TANK] = L["TANK"],
-  [HEALER] = L["HEALER"],
-  [CASTER] = L["CASTER"],
-  [DPS] = L["PHYS DPS"],
 }
 local shooty_export = CreateFrame("Frame", "shooty_exportframe", UIParent)
 shooty_export:SetWidth(250)
@@ -192,28 +175,6 @@ function RetRoll_standings:getArmorClass(class)
   return class_to_armor[class] or 0
 end
 
-function RetRoll_standings:getRolesClass(roster)
-  local roster_num = table.getn(roster)
-  for i=1,roster_num do
-    local player = roster[i]
-    local name, lclass, armor_class, ep, gp, pr = unpack(player)
-    local class = class_cache[lclass]
-    local roles = class_to_role[class]
-    if not (roles) then
-      player[3]=0
-    else
-      for i,role in ipairs(roles) do
-        if i==1 then
-          player[3]=role
-        else
-          table.insert(roster,{player[1],player[2],role,player[4],player[5],player[6]})
-        end
-      end      
-    end
-  end
-  return roster
-end 
-
 function RetRoll_standings:OnEnable()
   if not T:IsRegistered("RetRoll_standings") then
     T:Register("RetRoll_standings",
@@ -221,10 +182,10 @@ function RetRoll_standings:OnEnable()
         T:SetTitle(L["Standings"])
         self:OnTooltipUpdate()
       end,
-  		"showTitleWhenDetached", true,
-  		"showHintWhenDetached", true,
-  		"cantAttach", true,
-  		"menu", function()
+       	"showTitleWhenDetached", true,
+       	"showHintWhenDetached", true,
+       	"cantAttach", true,
+       	"menu", function()
         D:AddLine(
           "text", L["Raid Only"],
           "tooltipText", L["Only show members in raid."],
@@ -244,12 +205,6 @@ function RetRoll_standings:OnEnable()
           "func", function() RetRoll_standings:ToggleGroupBy("RetRoll_groupbyarmor") end
         )
         D:AddLine(
-          "text", L["Group by roles"],
-          "tooltipText", L["Group members by roles."],
-          "checked", RetRoll_groupbyrole,
-          "func", function() RetRoll_standings:ToggleGroupBy("RetRoll_groupbyrole") end
-        )
-        D:AddLine(
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
           "func", function() RetRoll_standings:Refresh() end
@@ -266,7 +221,7 @@ function RetRoll_standings:OnEnable()
           "func", function() RetRoll_standings:Import() end
         )
         end
-  		end
+       	end
     )
   end
   if not T:IsAttached("RetRoll_standings") then
@@ -343,27 +298,11 @@ function RetRoll_standings:ToggleRaidOnly()
 end
 
 local pr_sorter_standings = function(a,b)
-  --if RetRoll_minPE > 0 then
-  --  local a_over = a[4]-RetRoll_minPE >= 0
-  --  local b_over = b[4]-RetRoll_minPE >= 0
-  --  if a_over and b_over or (not a_over and not b_over) then
-  --    if a[6] ~= b[6] then
-  --      return tonumber(a[6]) > tonumber(b[6])
-  --    else
-  --      return tonumber(a[4]) > tonumber(b[4])
-  --    end
-  --  elseif a_over and (not b_over) then
-  --    return true
-  --  elseif b_over and (not a_over) then
-  --    return false
-  --  end
-  --else
     if a[6] ~= b[6] then
       return tonumber(a[6]) > tonumber(b[6])
     else
       return tonumber(a[4]) > tonumber(b[4])
     end
- -- end
 end
 -- Builds a standings table with record:
 -- name, class, armor_class, roles, EP, GP, PR
@@ -420,12 +359,6 @@ function RetRoll_standings:BuildStandingsTable()
       if (a[3] ~= b[3]) then return a[3] > b[3]
       else return pr_sorter_standings(a,b) end
     end)
-  elseif (RetRoll_groupbyrole) then
-    t = self:getRolesClass(t) -- we are subbing role into armor_class to avoid extra table creation
-    table.sort(t, function(a,b)
-    if (a[3] ~= b[3]) then return a[3] > b[3]
-      else return pr_sorter_standings(a,b) end
-    end)   
   else
     table.sort(t, pr_sorter_standings)
   end
@@ -434,88 +367,56 @@ end
 
 
 function RetRoll_standings:OnTooltipUpdate()
+  -- Create category with 2 columns: Name | EP
   local cat = T:AddCategory(
-      "columns", 4,
+      "columns", 2,
       "text",  C:Orange(L["Name"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "LEFT",  "LEFT",
-      "text2", C:Orange(L["Main Standing"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "RIGHT", "RIGHT",
-      "text3", C:Orange(L["Auxiliary"]),     "child_text3R",   1, "child_text3G",   1, "child_text3B",   1, "RIGHT", "RIGHT",
-      "text4", C:Orange(L["Roll Value"]),     "child_text4R",   1, "child_text4G",   1, "child_text4B",   0, "RIGHT", "RIGHT"
+      "text2", C:Orange(L["Main Standing"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "RIGHT", "RIGHT"
     )
   local t = self:BuildStandingsTable()
   local separator
   for i = 1, table.getn(t) do
     local displayName, class, armor_class, ep, gp, pr, originalName = unpack(t[i])
-    if (RetRoll_groupbyarmor) or (RetRoll_groupbyrole) then
+    if (RetRoll_groupbyarmor) then
       if not (separator) then
-        if (RetRoll_groupbyarmor) then
-          separator = armor_text[armor_class]
-        elseif (RetRoll_groupbyrole) then
-          separator = role_text[armor_class]
-        end
+        separator = armor_text[armor_class]
         if (separator) then
           cat:AddLine(
             "text", C:Green(separator),
-            "text2", "",
-            "text3", "",
-            "text4", ""
+            "text2", ""
           )
         end
       else
         local last_separator = separator
-        if (RetRoll_groupbyarmor) then
-          separator = armor_text[armor_class]
-        elseif (RetRoll_groupbyrole) then
-          separator = role_text[armor_class]
-        end
+        separator = armor_text[armor_class]
         if (separator) and (separator ~= last_separator) then
           cat:AddLine(
             "text", C:Green(separator),
-            "text2", "",
-            "text3", "",
-            "text4", ""
+            "text2", ""
           )          
         end
       end
     end
-	
-	local egp = math.min( gp , RetRoll.VARS.AERollCap )
-	local hf = RetRoll.VARS.AERollCap/2
-	local blue = 0
-	local green =  math.max(egp, RetRoll.VARS.AERollCap/4)/RetRoll.VARS.AERollCap *255
-	local red =  (1-( math.max(math.min(egp,RetRoll.VARS.AERollCap )-hf,0)/hf))  *255  
-	
-	if (gp<0 ) then blue = 0 red = 255 green = 0 end
+
     local text = C:Colorize(BC:GetHexColor(class), displayName)
-    local text2, text4
+    local text2
     if RetRoll_minPE > 0 and ep < RetRoll_minPE then
       text2 = C:Red(string.format("%.4g", ep))
-      text4 = C:Red(string.format("%.4g", pr))
     else
       text2 = string.format("%.4g", ep)
-      text4 =   string.format("%s (%s)",  pr,   C:Colorize( string.format("%02x%02x%02x", red,green,0 ) , egp)    ) 
     end
-	
- 
-	
 
-	if (gp > RetRoll.VARS.AERollCap ) then blue = 255 red = 128 green = 128 end
-	
-    local text3 =  C:Colorize( string.format("%02x%02x%02x", red,green,blue ) , gp)  
     if ((RetRoll._playerName) and RetRoll._playerName == originalName) or ((RetRoll_main) and RetRoll_main == originalName) then
       text = string.format("(*)%s",text)
-      --local pr_decay = RetRoll:capcalc(ep,gp)
-      --if pr_decay < 0 then
-      --  text4 = string.format("%s(|cffff0000%.4g|r)",text4,pr_decay)
-      --end
     end
     cat:AddLine(
       "text", text,
-      "text2", text2,
-      "text3", text3,
-      "text4", text4
+      "text2", text2
     )
   end
 end
 
--- GLOBALS: RetRoll_saychannel,RetRoll_groupbyclass,RetRoll_groupbyarmor,RetRoll_groupbyrole,RetRoll_raidonly,RetRoll_decay,RetRoll_minPE,RetRoll_reservechannel,RetRoll_main,RetRoll_progress,RetRoll_discount,RetRoll_log,RetRoll_dbver,RetRoll_looted
+-- GLOBALS: RetRoll_saychannel,RetRoll_groupbyclass,RetRoll_groupbyarmor,RetRoll_raidonly,RetRoll_decay,RetRoll_minPE,RetRoll_reservechannel,RetRoll_main,RetRoll_progress,RetR[...]
 -- GLOBALS: RetRoll,RetRoll_prices,RetRoll_standings,RetRoll_bids,RetRoll_loot,RetRoll_reserves,RetRollAlts,RetRoll_logs
+
+-- FILE CONTENT END --
