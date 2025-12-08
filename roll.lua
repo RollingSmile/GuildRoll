@@ -233,23 +233,18 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         return
     end
 
-    -- Update cached rank info (will set cachedRank.ready accordingly)
-    UpdateGuildRankCache()
-
     -- Rebuild the options table fresh based on current CSR visibility
     local newOptions = {
         { "EP(MS)", "roll ep" },
         { "SR", "roll sr" },
+        { "CSR", "roll csr" },
+        { "101", "roll 101" },
+        { "100", "roll 100" },
+        { "99", "roll 99" },
+        { "98", "roll 98" },
+        { "Standings", "show ep" }
     }
-    if CanSeeCSR() then
-        table.insert(newOptions, { "CSR", "roll csr" })
-    end
-    table.insert(newOptions, { "101", "roll 101" })
-    table.insert(newOptions, { "100", "roll 100" })
-    table.insert(newOptions, { "99", "roll 99" })
-    table.insert(newOptions, { "98", "roll 98" })
-    table.insert(newOptions, { "Standings", "show ep" })
-
+    
     -- Clear existing option widgets safely
     if rollOptionsFrame then
         for i = rollOptionsFrame:GetNumChildren(), 1, -1 do
