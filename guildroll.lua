@@ -483,7 +483,7 @@ function RetRoll:buildMenu()
   end
   if (needInit) or (needRefresh) then
     local members = RetRoll:buildRosterTable()
-    self:debugPrint(string.format(L["Scanning %d members for Standing data. (%s)"],table.getn(members),(RetRoll_raidonly and "Raid" or "Full")))
+    self:debugPrint(self:sf(L["Scanning %d members for Standing data. (%s)"], table.getn(members), (RetRoll_raidonly and "Raid" or "Full")))
     options.args["MainStanding"].args = RetRoll:buildClassMemberTable(members,"MainStanding")
     options.args["AuxStanding"].args = RetRoll:buildClassMemberTable(members,"AuxStanding")
     if (needInit) then needInit = false end
@@ -772,14 +772,14 @@ end
 
 
 function RetRoll:simpleSay(msg)
-  SendChatMessage(string.format("retroll: %s",msg), RetRoll_saychannel)
+  SendChatMessage(self:sf("retroll: %s", msg), RetRoll_saychannel)
 end
 
 function RetRoll:adminSay(msg)
   -- API is broken on Elysium
   -- local g_listen, g_speak, officer_listen, officer_speak, g_promote, g_demote, g_invite, g_remove, set_gmotd, set_publicnote, view_officernote, edit_officernote, set_guildinfo = GuildControlGetRankFlags() 
   -- if (officer_speak) then
-  SendChatMessage(string.format("retroll: %s",msg),"OFFICER")
+  SendChatMessage(self:sf("retroll: %s", msg),"OFFICER")
   -- end
 end
 
@@ -899,12 +899,12 @@ function RetRoll:addonComms(prefix,message,channel,sender)
           end          
         end
         if (settings_notice) and settings_notice ~= "" then
-          local sender_rank = string.format("%s(%s)",C:Colorize(BC:GetHexColor(class),sender),rank)
-          settings_notice = settings_notice..string.format(L[" settings accepted from %s"],sender_rank)
+          local sender_rank = self:sf("%s(%s)", C:Colorize(BC:GetHexColor(class), sender), rank)
+          settings_notice = settings_notice..self:sf(L[" settings accepted from %s"], sender_rank)
           self:defaultPrint(settings_notice)
-         -- self._options.args["RollValueogress_tier_header"].name = string.format(L["Progress Setting: %s"],RetRoll_progress)
-         -- self._options.args["set_discount_header"].name = string.format(L["Offspec Price: %s%%"],RetRoll_discount*100)
-          self._options.args["set_min_ep_header"].name = string.format(L["Minimum MainStanding: %s"],RetRoll_minPE)
+         -- self._options.args["RollValueogress_tier_header"].name = self:sf(L["Progress Setting: %s"], RetRoll_progress)
+         -- self._options.args["set_discount_header"].name = self:sf(L["Offspec Price: %s%%"], RetRoll_discount*100)
+          self._options.args["set_min_ep_header"].name = self:sf(L["Minimum MainStanding: %s"], RetRoll_minPE)
         end
       end
     end
@@ -1091,7 +1091,7 @@ function RetRoll:givename_ep(getname,ep,block) -- awards ep to a single characte
     alt = getname
     getname = playerNameInGuild
     ep = self:num_round(RetRoll_altpercent*ep)
-    postfix = string.format(", %s\'s Pug MainStanding Bank.",alt)
+    postfix = self:sf(", %s\'s Pug MainStanding Bank.", alt)
   elseif (RetRollAltspool) then
     local main = self:parseAlt(getname)
     if (main) then
@@ -1237,7 +1237,7 @@ function RetRoll:my_epgp_announce(use_main)
     ep,gp = (self:get_ep_v3(self._playerName) or 0), (self:get_gp_v3(self._playerName) or RetRoll.VARS.baseAE)
   end
   local baseRoll = RetRoll:GetBaseRollValue(ep,gp)
-  local msg = string.format(L["You now have: %d MainStanding %d AuxStanding + (%d)"], ep,gp,baseRoll)
+  local msg = self:sf(L["You now have: %d MainStanding %d AuxStanding + (%d)"], ep, gp, baseRoll)
   self:defaultPrint(msg)
 end
 
@@ -1260,9 +1260,9 @@ RetRoll.independentProfile = true
 function RetRoll:OnTooltipUpdate()
   local hint = L["|cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options."]
   if (admin()) then
-    hint = string.format(hint,L[" \n|cffffff00Ctrl+Click|r to toggle Reserves. \n|cffffff00Alt+Click|r to toggle Bids. \n|cffffff00Shift+Click|r to toggle Loot. \n|cffffff00Ctrl+Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Shift+Click|r to toggle Logs."])
+    hint = self:sf(hint, L[" \n|cffffff00Ctrl+Click|r to toggle Reserves. \n|cffffff00Alt+Click|r to toggle Bids. \n|cffffff00Shift+Click|r to toggle Loot. \n|cffffff00Ctrl+Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Shift+Click|r to toggle Logs."])
   else
-    hint = string.format(hint,"")
+    hint = self:sf(hint, "")
   end
   T:SetHint(hint)
 end
@@ -1357,7 +1357,7 @@ function RetRoll:buildClassMemberTable(roster,epgp)
       c[class].args[name] = { }
       c[class].args[name].type = "text"
       c[class].args[name].name = name
-      c[class].args[name].desc = string.format(desc,name)
+      c[class].args[name].desc = self:sf(desc, name)
       c[class].args[name].usage = usage
       if epgp == "MainStanding" then
         c[class].args[name].get = "suggestedAwardMainStanding"
@@ -1468,7 +1468,7 @@ function RetRoll:sendReserverResponce()
       if RetRoll_main == self._playerName then
         SendChatMessage("+","CHANNEL",nil,RetRoll.reservesChannelID)
       else
-        SendChatMessage(string.format("+%s",RetRoll_main),"CHANNEL",nil,RetRoll.reservesChannelID)
+        SendChatMessage(self:sf("+%s", RetRoll_main),"CHANNEL",nil,RetRoll.reservesChannelID)
       end
     end
   end
@@ -1812,7 +1812,7 @@ StaticPopupDialogs["RET_EP_RESERVE_AFKCHECK_RESPONCE"] = {
   end,
   OnUpdate = function(elapsed,dialog)
     this._timeout = this._timeout - elapsed
-    getglobal(dialog:GetName().."Text"):SetText(string.format(L["Reserves AFKCheck. Are you available? |cff00ff00%0d|rsec."],this._timeout))
+    getglobal(dialog:GetName().."Text"):SetText(RetRoll:sf(L["Reserves AFKCheck. Are you available? |cff00ff00%0d|rsec."], this._timeout))
     if (this._timeout<=0) then
       this._timeout = 0
       dialog:Hide()
@@ -1897,7 +1897,7 @@ function RetRoll:RollCommand(isSRRoll,isDSRRoll,isOS,bonus)
 			
 			gp = RetRoll_pugCache[key][playerName][2]
 			local inguildn = RetRoll_pugCache[key][playerName][3] or ""
-			desc = string.format("PUG(%s)",inguildn)
+			desc = self:sf("PUG(%s)", inguildn)
 		else
 			ep = 0
 			gp = 0
@@ -1951,23 +1951,23 @@ function RetRoll:RollCommand(isSRRoll,isDSRRoll,isOS,bonus)
   RandomRoll(minRoll, maxRoll)
   local cappedGP =  RetRoll:GetRollingGP(gp)
   -- Prepare the announcement message
-  local bonusText = " as "..desc.." of "..hostG
-  local message = string.format("I rolled Main Spec %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp,  bonusText)
+  local bonusText = " as "..tostring(desc).." of "..tostring(hostG)
+  local message = self:sf("I rolled Main Spec %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep, cappedGP, gp, bonusText)
   
   if(isOS) then
-    message = string.format("I rolled Off Spec %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp,  bonusText)
+    message = self:sf("I rolled Off Spec %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep, cappedGP, gp, bonusText)
   end
   if(isSRRoll) then
-    message = string.format("I rolled SR %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
+    message = self:sf("I rolled SR %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep, cappedGP, gp, bonusText)
   end
   if(isDSRRoll) then
-    message = string.format("I rolled Double SR %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
+    message = self:sf("I rolled Double SR %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep, cappedGP, gp, bonusText)
   end
 
   if bonus > 0 then
     local weeks = math.floor(bonus / 20)
-    bonusText = string.format(" +%d for %d weeks", bonus, weeks)..bonusText
-    message = string.format("I rolled Cumulative SR %d - %d with %d "..L["MainStanding"].." +%d(%d"..L["AuxStanding"]..")%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
+    bonusText = self:sf(" +%d for %d weeks", bonus, weeks)..bonusText
+    message = self:sf("I rolled Cumulative SR %d - %d with %d "..L["MainStanding"].." +%d(%d"..L["AuxStanding"]..")%s", minRoll, maxRoll, ep, cappedGP, gp, bonusText)
   end
   -- Determine the chat channel
   local chatType = UnitInRaid("player") and "RAID" or "SAY"
