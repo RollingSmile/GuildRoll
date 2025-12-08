@@ -323,9 +323,8 @@ function GuildRoll_standings:BuildStandingsTable()
     local gp = (GuildRoll:get_gp_v3(name,officernote) or GuildRoll.VARS.baseAE)
     local main, main_class, main_rank = GuildRoll:parseAlt(name,officernote)
     
-    -- Check if the player is a pug
-    local pugName = GuildRoll:getPugName(name)
-    local displayName = pugName and string.format("%s (%s)", pugName, name) or name
+    -- NoPugs: Removed getPugName call - displayName is just name
+    local displayName = name
 
     if (main) then
       if ((GuildRoll._playerName) and (name == GuildRoll._playerName)) then
