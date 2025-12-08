@@ -14,11 +14,10 @@ function GuildRoll:migration_0003_preview()
     local name, _, _, _, _, _, _, officernote, _, _ = GetGuildRosterInfo(i)
     if officernote then
       -- Match the {EP:GP} pattern (allowing negative numbers)
-      local prefix, ep, gp, postfix = string.match(officernote, "^(.-)({(%-?%d+):(%-?%d+)})(.*)$")
+      local prefix, ep, gp, postfix = string.match(officernote, "^(.-){(%-?%d+):(%-?%d+)}(.*)$")
       if ep and gp then
         local newNote = prefix .. "{" .. ep .. "}" .. postfix
         table.insert(changes, {
-          index = i,
           name = name,
           oldNote = officernote,
           newNote = newNote,
@@ -55,16 +54,31 @@ function GuildRoll:migration_0003_apply()
     return true
   end
   
-  -- Backup and apply changes
+  -- Build a map of changes by name for safer lookup
+  local changesByName = {}
   for _, change in ipairs(changes) do
-    -- Save backup
-    GuildRoll_migration_backup[change.name] = change.oldNote
-    
-    -- Apply new note
-    GuildRosterSetOfficerNote(change.index, change.newNote, true)
+    changesByName[change.name] = change
   end
   
-  self:defaultPrint(string.format(L["Migrated %d officer notes from {EP:GP} to {EP} format."], count))
+  -- Apply changes by looking up each member by name
+  local applied = 0
+  for i = 1, GetNumGuildMembers(1) do
+    local name, _, _, _, _, _, _, officernote, _, _ = GetGuildRosterInfo(i)
+    local change = changesByName[name]
+    if change then
+      -- Verify the officer note hasn't changed since preview
+      if officernote == change.oldNote then
+        -- Save backup
+        GuildRoll_migration_backup[name] = change.oldNote
+        
+        -- Apply new note
+        GuildRosterSetOfficerNote(i, change.newNote, true)
+        applied = applied + 1
+      end
+    end
+  end
+  
+  self:defaultPrint(string.format(L["Migrated %d officer notes from {EP:GP} to {EP} format."], applied))
   self:defaultPrint(L["Backup saved. Use /gpmigrate rollback to restore."])
   
   return true
@@ -91,7 +105,8 @@ function GuildRoll:migration_0003_rollback()
   
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, _, _, _, officernote, _, _ = GetGuildRosterInfo(i)
-    if GuildRoll_migration_backup[name] then
+    -- Verify the name matches before applying the backup
+    if name and GuildRoll_migration_backup[name] then
       GuildRosterSetOfficerNote(i, GuildRoll_migration_backup[name], true)
       count = count + 1
     end
