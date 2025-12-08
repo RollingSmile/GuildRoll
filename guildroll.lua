@@ -1929,7 +1929,7 @@ end
 
 function GuildRoll:CheckPugStanding()
   -- NO-OP: PUG support has been disabled
-  self:defaultPrint("PUG standing check is no longer available.")
+  self:defaultPrint("Pug standing check is no longer available.")
 end
 function GuildRoll:getAllPugs()
   -- NO-OP: PUG support has been disabled
@@ -1937,7 +1937,7 @@ function GuildRoll:getAllPugs()
 end
 function GuildRoll:updateAllPugStanding( force )
   -- NO-OP: PUG support has been disabled
-  self:defaultPrint("PUG standing updates are no longer available. PUG support has been disabled.")
+  self:defaultPrint("Pug standing updates are no longer available. Pug support has been disabled.")
 end
 
 
