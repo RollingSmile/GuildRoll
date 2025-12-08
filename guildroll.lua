@@ -637,14 +637,14 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
     self.hooks["GuildRosterSetOfficerNote"](index,note)
   else
     local name, _, _, _, _, _, _, prevnote, _, _ = GetGuildRosterInfo(index)
-    -- Check for both old format {EP:GP} and new format {EP}
-    local _,_,_,oldepgp,_ = string.find(prevnote or "","(.*)({%d+:%d+})(.*)")
+    -- Check for both old format {EP:GP} and new format {EP} (handle negative numbers)
+    local _,_,_,oldepgp,_ = string.find(prevnote or "","(.*)({%-?%d+:%-?%d+})(.*)")
     if not oldepgp then
-      _,_,_,oldepgp,_ = string.find(prevnote or "","(.*)({%d+})(.*)")
+      _,_,_,oldepgp,_ = string.find(prevnote or "","(.*)({%-?%d+})(.*)")
     end
-    local _,_,_,epgp,_ = string.find(note or "","(.*)({%d+:%d+})(.*)")
+    local _,_,_,epgp,_ = string.find(note or "","(.*)({%-?%d+:%-?%d+})(.*)")
     if not epgp then
-      _,_,_,epgp,_ = string.find(note or "","(.*)({%d+})(.*)")
+      _,_,_,epgp,_ = string.find(note or "","(.*)({%-?%d+})(.*)")
     end
     
     if (GuildRollAltspool) then
@@ -671,12 +671,12 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
         self:defaultPrint(string.format(L["|cffff0000Manually modified %s\'s note. Standing was %s|r"],name,oldepgp))
       end
     end
-    -- Sanitize based on which format is present
+    -- Sanitize based on which format is present (handle negative numbers)
     local safenote
-    if string.find(note,"({%d+:%d+})") then
-      safenote = string.gsub(note,"(.*)({%d+:%d+})(.*)",sanitizeNote)
+    if string.find(note,"({%-?%d+:%-?%d+})") then
+      safenote = string.gsub(note,"(.*)({%-?%d+:%-?%d+})(.*)",sanitizeNote)
     else
-      safenote = string.gsub(note,"(.*)({%d+})(.*)",sanitizeNote)
+      safenote = string.gsub(note,"(.*)({%-?%d+})(.*)",sanitizeNote)
     end
     return self.hooks["GuildRosterSetOfficerNote"](index,safenote)    
   end
@@ -879,20 +879,21 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
   local ep,gp = self:get_ep_v3(name,officernote), self:get_gp_v3(name,officernote)
   
   -- Check if we have new format {EP} (EP exists but GP is nil, and pattern matches {digits} not {digits:digits})
-  local has_new_format = (ep ~= nil and gp == nil and string.find(officernote,"{%d+}") and not string.find(officernote,"{%d+:%d+}"))
+  -- Use pattern that handles negative numbers consistently
+  local has_new_format = (ep ~= nil and gp == nil and string.find(officernote,"{%-?%d+}") and not string.find(officernote,"{%-?%d+:%-?%d+}"))
   
   if (ep == nil) then
     -- No EP at all - initialize with old format for backward compatibility
     local initstring = string.format("{%d:%d}",0,GuildRoll.VARS.baseAE)
     local newnote = string.format("%s%s",officernote,initstring)
-    newnote = string.gsub(newnote,"(.*)({%d+:%d+})(.*)",sanitizeNote)
+    newnote = string.gsub(newnote,"(.*)({%-?%d+:%-?%d+})(.*)",sanitizeNote)
     officernote = newnote
   elseif has_new_format then
     -- New format {EP} - sanitize with new pattern
-    officernote = string.gsub(officernote,"(.*)({%d+})(.*)",sanitizeNote)
+    officernote = string.gsub(officernote,"(.*)({%-?%d+})(.*)",sanitizeNote)
   else
     -- Old format {EP:GP} - sanitize with old pattern
-    officernote = string.gsub(officernote,"(.*)({%d+:%d+})(.*)",sanitizeNote)
+    officernote = string.gsub(officernote,"(.*)({%-?%d+:%-?%d+})(.*)",sanitizeNote)
   end
   
   GuildRosterSetOfficerNote(guild_index,officernote,true)
