@@ -1,10 +1,10 @@
 ## Interface: 11200
-## Title: guildep
+## Title: guildroll
 ## Author: RollingSmile
 ## X-Website: https://github.com/RollingSmile/GuildEP
 ## X-Category: Guild
 ## X-Credits: shooty,Roadblock, Qcat(zhCN), Excinerus
-## Version: 1.1
+## Version: 1.0
 ## X-Alpha: Test
 ## OptionalDeps: Ace2
 ## SavedVariables: GuildRoll_saychannel, GuildRoll_groupbyclass, GuildRoll_groupbyarmor, GuildRoll_groupbyrole, GuildRoll_raidonly, GuildRoll_dbver, GuildRoll_debug, GuildRoll_fubar
