@@ -3,15 +3,15 @@ local D = AceLibrary("Dewdrop-2.0")
 local C = AceLibrary("Crayon-2.0")
 
 local BC = AceLibrary("Babble-Class-2.2")
-local L = AceLibrary("AceLocale-2.2"):new("retroll")
+local L = AceLibrary("AceLocale-2.2"):new("guildroll")
 
-RetRoll_reserves = RetRoll:NewModule("RetRoll_reserves", "AceDB-2.0")
+GuildRoll_reserves = GuildRoll:NewModule("GuildRoll_reserves", "AceDB-2.0")
 
-function RetRoll_reserves:OnEnable()
-  if not T:IsRegistered("RetRoll_reserves") then
-    T:Register("RetRoll_reserves",
+function GuildRoll_reserves:OnEnable()
+  if not T:IsRegistered("GuildRoll_reserves") then
+    T:Register("GuildRoll_reserves",
       "children", function()
-        T:SetTitle(L["retroll reserves"])
+        T:SetTitle(L["guildroll reserves"])
         self:OnTooltipUpdate()
       end,
       "showTitleWhenDetached", true,
@@ -21,34 +21,34 @@ function RetRoll_reserves:OnEnable()
         D:AddLine(
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
-          "func", function() RetRoll_reserves:Refresh() end
+          "func", function() GuildRoll_reserves:Refresh() end
         )
       end      
     )
   end
-  if not T:IsAttached("RetRoll_reserves") then
-    T:Open("RetRoll_reserves")
+  if not T:IsAttached("GuildRoll_reserves") then
+    T:Open("GuildRoll_reserves")
   end
 end
 
-function RetRoll_reserves:OnDisable()
-  T:Close("RetRoll_reserves")
+function GuildRoll_reserves:OnDisable()
+  T:Close("GuildRoll_reserves")
 end
 
-function RetRoll_reserves:Refresh()
-  T:Refresh("RetRoll_reserves")
+function GuildRoll_reserves:Refresh()
+  T:Refresh("GuildRoll_reserves")
 end
 
-function RetRoll_reserves:setHideScript()
+function GuildRoll_reserves:setHideScript()
   local i = 1
   local tablet = getglobal(string.format("Tablet20DetachedFrame%d",i))
   while (tablet) and i<100 do
-    if tablet.owner ~= nil and tablet.owner == "RetRoll_reserves" then
-      RetRoll:make_escable(string.format("Tablet20DetachedFrame%d",i),"add")
+    if tablet.owner ~= nil and tablet.owner == "GuildRoll_reserves" then
+      GuildRoll:make_escable(string.format("Tablet20DetachedFrame%d",i),"add")
       tablet:SetScript("OnHide",nil)
       tablet:SetScript("OnHide",function()
-          if not T:IsAttached("RetRoll_reserves") then
-            T:Attach("RetRoll_reserves")
+          if not T:IsAttached("GuildRoll_reserves") then
+            T:Attach("GuildRoll_reserves")
             this:SetScript("OnHide",nil)
           end
         end)
@@ -59,49 +59,49 @@ function RetRoll_reserves:setHideScript()
   end  
 end
 
-function RetRoll_reserves:Top()
-  if T:IsRegistered("RetRoll_reserves") and (T.registry.RetRoll_reserves.tooltip) then
-    T.registry.RetRoll_reserves.tooltip.scroll=0
+function GuildRoll_reserves:Top()
+  if T:IsRegistered("GuildRoll_reserves") and (T.registry.GuildRoll_reserves.tooltip) then
+    T.registry.GuildRoll_reserves.tooltip.scroll=0
   end  
 end
 
-function RetRoll_reserves:Toggle(forceShow)
+function GuildRoll_reserves:Toggle(forceShow)
   self:Top()
-  if T:IsAttached("RetRoll_reserves") then
-    T:Detach("RetRoll_reserves") -- show
-    if (T:IsLocked("RetRoll_reserves")) then
-      T:ToggleLocked("RetRoll_reserves")
+  if T:IsAttached("GuildRoll_reserves") then
+    T:Detach("GuildRoll_reserves") -- show
+    if (T:IsLocked("GuildRoll_reserves")) then
+      T:ToggleLocked("GuildRoll_reserves")
     end
     self:setHideScript()
   else
     if (forceShow) then
-      RetRoll_reserves:Refresh()
+      GuildRoll_reserves:Refresh()
     else
-      T:Attach("RetRoll_reserves") -- hide
+      T:Attach("GuildRoll_reserves") -- hide
     end
   end  
 end
 
-function RetRoll_reserves:OnClickItem(name)
+function GuildRoll_reserves:OnClickItem(name)
   ChatFrame_SendTell(name)
 end
 
-function RetRoll_reserves:BuildReservesTable()
+function GuildRoll_reserves:BuildReservesTable()
   --{name,class,rank,alt}
-  table.sort(RetRoll.reserves, function(a,b)
+  table.sort(GuildRoll.reserves, function(a,b)
     if (a[2] ~= b[2]) then return a[2] > b[2]
     else return a[1] > b[1] end
   end)
-  return RetRoll.reserves
+  return GuildRoll.reserves
 end
 
-function RetRoll_reserves:OnTooltipUpdate()
+function GuildRoll_reserves:OnTooltipUpdate()
   local cdcat = T:AddCategory(
       "columns", 2
     )
   cdcat:AddLine(
       "text", C:Orange(L["Countdown"]),
-      "text2", RetRoll.timer.cd_text
+      "text2", GuildRoll.timer.cd_text
     )
   local cat = T:AddCategory(
       "columns", 3,
@@ -121,5 +121,5 @@ function RetRoll_reserves:OnTooltipUpdate()
   end
 end
 
--- GLOBALS: RetRoll_saychannel,RetRoll_groupbyclass,RetRoll_groupbyarmor,RetRoll_groupbyrole,RetRoll_raidonly,RetRoll_decay,RetRoll_minPE,RetRoll_reservechannel,RetRoll_main,RetRoll_progress,RetRoll_discount,RetRoll_log,RetRoll_dbver,RetRoll_looted
--- GLOBALS: RetRoll,RetRoll_prices,RetRoll_standings,RetRoll_bids,RetRoll_loot,RetRoll_reserves,RetRollAlts,RetRoll_logs
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_reservechannel,GuildRoll_main,GuildRoll_progress,GuildRoll_discount,GuildRoll_log,GuildRoll_dbver,GuildRoll_looted
+-- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRoll_reserves,GuildRollAlts,GuildRoll_logs
