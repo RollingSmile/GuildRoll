@@ -1639,7 +1639,6 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
   local ep = 0 
   local gp = 0
   local desc = ""  
-  local hostG= GuildRoll:GetGuildName()
   -- NoPugs: Removed IsPugInHostedRaid branch
   -- Check if the player is an alt
   if GuildRollAltspool then
