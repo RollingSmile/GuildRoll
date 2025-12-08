@@ -15,12 +15,12 @@ local function ExecuteCommand(command)
     elseif command == "roll ep" then
         -- EP-aware MainSpec roll (1+EP .. 100+EP)
         if GuildRoll and GuildRoll.RollCommand then
-            GuildRoll:RollCommand(false, false, false, 0)
+            GuildRoll:RollCommand(false, 0)
         end
     elseif command == "roll sr" then
         -- EP-aware SR roll (100+EP .. 200+EP)
         if GuildRoll and GuildRoll.RollCommand then
-            GuildRoll:RollCommand(true, false, false, 0)
+            GuildRoll:RollCommand(true, 0)
         end
     elseif command == "roll csr" then
         -- Use static popup dialog to input CSR weeks (0..15) and validate
@@ -38,7 +38,7 @@ local function ExecuteCommand(command)
                     if bonus == nil then
                         print("Invalid number entered. Valid values: 0,1 or 2..15")
                     else
-                        GuildRoll:RollCommand(true, false, false, bonus)
+                        GuildRoll:RollCommand(true, bonus)
                     end
                 else
                     print("Invalid number entered.")
@@ -64,7 +64,7 @@ local function ExecuteCommand(command)
                     if bonus == nil then
                         print("Invalid number entered. Valid values: 0,1 or 2..15")
                     else
-                        GuildRoll:RollCommand(true, false, false, bonus)
+                        GuildRoll:RollCommand(true, bonus)
                     end
                 else
                     print("Invalid number entered.")
