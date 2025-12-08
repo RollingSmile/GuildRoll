@@ -1,5 +1,5 @@
 ## Interface: 11200
-## Title: GuildEP
+## Title: guildep
 ## Author: RollingSmile
 ## X-Website: https://github.com/RollingSmile/GuildEP
 ## X-Category: Guild
