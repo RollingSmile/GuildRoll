@@ -166,19 +166,15 @@ end
 
 -- Build options list lazily: EP-aware options + CSR (if permitted) + numeric legacy rolls + standings
 local options = {
-    { "EP(MS)", "roll ep" },     -- EP-aware MS (1+EP .. 100+EP)
-    { "SR", "roll sr" },         -- EP-aware SR (100+EP .. 200+EP)
+        { "EP(MS)", "roll ep" },
+        { "SR", "roll sr" },
+        { "CSR", "roll csr" },
+        { "101", "roll 101" },
+        { "100", "roll 100" },
+        { "99", "roll 99" },
+        { "98", "roll 98" },
+        { "Standings", "show ep" }
 }
-
-if CanSeeCSR() then
-    table.insert(options, { "CSR", "roll csr" })
-end
-
-table.insert(options, { "101", "roll 101" })
-table.insert(options, { "100", "roll 100" })
-table.insert(options, { "99", "roll 99" })
-table.insert(options, { "98", "roll 98" })
-table.insert(options, { "Standings", "show ep" })
 
 -- Create roll buttons dynamically with closer spacing
 local previousButton = rollOptionsFrame
