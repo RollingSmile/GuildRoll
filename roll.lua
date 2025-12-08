@@ -10,8 +10,8 @@ local function ExecuteCommand(command)
         RandomRoll(1, 100)
 	elseif command == "roll 99" then
         RandomRoll(1, 99)
-    elseif command == "roll 50" then
-        RandomRoll(1, 50)
+    elseif command == "roll 98" then
+        RandomRoll(1, 98)
     elseif command == "ret ms" then
         if GuildRoll and GuildRoll.RollCommand then
             GuildRoll:RollCommand(false, false,false, 0)
@@ -168,11 +168,9 @@ local options = {
     { "OS", "ret os" },
     { "SR", "ret sr" },
     { "CSR", "ret csr" },
-    { "Tmog", "roll 50" },
-    { "Interest (99)", "roll 99" ,60 , true},
+    { "Tmog", "roll 98" },
     { "101", "roll 101"},
-    { "100", "roll 100" },  
-    { "69", "noice" },  
+    { "100", "roll 100" },
     { "Standings", "ret show" }
 }
 
