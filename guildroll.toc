@@ -7,7 +7,7 @@
 ## Version: 1.0
 ## X-Alpha: Test
 ## OptionalDeps: Ace2
-## SavedVariables: GuildRoll_saychannel, GuildRoll_groupbyclass, GuildRoll_groupbyarmor, GuildRoll_groupbyrole, GuildRoll_raidonly, GuildRoll_dbver, GuildRoll_debug, GuildRoll_fubar
+## SavedVariables: GuildRoll_saychannel, GuildRoll_groupbyclass, GuildRoll_groupbyarmor, GuildRoll_groupbyrole, GuildRoll_raidonly, GuildRoll_dbver, GuildRoll_debug, GuildRoll_fubar, GuildRoll_migration_backup
 ## SavedVariablesPerCharacter: GuildRoll_main, GuildRoll_log, GuildRoll_looted, GuildRoll_decay, GuildRoll_minPE, GuildRoll_progress, GuildRoll_discount, GuildRollAltspool, GuildRoll_altpercent, GuildRoll_pugStanding,GuildRoll_showRollWindow
 
 Libs\AceLibrary\AceLibrary.lua
@@ -35,7 +35,8 @@ Libs\ChatThrottleLib.lua
 localization.lua
 guildroll.lua 
 roll.lua
-migrations.lua 
+migrations.lua
+migrations/0003_officernote_strip_gp.lua
 standings.lua 
 alts.lua
 logs.lua

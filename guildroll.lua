@@ -600,6 +600,10 @@ function GuildRoll:delayedInit()
     local bonus = GuildRoll:calculateBonus(input)
     self:RollCommand(true, false,false, bonus)
   end)
+  
+  self:RegisterChatCommand({"/gpmigrate"}, function(input)
+    GuildRoll:migration_0003_handler(input)
+  end)
   --self:RegisterEvent("CHAT_MSG_ADDON","addonComms")  
   -- broadcast our version
   local addonMsg = string.format("GuildRollVERSION;%s;%d",GuildRoll._versionString,major_ver or 0)
