@@ -24,7 +24,7 @@ local function ExecuteCommand(command)
         end
     elseif command == "roll csr" then
         -- Use static popup dialog to input CSR weeks (0..15) and validate
-        StaticPopupDialogs["RET_CSR_INPUT"] = {
+        StaticPopupDialogs["CSR_INPUT"] = {
             text = "Enter number of weeks you SR this item (0..15):",
             button1 = TEXT(ACCEPT),
             button2 = TEXT(CANCEL),
@@ -62,7 +62,7 @@ local function ExecuteCommand(command)
                 if number ~= nil then
                     local bonus = GuildRoll:calculateBonus(number)
                     if bonus == nil then
-                        print("Invalid number entered. Valid values: 0,1 or 2..15")
+                        print("Invalid number entered. Valid values: 1..15")
                     else
                         GuildRoll:RollCommand(true, false, false, bonus)
                     end
@@ -79,7 +79,7 @@ local function ExecuteCommand(command)
             whileDead = 1,
             hideOnEscape = 1,
         }
-        StaticPopup_Show("RET_CSR_INPUT")
+        StaticPopup_Show("CSR_INPUT")
     elseif command == "show ep" then
         if GuildRoll_standings and GuildRoll_standings.Toggle then
             GuildRoll_standings:Toggle()
@@ -164,51 +164,39 @@ local function CreateRollButton(name, parent, command, anchor, width, font)
     return buttonFrame
 end
 
--- Helper: get player's rankIndex and the rankIndex of the "Core Raider" rank (if found)
-local DEFAULT_REQUIRED_RANK_INDEX = 3 -- fallback if "Core Raider" rank not found; adjust if your guild uses different ordering (0 = Guild Master)
-
-local function SafeGetPlayerAndRequiredRankIndices()
-    if not IsInGuild() then return nil, nil end
+-- Helper: get player's rankIndex (0 = Guild Master, 1 = Officer, 2 = Veteran, 3 = Core Raider, ...)
+local function GetPlayerRankIndex()
+    if not IsInGuild() then return nil end
     if GuildRoster then
-        pcall(GuildRoster)
+        pcall(GuildRoster) -- request update (non-blocking)
     end
-    local num = GetNumGuildMembers and (GetNumGuildMembers(true) or 0) or 0
-    if num <= 0 then return nil, nil end
+    local okNum, num = pcall(function() return GetNumGuildMembers(true) end)
+    num = (okNum and num) and num or 0
+    if num <= 0 then return nil end
     local playerName = UnitName("player")
-    local playerRankIndex, requiredRankIndex
     for i = 1, num do
         local ok, name, rankName, rankIndex = pcall(function() return GetGuildRosterInfo(i) end)
         if ok and name then
             local simpleName = string.match(name, "^[^-]+") or name
-            if playerName and simpleName == playerName and playerRankIndex == nil then
-                playerRankIndex = rankIndex
+            if simpleName == playerName then
+                return rankIndex
             end
-            if rankName and type(rankName) == "string" then
-                local rn = rankName:lower()
-                if rn == "core raider" and requiredRankIndex == nil then
-                    requiredRankIndex = rankIndex
-                end
-            end
-            if playerRankIndex and requiredRankIndex then break end
         end
     end
-    return playerRankIndex, requiredRankIndex
+    return nil
 end
 
+-- Determine if current player may see CSR button: indices 0..3 allowed (Guild master, Officer, Veteran, Core Raider)
 local function CanSeeCSR()
-    if not IsInGuild() then return false end
-    local playerRankIndex, requiredRankIndex = SafeGetPlayerAndRequiredRankIndices()
-    if not playerRankIndex then return false end
-    if not requiredRankIndex then
-        requiredRankIndex = DEFAULT_REQUIRED_RANK_INDEX
-    end
-    return playerRankIndex <= requiredRankIndex
+    local rankIndex = GetPlayerRankIndex()
+    if not rankIndex then return false end
+    return rankIndex <= 3
 end
 
 -- Build options list lazily: EP-aware options + CSR (if permitted) + numeric legacy rolls + standings
 local options = {
     { "EP(MS)", "roll ep" },     -- EP-aware MS (1+EP .. 100+EP)
-    { "SR", "roll sr" },           -- EP-aware SR (100+EP .. 200+EP)
+    { "SR", "roll sr" },         -- EP-aware SR (100+EP .. 200+EP)
 }
 
 if CanSeeCSR() then
