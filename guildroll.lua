@@ -883,10 +883,10 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
   local has_new_format = (ep ~= nil and gp == nil and string.find(officernote,"{%-?%d+}") and not string.find(officernote,"{%-?%d+:%-?%d+}"))
   
   if (ep == nil) then
-    -- No EP at all - initialize with old format for backward compatibility
-    local initstring = string.format("{%d:%d}",0,GuildRoll.VARS.baseAE)
+    -- No EP at all - initialize with new format {EP}
+    local initstring = string.format("{%d}",0)
     local newnote = string.format("%s%s",officernote,initstring)
-    newnote = string.gsub(newnote,"(.*)({%-?%d+:%-?%d+})(.*)",sanitizeNote)
+    newnote = string.gsub(newnote,"(.*)({%-?%d+})(.*)",sanitizeNote)
     officernote = newnote
   elseif has_new_format then
     -- New format {EP} - sanitize with new pattern
