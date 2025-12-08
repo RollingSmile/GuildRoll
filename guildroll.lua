@@ -1620,13 +1620,17 @@ function GuildRoll:EasyMenu(menuList, menuFrame, anchor, x, y, displayMode, leve
   UIDropDownMenu_Initialize(menuFrame, function() GuildRoll:EasyMenu_Initialize(level, menuList) end, displayMode, level)
   ToggleDropDownMenu(1, nil, menuFrame, anchor, x, y)
 end
+-- NOTE: This function is kept for compatibility but is no longer used in roll calculations.
+-- Rolls now use only EP (MainStanding) + CSR bonus.
 function GuildRoll:GetRollingGP(gp)
 
     return math.max(-1 * GuildRoll.VARS.AERollCap , math.min(GuildRoll.VARS.AERollCap,gp) )
 end
+-- Returns the base roll value for the player.
+-- Now returns only EP (MainStanding). GP (AuxStanding) is no longer included in roll calculations.
 function GuildRoll:GetBaseRollValue(ep,gp)
 
-    return  ep + GuildRoll:GetRollingGP(gp)
+    return  ep
 
 end
 
@@ -1682,20 +1686,20 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
   if minRoll > maxRoll then minRoll = maxRoll end
 
   RandomRoll(minRoll, maxRoll)
-  local cappedGP =  GuildRoll:GetRollingGP(gp)
+  
   -- Prepare the announcement message
   local bonusText = " as "..desc.." of "..hostG
-  local message = string.format("I rolled Main Spec %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp,  bonusText)
+  local message = string.format("I rolled MS \"%d - %d\" with %d "..L["MainStanding"], minRoll, maxRoll, ep)..bonusText
   
   if(isSRRoll) then
-    message = string.format("I rolled SR %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
+    message = string.format("I rolled SR \"%d - %d\" with %d "..L["MainStanding"], minRoll, maxRoll, ep)..bonusText
   end
 
   if bonus > 0 then
     -- Calculate weeks: bonus = (weeks - 1) * CSRWeekBonus, so weeks = (bonus / CSRWeekBonus) + 1
     local weeks = math.floor(bonus / GuildRoll.VARS.CSRWeekBonus) + 1
-    bonusText = string.format(" +%d for %d weeks", bonus, weeks)..bonusText
-    message = string.format("I rolled Cumulative SR %d - %d with %d "..L["MainStanding"].." +%d(%d"..L["AuxStanding"]..")%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
+    local csrBonusText = string.format("%d weeks", weeks)
+    message = string.format("I rolled SR \"%d - %d\" with %d "..L["MainStanding"].." + \"%s\"", minRoll, maxRoll, ep, csrBonusText)..bonusText
   end
   -- Determine the chat channel
   local chatType = UnitInRaid("player") and "RAID" or "SAY"
