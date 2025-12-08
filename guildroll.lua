@@ -1639,7 +1639,6 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
   local ep = 0 
   local gp = 0
   local desc = ""  
-  local hostG= GuildRoll:GetGuildName()
   -- NoPugs: Removed IsPugInHostedRaid branch
   -- Check if the player is an alt
   if GuildRollAltspool then
@@ -1688,7 +1687,11 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
   RandomRoll(minRoll, maxRoll)
   
   -- Prepare the announcement message
-  local bonusText = " as "..desc.." of "..hostG
+  local bonusText = ""
+  if string.find(desc, "^Alt of ") then
+    -- Only append for alts
+    bonusText = " as "..desc
+  end
   local message = string.format("I rolled MS \"%d - %d\" with %d "..L["MainStanding"].."%s", minRoll, maxRoll, ep, bonusText)
   
   if(isSRRoll) then
