@@ -94,14 +94,6 @@ local function ExecuteCommand(command)
             GuildRoll_standings:Toggle()
         end
     elseif command == "noice" then
-        local noices = {
-            {"nice","SAY"},{"noice","SAY"},{"Nice !","YELL"},{"NOICE !","YELL"},
-            {"NOIIICE","YELL"},{"NOYCE !","YELL"},{"niiice","SAY"},{"Errhm, noice","SAY"}
-        }
-        local noice = noices[math.random(1,#noices)]
-        SendChatMessage(noice[1], noice[2])
-        if noice[2] == "YELL" then DoEmote("cheer") end
-    end
 end
 
 -- Create a frame for the Roll button
