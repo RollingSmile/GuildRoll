@@ -164,53 +164,117 @@ local function CreateRollButton(name, parent, command, anchor, width, font)
     return buttonFrame
 end
 
--- Helper: get player's rank index and rank name (returns rankIndex, rankName)
-local function GetPlayerRankInfo()
-    if not IsInGuild() then return nil, nil end
-    if GuildRoster then
-        pcall(GuildRoster) -- request update (non-blocking)
+-- == Revised rank detection with small caching ==
+-- We know your guild rank layout: 0..3 should see CSR (0 GM, 1 Officer, 2 Veteran, 3 Core Raider)
+-- Simple cache updated on PLAYER_LOGIN and GUILD_ROSTER_UPDATE to avoid repeated scans.
+
+local CSR_DEBUG = false -- set to true to get debug prints in chat
+
+local cachedRank = {
+    ready = false,    -- true when roster checked at least once
+    rankIndex = nil,  -- numeric index when available
+    rankName = nil,   -- rank name when available
+}
+
+-- UpdateGuildRankCache: attempts to populate cachedRank; returns true if cache.ready true after call
+local function UpdateGuildRankCache()
+    if not IsInGuild() then
+        if CSR_DEBUG then print("UpdateGuildRankCache: not in guild") end
+        cachedRank.ready = true
+        cachedRank.rankIndex = nil
+        cachedRank.rankName = nil
+        return true
     end
+
+    -- Request roster refresh safely (modern or legacy)
+    if C_GuildInfo and C_GuildInfo.RequestGuildRoster then
+        pcall(C_GuildInfo.RequestGuildRoster)
+    else
+        pcall(GuildRoster)
+    end
+
     local okNum, num = pcall(function() return GetNumGuildMembers(true) end)
     num = (okNum and num) and num or 0
-    if num <= 0 then return nil, nil end
+    if num <= 0 then
+        if CSR_DEBUG then print("UpdateGuildRankCache: roster not ready (num <= 0)") end
+        cachedRank.ready = false
+        cachedRank.rankIndex = nil
+        cachedRank.rankName = nil
+        return false
+    end
+
     local playerName = UnitName("player")
     for i = 1, num do
-        local ok, name, rankName, rankIndex = pcall(function() return GetGuildRosterInfo(i) end)
-        if ok and name then
+        local name, rankName, rankIndex
+        -- Try legacy API (GetGuildRosterInfo) which is widely supported
+        local ok, n1, n2, n3 = pcall(function() return GetGuildRosterInfo(i) end)
+        if ok and n1 then
+            name = n1
+            rankName = n2
+            rankIndex = n3
+        end
+
+        -- If name obtained, compare (strip realm)
+        if name then
             local simpleName = string.match(name, "^[^-]+") or name
             if simpleName == playerName then
-                return rankIndex, rankName
+                cachedRank.ready = true
+                cachedRank.rankIndex = rankIndex
+                cachedRank.rankName = rankName
+                if CSR_DEBUG then
+                    print(("UpdateGuildRankCache: found player -> rankIndex=%s rankName=%s"):format(tostring(rankIndex), tostring(rankName)))
+                end
+                return true
             end
         end
     end
-    return nil, nil
+
+    -- roster ready but player not found
+    cachedRank.ready = true
+    cachedRank.rankIndex = nil
+    cachedRank.rankName = nil
+    if CSR_DEBUG then print("UpdateGuildRankCache: roster ready but player not found") end
+    return true
 end
 
--- Determine if current player may see CSR button:
--- prefer explicit API checks (IsGuildLeader/IsGuildOfficer), then legacy rankIndex cutoff,
--- then fall back to searching rankName for "offic" (covers common localized names).
+-- GetPlayerRankInfo now reads from cache; returns rankIndex, rankName, ready
+local function GetPlayerRankInfo()
+    return cachedRank.rankIndex, cachedRank.rankName, cachedRank.ready
+end
+
+-- CanSeeCSR uses API checks first, then the cached rankIndex (0..3 allowed)
 local function CanSeeCSR()
-    if not IsInGuild() then return false end
+    if not IsInGuild() then
+        if CSR_DEBUG then print("CanSeeCSR: not in guild") end
+        return false
+    end
 
     if IsGuildLeader and IsGuildLeader() then
+        if CSR_DEBUG then print("CanSeeCSR: IsGuildLeader -> true") end
         return true
     end
     if IsGuildOfficer and IsGuildOfficer() then
+        if CSR_DEBUG then print("CanSeeCSR: IsGuildOfficer -> true") end
         return true
     end
 
-    local rankIndex, rankName = GetPlayerRankInfo()
-    if rankIndex and rankIndex <= 3 then
-        return true
+    local rankIndex, rankName, ready = GetPlayerRankInfo()
+    if not ready then
+        if CSR_DEBUG then print("CanSeeCSR: cache not ready, returning false for now") end
+        return false
     end
 
-    if rankName and type(rankName) == "string" then
-        local rn = string.lower(rankName)
-        if string.find(rn, "offic") then
+    if rankIndex and type(rankIndex) == "number" then
+        if rankIndex >= 0 and rankIndex <= 3 then
+            if CSR_DEBUG then print(("CanSeeCSR: rankIndex %d => CSR allowed"):format(rankIndex)) end
             return true
+        else
+            if CSR_DEBUG then print(("CanSeeCSR: rankIndex %d => CSR denied"):format(rankIndex)) end
+            return false
         end
     end
 
+    if CSR_DEBUG then print("CanSeeCSR: no rankIndex available, denying by default") end
     return false
 end
 
@@ -277,11 +341,14 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
 
--- Safer rebuild handler: always rebuild the options list deterministically
+-- Safer rebuild handler: update cache first, then rebuild the options list deterministically
 eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event ~= "GUILD_ROSTER_UPDATE" and event ~= "PLAYER_LOGIN" then
         return
     end
+
+    -- Update cached rank info (will set cachedRank.ready accordingly)
+    UpdateGuildRankCache()
 
     -- Rebuild the options table fresh based on current CSR visibility
     local newOptions = {
