@@ -1692,6 +1692,7 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
   end
 
   if bonus > 0 then
+    -- Calculate weeks: bonus = (weeks - 1) * CSRWeekBonus, so weeks = (bonus / CSRWeekBonus) + 1
     local weeks = math.floor(bonus / GuildRoll.VARS.CSRWeekBonus) + 1
     bonusText = string.format(" +%d for %d weeks", bonus, weeks)..bonusText
     message = string.format("I rolled Cumulative SR %d - %d with %d "..L["MainStanding"].." +%d(%d"..L["AuxStanding"]..")%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)

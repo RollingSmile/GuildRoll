@@ -24,7 +24,6 @@ local function UpdateRankInfo()
     local numGuildMembers = GetNumGuildMembers(true)
     
     -- Find Core Raider rank index by scanning guild members once
-    -- This is more efficient than calling GuildControlGetRankName for every member
     coreRaiderRankIndex = nil
     local ranksScanned = {}
     
@@ -33,7 +32,8 @@ local function UpdateRankInfo()
         if name and rankIndex and not ranksScanned[rankIndex] then
             ranksScanned[rankIndex] = true
             local numRanks = GuildControlGetNumRanks()
-            if rankIndex >= 0 and rankIndex < numRanks then
+            -- GuildControlGetRankName expects 1-based index, rankIndex is 0-based
+            if rankIndex >= 0 and rankIndex + 1 <= numRanks then
                 local rankName = GuildControlGetRankName(rankIndex + 1)
                 if rankName == "Core Raider" then
                     coreRaiderRankIndex = rankIndex
