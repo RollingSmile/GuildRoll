@@ -2,23 +2,76 @@
 GuildRoll_RollPos = GuildRoll_RollPos or { x = 400, y = 300 }
 GuildRoll_showRollWindow = true
 
+-- Default rank index for Core Raider if not found in guild
+local DEFAULT_REQUIRED_RANK_INDEX = 3
+
+-- Variables to track player rank and CSR eligibility
+local playerRankIndex = nil
+local coreRaiderRankIndex = nil
+local isCSRAllowed = false
+
+-- Function to update rank information
+local function UpdateRankInfo()
+    if not IsInGuild() then
+        isCSRAllowed = false
+        return
+    end
+    
+    -- Request fresh guild roster data
+    GuildRoster()
+    
+    local playerName = UnitName("player")
+    local numGuildMembers = GetNumGuildMembers(true)
+    
+    -- Find Core Raider rank index by scanning guild members
+    coreRaiderRankIndex = nil
+    for i = 1, numGuildMembers do
+        local name, _, rankIndex, _, _, _, _, _, _, _ = GetGuildRosterInfo(i)
+        if name then
+            -- Get the rank name for this member's rank
+            local numRanks = GuildControlGetNumRanks()
+            if rankIndex and rankIndex >= 0 and rankIndex < numRanks then
+                local rankName = GuildControlGetRankName(rankIndex + 1)
+                if rankName == "Core Raider" and not coreRaiderRankIndex then
+                    coreRaiderRankIndex = rankIndex
+                end
+            end
+        end
+    end
+    
+    -- Use default if Core Raider rank not found
+    if not coreRaiderRankIndex then
+        coreRaiderRankIndex = DEFAULT_REQUIRED_RANK_INDEX
+    end
+    
+    -- Find player's rank index
+    for i = 1, numGuildMembers do
+        local name, _, rankIndex = GetGuildRosterInfo(i)
+        if name == playerName then
+            playerRankIndex = rankIndex
+            break
+        end
+    end
+    
+    -- Check if CSR is allowed (lower rankIndex = higher rank)
+    if playerRankIndex and coreRaiderRankIndex then
+        isCSRAllowed = (playerRankIndex <= coreRaiderRankIndex)
+    else
+        isCSRAllowed = false
+    end
+end
+
 -- Function to execute commands
 local function ExecuteCommand(command)
-    if command == "roll 101" then
-        RandomRoll(1, 101)
-    elseif command == "roll 100" then
+    if command == "roll 100" then
         RandomRoll(1, 100)
-	elseif command == "roll 99" then
+    elseif command == "roll 99" then
         RandomRoll(1, 99)
     elseif command == "roll 98" then
         RandomRoll(1, 98)
     elseif command == "ret ms" then
         if GuildRoll and GuildRoll.RollCommand then
             GuildRoll:RollCommand(false, false,false, 0)
-        end
-    elseif command == "ret os" then
-        if GuildRoll and GuildRoll.RollCommand then
-            GuildRoll:RollCommand(false, false,true, 0)
         end
     elseif command == "ret sr" then
         if GuildRoll and GuildRoll.RollCommand then
@@ -27,44 +80,43 @@ local function ExecuteCommand(command)
     elseif command == "ret csr" then
         -- Use static popup dialog to input bonus
         StaticPopupDialogs["RET_CSR_INPUT"] = {
-            text = "Enter number of weeks you SR this item:",
+            text = "Enter number of weeks you SR this item (0-15):",
             button1 = TEXT(ACCEPT),
             button2 = TEXT(CANCEL),
             hasEditBox = 1,
             maxLetters = 5,
-            OnAccept = function()
-                local editBox = getglobal(this:GetParent():GetName().."EditBox")
-                local number = tonumber(editBox:GetText())
-                if number then
-                    local bonus = GuildRoll:calculateBonus(number)
-                    GuildRoll:RollCommand(true, false,false, bonus)
+            OnAccept = function(self)
+                local editBox = _G[self:GetParent():GetName().."EditBox"]
+                local input = editBox:GetText()
+                local bonus = GuildRoll:calculateBonus(input)
+                if bonus == nil then
+                    print("Invalid number entered. Please enter a number between 0 and 15.")
                 else
-                    print("Invalid number entered.")
+                    GuildRoll:RollCommand(true, false,false, bonus)
                 end
             end,
-            OnShow = function()
-                local editBox = getglobal(this:GetParent():GetName().."EditBox")
-                getglobal(this:GetName().."EditBox"):SetText("")
-                getglobal(this:GetName().."EditBox"):SetFocus()
+            OnShow = function(self)
+                _G[self:GetName().."EditBox"]:SetText("")
+                _G[self:GetName().."EditBox"]:SetFocus()
             end,
             OnHide = function()
                 if ChatFrameEditBox:IsVisible() then
                     ChatFrameEditBox:SetFocus()
                 end
             end,
-            EditBoxOnEnterPressed = function()
-                local editBox = getglobal(this:GetParent():GetName().."EditBox")
-                local number = tonumber(editBox:GetText())
-                if number then
-                    local bonus = GuildRoll:calculateBonus(number)
-                    GuildRoll:RollCommand(true, false,false, bonus)
+            EditBoxOnEnterPressed = function(self)
+                local editBox = _G[self:GetParent():GetName().."EditBox"]
+                local input = editBox:GetText()
+                local bonus = GuildRoll:calculateBonus(input)
+                if bonus == nil then
+                    print("Invalid number entered. Please enter a number between 0 and 15.")
                 else
-                    print("Invalid number entered.")
+                    GuildRoll:RollCommand(true, false,false, bonus)
                 end
-                this:GetParent():Hide()
+                self:GetParent():Hide()
             end,
-            EditBoxOnEscapePressed = function()
-                this:GetParent():Hide()
+            EditBoxOnEscapePressed = function(self)
+                self:GetParent():Hide()
             end,
             timeout = 0,
             exclusive = 1,
@@ -163,30 +215,47 @@ end
 
  
 -- Roll option buttons configuration
-local options = {
-    { "MS", "ret ms" },
-    { "OS", "ret os" },
-    { "SR", "ret sr" },
-    { "CSR", "ret csr" },
-    { "Tmog", "roll 98" },
-    { "101", "roll 101"},
-    { "100", "roll 100" },
-    { "Standings", "ret show" }
-}
+-- Store button frames for later manipulation (e.g., hiding CSR button)
+local buttonFrames = {}
 
--- Create roll buttons dynamically with closer spacing
-local previousButton = rollOptionsFrame
-for _, option in ipairs(options) do
-    local buttonFrame = CreateRollButton(option[1], rollOptionsFrame, option[2], previousButton,option[3] or 60,option[4] or false)
-
-    if previousButton == rollOptionsFrame then
-        -- For the first button, set it relative to the rollOptionsFrame
-        buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)  -- Align with the top of the options frame 
-    else
-        -- For subsequent buttons, set their position based on the previous button
-        buttonFrame:SetPoint("TOP", previousButton, "BOTTOM", 0, 5)  -- Close spacing
+local function CreateButtons()
+    -- Clear any existing buttons
+    for _, frame in pairs(buttonFrames) do
+        frame:Hide()
     end
-    previousButton = buttonFrame  -- Update previousButton to the current buttonFrame for the next iteration
+    buttonFrames = {}
+    
+    local options = {
+        { "MS", "ret ms" },
+        { "OS", "roll 99" },
+        { "Tmog", "roll 98" },
+        { "EP(MS)", "ret ms" },
+        { "SR", "ret sr" },
+    }
+    
+    -- Add CSR button only if allowed
+    if isCSRAllowed then
+        table.insert(options, { "CSR", "ret csr" })
+    end
+    
+    table.insert(options, { "100", "roll 100" })
+    table.insert(options, { "Standings", "ret show" })
+    
+    -- Create roll buttons dynamically with closer spacing
+    local previousButton = rollOptionsFrame
+    for _, option in ipairs(options) do
+        local buttonFrame = CreateRollButton(option[1], rollOptionsFrame, option[2], previousButton, option[3] or 60, option[4] or false)
+        table.insert(buttonFrames, buttonFrame)
+        
+        if previousButton == rollOptionsFrame then
+            -- For the first button, set it relative to the rollOptionsFrame
+            buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)  -- Align with the top of the options frame 
+        else
+            -- For subsequent buttons, set their position based on the previous button
+            buttonFrame:SetPoint("TOP", previousButton, "BOTTOM", 0, 5)  -- Close spacing
+        end
+        previousButton = buttonFrame  -- Update previousButton to the current buttonFrame for the next iteration
+    end
 end
 
 -- Toggle roll buttons on Roll button click
@@ -226,14 +295,25 @@ end)
 -- Restore saved position on load
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
-eventFrame:SetScript("OnEvent", function()
-    if GuildRoll_RollPos.x and GuildRoll_RollPos.y then
-        rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
-    else
-        GuildRoll_RollPos = { x = 400, y = 300 }
-        rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
-    end
-    if not GuildRoll_showRollWindow then
-        rollFrame:Hide()
+eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
+eventFrame:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_LOGIN" then
+        if GuildRoll_RollPos.x and GuildRoll_RollPos.y then
+            rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
+        else
+            GuildRoll_RollPos = { x = 400, y = 300 }
+            rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
+        end
+        if not GuildRoll_showRollWindow then
+            rollFrame:Hide()
+        end
+        -- Initialize rank info and create buttons
+        UpdateRankInfo()
+        CreateButtons()
+    elseif event == "GUILD_ROSTER_UPDATE" then
+        -- Update rank info when guild roster changes
+        UpdateRankInfo()
+        -- Recreate buttons if CSR eligibility changed
+        CreateButtons()
     end
 end)

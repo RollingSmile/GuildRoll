@@ -11,7 +11,6 @@ local L = AceLibrary("AceLocale-2.2"):new("guildroll")
 GuildRoll.VARS = {
   baseAE = 0,
   AERollCap = 50,
-  OSPenalty = 50,
   minPE = 0,
   baseawardpoints = 10,
   decay = 0.5,
@@ -590,14 +589,22 @@ function GuildRoll:delayedInit()
   self:RegisterChatCommand({"/GuildRoll","/guildroll","/ret"},self.cmdtable())
   function GuildRoll:calculateBonus(input)
     local number = tonumber(input)
-    if number and number >= 2 and number <= 15 then
-        return number * 20
+    if not number or number < 0 or number > 15 then
+      return nil  -- Invalid input
     end
-    return 20  -- Return 20 for first week if input is invalid
+    if number == 0 or number == 1 then
+      return 0
+    end
+    -- number is between 2 and 15
+    return (number - 1) * 10
   end
   
   self:RegisterChatCommand({"/retcsr"}, function(input)
     local bonus = GuildRoll:calculateBonus(input)
+    if bonus == nil then
+      self:defaultPrint("Invalid CSR input. Please enter a number between 0 and 15.")
+      return
+    end
     self:RollCommand(true, false,false, bonus)
   end)
   --self:RegisterEvent("CHAT_MSG_ADDON","addonComms")  
@@ -1671,25 +1678,24 @@ function GuildRoll:RollCommand(isSRRoll,isDSRRoll,isOS,bonus)
   -- Calculate the roll range based on whether it's an SR roll or not
   local minRoll, maxRoll
   local baseRoll = GuildRoll:GetBaseRollValue(ep,gp)
-  if isOS then
-    baseRoll= baseRoll - GuildRoll.VARS.OSPenalty
-  end
+  -- New EP-aware roll ranges
   if isSRRoll then
-    minRoll = 101 + baseRoll
+    -- SR: 100 + baseRoll to 200 + baseRoll
+    minRoll = 100 + baseRoll
     maxRoll = 200 + baseRoll
-    if isDSRRoll then
-      minRoll = 101 + 20 +baseRoll
-      maxRoll = 200 + 20 +baseRoll
-    end
   else
-    minRoll = 1   + baseRoll
+    -- EP-aware MS: 1 + baseRoll to 100 + baseRoll
+    minRoll = 1 + baseRoll
     maxRoll = 100 + baseRoll
   end
+  
+  -- Add bonus after range selection
   minRoll = minRoll + bonus
   maxRoll = maxRoll + bonus
 	
-  if maxRoll < 0 then maxRoll = 0 end
+  -- Clamp to >= 0 and ensure min <= max
   if minRoll < 0 then minRoll = 0 end
+  if maxRoll < 0 then maxRoll = 0 end
   if minRoll > maxRoll then minRoll = maxRoll end
 
   RandomRoll(minRoll, maxRoll)
@@ -1698,18 +1704,12 @@ function GuildRoll:RollCommand(isSRRoll,isDSRRoll,isOS,bonus)
   local bonusText = " as "..desc.." of "..hostG
   local message = string.format("I rolled Main Spec %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp,  bonusText)
   
-  if(isOS) then
-    message = string.format("I rolled Off Spec %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp,  bonusText)
-  end
   if(isSRRoll) then
     message = string.format("I rolled SR %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
   end
-  if(isDSRRoll) then
-    message = string.format("I rolled Double SR %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
-  end
 
   if bonus > 0 then
-    local weeks = math.floor(bonus / 20)
+    local weeks = math.floor(bonus / 10) + 1
     bonusText = string.format(" +%d for %d weeks", bonus, weeks)..bonusText
     message = string.format("I rolled Cumulative SR %d - %d with %d "..L["MainStanding"].." +%d(%d"..L["AuxStanding"]..")%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
   end
