@@ -390,8 +390,10 @@ function GuildRoll:buildMenu()
       type = "header",
       name = string.format(L["Minimum MainStanding: %s"],GuildRoll_minPE),
       order = 117,
-      hidden = function() return admin() end,
+      hidden = function() return not admin() end,
     }
+		
+		
     options.args["set_min_ep"] = {
       type = "text",
       name = L["Minimum MainStanding"],
