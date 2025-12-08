@@ -1682,7 +1682,7 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
   if minRoll > maxRoll then minRoll = maxRoll end
 
   RandomRoll(minRoll, maxRoll)
-  
+
   -- Prepare the announcement message
   local rollRange = string.format('"%d - %d"', minRoll, maxRoll)
   local message
