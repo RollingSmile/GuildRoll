@@ -5,7 +5,7 @@
 ## X-Category: Guild
 ## X-Credits: shooty,Roadblock, Qcat(zhCN), Excinerus
 ## Version: 1.0
-## X-Alpha: 
+## X-Alpha: Test
 ## OptionalDeps: Ace2
 ## SavedVariables: RetRoll_saychannel, RetRoll_groupbyclass, RetRoll_groupbyarmor, RetRoll_groupbyrole, RetRoll_raidonly, RetRoll_dbver, RetRoll_debug, RetRoll_fubar
 ## SavedVariablesPerCharacter: RetRoll_main, RetRoll_log, RetRoll_looted, RetRoll_decay, RetRoll_minPE, RetRoll_reservechannel, RetRoll_progress, RetRoll_discount, RetRollAltspool, RetRoll_altpercent, RetRoll_pugStanding,RetRoll_showRollWindow
