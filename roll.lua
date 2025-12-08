@@ -226,7 +226,7 @@ local function CreateButtons()
     buttonFrames = {}
     
     local options = {
-        { "MS", "ret ms" },
+        { "MS", "roll 100" },
         { "OS", "roll 99" },
         { "Tmog", "roll 98" },
         { "EP(MS)", "ret ms" },
@@ -238,7 +238,6 @@ local function CreateButtons()
         table.insert(options, { "CSR", "ret csr" })
     end
     
-    table.insert(options, { "100", "roll 100" })
     table.insert(options, { "Standings", "ret show" })
     
     -- Create roll buttons dynamically with closer spacing
