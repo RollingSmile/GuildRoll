@@ -220,18 +220,12 @@ function GuildRoll:buildMenu()
       hidden = function() return not (admin()) end,
     }
     options.args["MainStanding_raid"] = {
-      type = "text",
+      type = "execute",
       name = L["+MainStanding to Raid"],
       desc = L["Award MainStanding to all raid members."],
       order = 20,
-      get = "suggestedAwardMainStanding",
-      set = function(v) GuildRoll:award_raid_ep(tonumber(v)) end,
-      usage = "<EP>",
+      func = function() GuildRoll:PromptAwardRaidEP() end,
       hidden = function() return not (admin()) end,
-      validate = function(v)
-        local n = tonumber(v)
-        return n and n >= 0 and n < GuildRoll.VARS.max
-      end
     }
  
     options.args["alts"] = {
@@ -940,6 +934,14 @@ function GuildRoll:award_raid_gp(gp) -- awards gp to raid members in zone
   else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
 end
 
+function GuildRoll:PromptAwardRaidEP()
+  if not (IsGuildLeader() or CanEditOfficerNote()) then
+    self:defaultPrint("You don't have permission to award EP.")
+    return
+  end
+  StaticPopup_Show("GUILDROLL_AWARD_EP_RAID_HELP")
+end
+
 function GuildRoll:givename_ep(getname,ep) 
 	
  return GuildRoll:givename_ep(getname,ep,nil)  
@@ -1568,6 +1570,84 @@ StaticPopupDialogs["RET_GP_CONFIRM_RESET"] = {
   whileDead = 1,
   exclusive = 1,
   showAlert = 1,
+  hideOnEscape = 1
+}
+
+StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
+  text = "Enter EP to award to raid members:",
+  button1 = TEXT(ACCEPT),
+  button2 = TEXT(CANCEL),
+  hasEditBox = 1,
+  maxLetters = 10,
+  OnShow = function()
+    local zoneHelp = {
+      NAX = {prefill = 7, text = "Naxx - 7 EP for using FLASK + 7 EP for attendance."},
+      AQ40 = {prefill = 5, text = "AQ40 - 5 EP for using FLASK + 5 EP for attendance."},
+      BWL = {prefill = 3, text = "BWL - 3 EP for using more than 3 types of CONSUMMS + 3 EP for attendance."},
+      ES = {prefill = 3, text = "ES  - 3 EP for using more than 3 types of CONSUMMS + 3 EP for attendance."},
+      MC = {prefill = 2, text = "MC  - 2 EP for using more than 3 types of CONSUMMS + 2 EP for attendance."}
+    }
+    
+    local suggested = GuildRoll.VARS.baseawardpoints
+    local success, result = pcall(function() return GuildRoll:suggestedAwardMainStanding() end)
+    if success and result then
+      suggested = result
+    end
+    
+    local helpText = "Enter EP to award to raid members:"
+    local prefillValue = suggested
+    
+    local inInstance, instanceType = IsInInstance()
+    if inInstance then
+      local zoneLoc = GetRealZoneText()
+      if BZ:HasReverseTranslation(zoneLoc) then
+        local zoneEN = BZ:GetReverseTranslation(zoneLoc)
+        if zoneEN then
+          local LocKey = RaidKey[zoneEN]
+          if LocKey and zoneHelp[LocKey] then
+            helpText = zoneHelp[LocKey].text .. "\n\nEnter EP (editable):"
+            prefillValue = zoneHelp[LocKey].prefill
+          end
+        end
+      end
+    end
+    
+    getglobal(this:GetName().."Text"):SetText(helpText)
+    getglobal(this:GetName().."EditBox"):SetText(tostring(prefillValue))
+    getglobal(this:GetName().."EditBox"):SetFocus()
+  end,
+  OnAccept = function()
+    local editBox = getglobal(this:GetParent():GetName().."EditBox")
+    local epValue = tonumber(editBox:GetText())
+    if not epValue then
+      GuildRoll:defaultPrint("Invalid EP value entered.")
+      return
+    end
+    if epValue < 0 or epValue >= GuildRoll.VARS.max then
+      GuildRoll:defaultPrint("EP value must be between 0 and " .. GuildRoll.VARS.max)
+      return
+    end
+    if not (IsGuildLeader() or CanEditOfficerNote()) then
+      GuildRoll:defaultPrint("You don't have permission to award EP.")
+      return
+    end
+    GuildRoll:award_raid_ep(epValue)
+  end,
+  EditBoxOnEnterPressed = function()
+    local parent = this:GetParent()
+    local editBox = getglobal(parent:GetName().."EditBox")
+    local epValue = tonumber(editBox:GetText())
+    if epValue and epValue >= 0 and epValue < GuildRoll.VARS.max and (IsGuildLeader() or CanEditOfficerNote()) then
+      GuildRoll:award_raid_ep(epValue)
+      parent:Hide()
+    end
+  end,
+  EditBoxOnEscapePressed = function()
+    this:GetParent():Hide()
+  end,
+  timeout = 0,
+  exclusive = 1,
+  whileDead = 1,
   hideOnEscape = 1
 }
 
