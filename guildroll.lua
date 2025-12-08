@@ -103,15 +103,6 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       end,
       order = 8,
     },
-    os = {
-      type = "execute",
-      name = "Roll Offspec",
-      desc = "Roll Offspec with your standing",
-      func = function() 
-        GuildRoll:RollCommand(false,false,true,0)
-      end,
-      order = 8,
-    },
     sr = {
       type = "execute",
       name = "Roll SR",
@@ -186,15 +177,6 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
         GuildRoll:RollCommand(false,false,false,0)
       end,
       order = 5,
-    },
-    os = {
-      type = "execute",
-      name = "Roll OffSpec",
-      desc = "Roll OffSpec with your standing",
-      func = function() 
-        GuildRoll:RollCommand(false,false,true,0)
-      end,
-      order = 6,
     },
     sr = {
       type = "execute",
