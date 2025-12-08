@@ -21,8 +21,6 @@ GuildRoll.VARS = {
   maxloglines = 500,
   prefix = "RRG_",
   inRaid = false,
-  -- reservechan = "Reserves", -- Feature removed
-  -- reserveanswer = "^(%+)(%a*)$", -- Feature removed
   bop = C:Red("BoP"),
   boe = C:Yellow("BoE"),
   nobind = C:White("NoBind"), 
@@ -131,15 +129,6 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       end,
       order = 10,
     },
-  -- dsr = {
-  --   type = "execute",
-  --   name = "Roll Double SR",
-  --   desc = "Roll Double Soft Reserve with your standing",
-  --   func = function() 
-  --     GuildRoll:RollCommand(true,true,false,0)
-  --   end,
-  --   order = 11,
-  -- },
   }},
 {type = "group", handler = GuildRoll, args = {
     show = {
@@ -206,15 +195,6 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       end,
       order = 8,
     },
-  -- dsr = {
-  --   type = "execute",
-  --   name = "Roll Double SR",
-  --   desc = "Roll Double Soft Reserve with your standing",
-  --   func = function() 
-  --     GuildRoll:RollCommand(true,true,false,0)
-  --   end,
-  --   order = 9,
-  -- },
   }}
 GuildRoll.cmdtable = function() 
   if (admin()) then
@@ -383,14 +363,14 @@ function GuildRoll:buildMenu()
      hidden = function() return not (IsGuildLeader()) end,
      func = function() StaticPopup_Show("RET_EP_CONFIRM_RESET") end
     }
-    options.args["resetAuxStanding"] = {
-     type = "execute",
-     name = L["Reset AuxStanding"],
-     desc = string.format(L["Resets everyone\'s AuxStanding to 0/%d (Admin only)."],GuildRoll.VARS.baseAE),
-     order = 122,
-     hidden = function() return not (IsGuildLeader()) end,
-     func = function() StaticPopup_Show("RET_GP_CONFIRM_RESET") end
-    }
+    -- options.args["resetAuxStanding"] = {
+    -- type = "execute",
+    -- name = L["Reset AuxStanding"],
+    -- desc = string.format(L["Resets everyone\'s AuxStanding to 0/%d (Admin only)."],GuildRoll.VARS.baseAE),
+    -- order = 122,
+    -- hidden = function() return not (IsGuildLeader()) end,
+    -- func = function() StaticPopup_Show("RET_GP_CONFIRM_RESET") end
+    -- }
 
   end
   if (needInit) or (needRefresh) then
@@ -434,10 +414,6 @@ function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
     end
   end
 
- 
-  
-  
- 
   self:RegisterEvent("GUILD_ROSTER_UPDATE",function() 
       if (arg1) then -- member join /leave
         GuildRoll:SetRefresh(true)
@@ -551,16 +527,7 @@ function GuildRoll:delayedInit()
   GuildRoll.VARS.GuildName  =""
   if (IsInGuild()) then
     GuildRoll.VARS.GuildName  = (GetGuildInfo("player"))
-    if (GuildRoll.VARS.GuildName ) and GuildRoll.VARS.GuildName  ~= "" then
-    --  GuildRoll.VARS.GuildPugBroadCastCN  = GuildRoll:GetGuildPugChannelName(GuildRoll.VARS.GuildName)
-     -- if (admin()) then JoinChannelByName(GuildRoll.VARS.GuildPugBroadCastCN) end
-    end
   end
-  -- Reserves channel initialization removed
-  -- migrate Standing storage if needed
-  
- 
---  self:parseVersion(GuildRoll._versionString)
    
   local major_ver = 0 --self._version.major or 0
  -- if IsGuildLeader() and ( (GuildRoll_dbver == nil) or (major_ver > GuildRoll_dbver) ) then
