@@ -276,7 +276,11 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             if opt[1] == "CSR" then foundCSR = true; break end
         end
         if csrVisible and not foundCSR then
-            table.insert(options, #options - 4, { "CSR", "roll csr" }) -- insert before numeric legacy options
+            -- compute a safe insertion position (avoid using '#' operator)
+            local n = table.getn(options) or 0
+            local pos = n - 4
+            if pos < 1 then pos = 1 end
+            table.insert(options, pos, { "CSR", "roll csr" })
             -- remove and re-create children of rollOptionsFrame
             for i = rollOptionsFrame:GetNumChildren(), 1, -1 do
                 local child = select(i, rollOptionsFrame:GetChildren())
