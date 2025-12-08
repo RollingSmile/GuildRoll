@@ -128,7 +128,7 @@ local function ExecuteCommand(command)
 end
 
 -- Create a frame for the Roll button
-local rollFrame = CreateFrame("Frame", "ShootyRollFrame", UIParent)
+local rollFrame = CreateFrame("Frame", "GuildEpRollFrame", UIParent)
 rollFrame:SetWidth(80)
 rollFrame:SetHeight(41)
 rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
@@ -158,7 +158,7 @@ rollFrame:SetBackdrop({
 })
 
 -- Create the Roll button inside the frame
-local rollButton = CreateFrame("Button", "ShootyRollButton", rollFrame, "UIPanelButtonTemplate")
+local rollButton = CreateFrame("Button", "GuildEpRollButton", rollFrame, "UIPanelButtonTemplate")
 rollButton:SetWidth(96)
 rollButton:SetHeight(30)
 rollButton:SetText("Roll")

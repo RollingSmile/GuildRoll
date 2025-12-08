@@ -46,7 +46,7 @@ local raidStatus,lastRaidStatus
 local lastUpdate = 0
 local needInit,needRefresh = true
 local admin,sanitizeNote
-local shooty_debugchat
+local guildep_debugchat
 local running_check,running_bid
 local partyUnit,raidUnit = {},{}
 local hexColorQuality = {}
@@ -473,9 +473,9 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
     local cf = getglobal("ChatFrame"..i)
     local tabName = tab:GetText()
     if tab ~= nil and (string.lower(tabName) == "debug") then
-      shooty_debugchat = cf
-      ChatFrame_RemoveAllMessageGroups(shooty_debugchat)
-      shooty_debugchat:SetMaxLines(1024)
+      guildep_debugchat = cf
+      ChatFrame_RemoveAllMessageGroups(guildep_debugchat)
+      guildep_debugchat:SetMaxLines(1024)
       break
     end
   end
@@ -519,6 +519,27 @@ function GuildRoll:delayedInit()
   GuildRoll.VARS.GuildName  =""
   if (IsInGuild()) then
     GuildRoll.VARS.GuildName  = (GetGuildInfo("player"))
+  end
+   
+  -- Migration helper: Copy legacy "shooty" frame names to new "guildep" names
+  -- This ensures users who update without clearing saved variables don't lose functionality
+  if _G["shooty_exportframe"] and not _G["guildep_exportframe"] then
+    _G["guildep_exportframe"] = _G["shooty_exportframe"]
+  end
+  if _G["shooty_exportaction"] and not _G["guildep_exportaction"] then
+    _G["guildep_exportaction"] = _G["shooty_exportaction"]
+  end
+  if _G["shooty_exportedit"] and not _G["guildep_exportedit"] then
+    _G["guildep_exportedit"] = _G["shooty_exportedit"]
+  end
+  if _G["shooty_exportscroll"] and not _G["guildep_exportscroll"] then
+    _G["guildep_exportscroll"] = _G["shooty_exportscroll"]
+  end
+  if _G["ShootyRollFrame"] and not _G["GuildEpRollFrame"] then
+    _G["GuildEpRollFrame"] = _G["ShootyRollFrame"]
+  end
+  if _G["ShootyRollButton"] and not _G["GuildEpRollButton"] then
+    _G["GuildEpRollButton"] = _G["ShootyRollButton"]
   end
    
   local major_ver = 0 --self._version.major or 0
@@ -627,9 +648,9 @@ function GuildRoll:flashFrame(frame)
 end
 
 function GuildRoll:debugPrint(msg)
-  if (shooty_debugchat) then
-    shooty_debugchat:AddMessage(string.format(out,msg))
-    self:flashFrame(shooty_debugchat)
+  if (guildep_debugchat) then
+    guildep_debugchat:AddMessage(string.format(out,msg))
+    self:flashFrame(guildep_debugchat)
   else
     self:defaultPrint(msg)
   end

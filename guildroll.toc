@@ -3,7 +3,7 @@
 ## Author: RollingSmile
 ## X-Website: https://github.com/RollingSmile/GuildEP
 ## X-Category: Guild
-## X-Credits: shooty,Roadblock, Qcat(zhCN), Excinerus
+## X-Credits: guildep,Roadblock, Qcat(zhCN), Excinerus
 ## Version: 1.0
 ## X-Alpha: Test
 ## OptionalDeps: Ace2

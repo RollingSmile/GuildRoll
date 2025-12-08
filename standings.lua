@@ -31,13 +31,13 @@ local armor_text = {
   [MAIL] = L["MAIL"],
   [PLATE] = L["PLATE"],
 }
-local shooty_export = CreateFrame("Frame", "shooty_exportframe", UIParent)
-shooty_export:SetWidth(250)
-shooty_export:SetHeight(150)
-shooty_export:SetPoint('TOP', UIParent, 'TOP', 0,-80)
-shooty_export:SetFrameStrata('DIALOG')
-shooty_export:Hide()
-shooty_export:SetBackdrop({
+local guildep_export = CreateFrame("Frame", "guildep_exportframe", UIParent)
+guildep_export:SetWidth(250)
+guildep_export:SetHeight(150)
+guildep_export:SetPoint('TOP', UIParent, 'TOP', 0,-80)
+guildep_export:SetFrameStrata('DIALOG')
+guildep_export:Hide()
+guildep_export:SetBackdrop({
   bgFile = [[Interface\Tooltips\UI-Tooltip-Background]],
   edgeFile = [[Interface\Tooltips\UI-Tooltip-Border]],
   tile = true,
@@ -45,54 +45,54 @@ shooty_export:SetBackdrop({
   edgeSize = 16,
   insets = {left = 5, right = 5, top = 5, bottom = 5}
   })
-shooty_export:SetBackdropBorderColor(TOOLTIP_DEFAULT_COLOR.r, TOOLTIP_DEFAULT_COLOR.g, TOOLTIP_DEFAULT_COLOR.b)
-shooty_export:SetBackdropColor(TOOLTIP_DEFAULT_BACKGROUND_COLOR.r, TOOLTIP_DEFAULT_BACKGROUND_COLOR.g, TOOLTIP_DEFAULT_BACKGROUND_COLOR.b)
-shooty_export.action = CreateFrame("Button","shooty_exportaction", shooty_export, "UIPanelButtonTemplate")
-shooty_export.action:SetWidth(100)
-shooty_export.action:SetHeight(22)
-shooty_export.action:SetPoint("BOTTOM",0,-20)
-shooty_export.action:SetText("Import")
-shooty_export.action:Hide()
-shooty_export.action:SetScript("OnClick",function() GuildRoll_standings.import() end)
-shooty_export.title = shooty_export:CreateFontString(nil,"OVERLAY")
-shooty_export.title:SetPoint("TOP",0,-5)
-shooty_export.title:SetFont("Fonts\\ARIALN.TTF", 12)
-shooty_export.title:SetWidth(200)
-shooty_export.title:SetJustifyH("LEFT")
-shooty_export.title:SetJustifyV("CENTER")
-shooty_export.title:SetShadowOffset(1, -1)
-shooty_export.edit = CreateFrame("EditBox", "shooty_exportedit", shooty_export)
-shooty_export.edit:SetMultiLine(true)
-shooty_export.edit:SetAutoFocus(true)
-shooty_export.edit:EnableMouse(true)
-shooty_export.edit:SetMaxLetters(0)
-shooty_export.edit:SetHistoryLines(1)
-shooty_export.edit:SetFont('Fonts\\ARIALN.ttf', 12, 'THINOUTLINE')
-shooty_export.edit:SetWidth(290)
-shooty_export.edit:SetHeight(190)
-shooty_export.edit:SetScript("OnEscapePressed", function() 
-    shooty_export.edit:SetText("")
-    shooty_export:Hide() 
+guildep_export:SetBackdropBorderColor(TOOLTIP_DEFAULT_COLOR.r, TOOLTIP_DEFAULT_COLOR.g, TOOLTIP_DEFAULT_COLOR.b)
+guildep_export:SetBackdropColor(TOOLTIP_DEFAULT_BACKGROUND_COLOR.r, TOOLTIP_DEFAULT_BACKGROUND_COLOR.g, TOOLTIP_DEFAULT_BACKGROUND_COLOR.b)
+guildep_export.action = CreateFrame("Button","guildep_exportaction", guildep_export, "UIPanelButtonTemplate")
+guildep_export.action:SetWidth(100)
+guildep_export.action:SetHeight(22)
+guildep_export.action:SetPoint("BOTTOM",0,-20)
+guildep_export.action:SetText("Import")
+guildep_export.action:Hide()
+guildep_export.action:SetScript("OnClick",function() GuildRoll_standings.import() end)
+guildep_export.title = guildep_export:CreateFontString(nil,"OVERLAY")
+guildep_export.title:SetPoint("TOP",0,-5)
+guildep_export.title:SetFont("Fonts\\ARIALN.TTF", 12)
+guildep_export.title:SetWidth(200)
+guildep_export.title:SetJustifyH("LEFT")
+guildep_export.title:SetJustifyV("CENTER")
+guildep_export.title:SetShadowOffset(1, -1)
+guildep_export.edit = CreateFrame("EditBox", "guildep_exportedit", guildep_export)
+guildep_export.edit:SetMultiLine(true)
+guildep_export.edit:SetAutoFocus(true)
+guildep_export.edit:EnableMouse(true)
+guildep_export.edit:SetMaxLetters(0)
+guildep_export.edit:SetHistoryLines(1)
+guildep_export.edit:SetFont('Fonts\\ARIALN.ttf', 12, 'THINOUTLINE')
+guildep_export.edit:SetWidth(290)
+guildep_export.edit:SetHeight(190)
+guildep_export.edit:SetScript("OnEscapePressed", function() 
+    guildep_export.edit:SetText("")
+    guildep_export:Hide() 
   end)
-shooty_export.edit:SetScript("OnEditFocusGained", function()
-  shooty_export.edit:HighlightText()
+guildep_export.edit:SetScript("OnEditFocusGained", function()
+  guildep_export.edit:HighlightText()
 end)
-shooty_export.edit:SetScript("OnCursorChanged", function() 
-  shooty_export.edit:HighlightText()
+guildep_export.edit:SetScript("OnCursorChanged", function() 
+  guildep_export.edit:HighlightText()
 end)
-shooty_export.AddSelectText = function(txt)
-  shooty_export.edit:SetText(txt)
-  shooty_export.edit:HighlightText()
+guildep_export.AddSelectText = function(txt)
+  guildep_export.edit:SetText(txt)
+  guildep_export.edit:HighlightText()
 end
-shooty_export.scroll = CreateFrame("ScrollFrame", "shooty_exportscroll", shooty_export, 'UIPanelScrollFrameTemplate')
-shooty_export.scroll:SetPoint('TOPLEFT', shooty_export, 'TOPLEFT', 8, -30)
-shooty_export.scroll:SetPoint('BOTTOMRIGHT', shooty_export, 'BOTTOMRIGHT', -30, 8)
-shooty_export.scroll:SetScrollChild(shooty_export.edit)
-GuildRoll:make_escable("shooty_exportframe","add")
+guildep_export.scroll = CreateFrame("ScrollFrame", "guildep_exportscroll", guildep_export, 'UIPanelScrollFrameTemplate')
+guildep_export.scroll:SetPoint('TOPLEFT', guildep_export, 'TOPLEFT', 8, -30)
+guildep_export.scroll:SetPoint('BOTTOMRIGHT', guildep_export, 'BOTTOMRIGHT', -30, 8)
+guildep_export.scroll:SetScrollChild(guildep_export.edit)
+GuildRoll:make_escable("guildep_exportframe","add")
 
 function GuildRoll_standings:Export()
-  shooty_export.action:Hide()
-  shooty_export.title:SetText(C:Gold(L["Ctrl-C to copy. Esc to close."]))
+  guildep_export.action:Hide()
+  guildep_export.title:SetText(C:Gold(L["Ctrl-C to copy. Esc to close."]))
   local t = {}
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
@@ -105,25 +105,25 @@ function GuildRoll_standings:Export()
   table.sort(t, function(a,b)
       return tonumber(a[4]) > tonumber(b[4])
     end)
-  shooty_export:Show()
+  guildep_export:Show()
   local txt = "Name;EP;GP;PR\n"
   for i,val in ipairs(t) do
     txt = string.format("%s%s;%d;%d;%d\n",txt,val[1],val[2],val[3],val[4])
   end
-  shooty_export.AddSelectText(txt)
+  guildep_export.AddSelectText(txt)
 end
 
 function GuildRoll_standings:Import()
   if not IsGuildLeader() then return end
-  shooty_export.action:Show()
-  shooty_export.title:SetText(C:Red("Ctrl-V to paste data. Esc to close."))
-  shooty_export.AddSelectText(L.IMPORT_WARNING)
-  shooty_export:Show()
+  guildep_export.action:Show()
+  guildep_export.title:SetText(C:Red("Ctrl-V to paste data. Esc to close."))
+  guildep_export.AddSelectText(L.IMPORT_WARNING)
+  guildep_export:Show()
 end
 
 function GuildRoll_standings.import()
   if not IsGuildLeader() then return end
-  local text = shooty_export.edit:GetText()
+  local text = guildep_export.edit:GetText()
   local t = {}
   local found
   for line in string.gfind(text,"[^\r\n]+") do
@@ -136,7 +136,7 @@ function GuildRoll_standings.import()
   end
   if (found) then
     local count = 0
-    shooty_export.edit:SetText("")
+    guildep_export.edit:SetText("")
     for i=1,GetNumGuildMembers(1) do
       local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
       local name_epgp = t[name]
@@ -153,7 +153,7 @@ function GuildRoll_standings.import()
     for name,epgp in pairs(t) do
       report = string.format("%s%s {%s:%s}\n",report,name,t[1],t[2])
     end
-    shooty_export.AddSelectText(report)
+    guildep_export.AddSelectText(report)
   end
 end
 
