@@ -149,15 +149,6 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
   --   end,
   --   order = 11,
   -- },
-    ep = {
-      type = "execute",
-      name = "Check your pug Standing",
-      desc = "Checks your pug Standing",
-      func = function() 
-        GuildRoll:CheckPugStanding()
-      end,
-      order = 12,
-    },
   }},
 {type = "group", handler = GuildRoll, args = {
     show = {
@@ -242,15 +233,6 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
   --   end,
   --   order = 9,
   -- },
-    ep = {
-      type = "execute",
-      name = "Check your pug Standing",
-      desc = "Checks your pug Standing",
-      func = function() 
-        GuildRoll:CheckPugStanding()
-      end,
-      order = 10,
-    },
   }}
 GuildRoll.cmdtable = function() 
   if (admin()) then
@@ -312,14 +294,6 @@ function GuildRoll:buildMenu()
       end
     }
  
-    options.args["updatePugs"] = {
-      type = "execute",
-      name = "Update Pug Standing",
-      desc = "Update Pug Standing",
-      order = 62,
-      hidden = function() return not (admin()) end,
-      func = function() GuildRoll:updateAllPugStanding(false) end
-    }
     options.args["alts"] = {
       type = "toggle",
       name = L["Enable Alts"],
@@ -651,8 +625,7 @@ function GuildRoll:delayedInit()
   self:RegisterChatCommand({"/retcsr"}, function(input)
     local bonus = GuildRoll:calculateBonus(input)
     self:RollCommand(true, false,false, bonus)
-  end) 
-  self:RegisterChatCommand({"/updatepugs"}, function() GuildRoll:updateAllPugStanding(false) end)
+  end)
   --self:RegisterEvent("CHAT_MSG_ADDON","addonComms")  
   -- broadcast our version
   local addonMsg = string.format("GuildRollVERSION;%s;%d",GuildRoll._versionString,major_ver or 0)
@@ -1863,42 +1836,27 @@ function GuildRoll:RollCommand(isSRRoll,isDSRRoll,isOS,bonus)
   local gp = 0
   local desc = ""  
   local hostG= GuildRoll:GetGuildName()
-	if (IsPugInHostedRaid()) then
-		hostG = GuildRoll.VARS.HostGuildName
-		local key = GuildRoll:GetGuildKey(GuildRoll.VARS.HostGuildName)
-		if GuildRoll_pugCache[key] and GuildRoll_pugCache[key][playerName] then
-		-- Player is a Pug, use stored EP
-			ep = GuildRoll_pugCache[key][playerName][1] 
-			
-			
-			gp = GuildRoll_pugCache[key][playerName][2]
-			local inguildn = GuildRoll_pugCache[key][playerName][3] or ""
-			desc = string.format("PUG(%s)",inguildn)
-		else
-			ep = 0
-			gp = 0
-			desc = "Unregistered PUG"
-		end
-	  -- Check if the player is an alt
-	elseif GuildRollAltspool then
-		local main = self:parseAlt(playerName)
-		if main then
-		  -- If the player is an alt, use the main's EP
-		  ep = self:get_ep_v3(main) or 0
-		  gp = self:get_gp_v3(main) or 0
-		  desc = "Alt of "..main
-		else
-		  -- If not an alt, use the player's own EP
-		  ep = self:get_ep_v3(playerName) or 0
-		  gp = self:get_gp_v3(playerName) or 0
-		  desc = "Main"
-		end
-	else
-		-- If alt pooling is not enabled, just use the player's EP
-		ep = self:get_ep_v3(playerName) or 0
-		gp = self:get_gp_v3(playerName) or 0
-		desc = "Main"
-	end
+  -- NoPugs: Removed IsPugInHostedRaid branch
+  -- Check if the player is an alt
+  if GuildRollAltspool then
+    local main = self:parseAlt(playerName)
+    if main then
+      -- If the player is an alt, use the main's EP
+      ep = self:get_ep_v3(main) or 0
+      gp = self:get_gp_v3(main) or 0
+      desc = "Alt of "..main
+    else
+      -- If not an alt, use the player's own EP
+      ep = self:get_ep_v3(playerName) or 0
+      gp = self:get_gp_v3(playerName) or 0
+      desc = "Main"
+    end
+  else
+    -- If alt pooling is not enabled, just use the player's EP
+    ep = self:get_ep_v3(playerName) or 0
+    gp = self:get_gp_v3(playerName) or 0
+    desc = "Main"
+  end
   
   -- Calculate the roll range based on whether it's an SR roll or not
   local minRoll, maxRoll
@@ -1952,106 +1910,31 @@ function GuildRoll:RollCommand(isSRRoll,isDSRRoll,isOS,bonus)
   SendChatMessage(message, chatType)
 end
 function GuildRoll:isPug(name)
-  for i = 1, GetNumGuildMembers(1) do
-    local guildMemberName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
- 
-    if officerNote and officerNote ~= '' then
-      local _,_,pugName = string.find(officerNote, "{pug:([^}]+)}")
-        if pugName == name then
-          return true, guildMemberName 
-        end
-    end
-  end
+  -- NoPugs: This function has been disabled
   return false
 end
 function GuildRoll:isBank(name)
-  for i = 1, GetNumGuildMembers(1) do
-    local guildMemberName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
-	
-	if guildMemberName == name then
-		if officerNote and officerNote ~= '' then
-		  local _,_,pugName = string.find(officerNote, "{pug:([^}]+)}")
-			if pugName then
-			  return true,   pugName
-			end
-		end
-	end
- 
-  end
+  -- NoPugs: This function has been disabled
   return false
 end
 
 function GuildRoll:CheckPugStanding()
-  local playerName = UnitName("player")
-  local foundEP = false
-  
-  for guildName, guildData in pairs(GuildRoll_pugCache) do
-    if guildData[playerName] then
-      self:defaultPrint(string.format("Your "..L["MainStanding"].." for %s: %d , %d", guildName, guildData[playerName][1],guildData[playerName][2]))
-      foundEP = true
-    end
-  end
-  
-  if not foundEP then
-    self:defaultPrint("No "..L["MainStanding"].." found for " .. playerName .. " in any guild")
-  end
+  -- NoPugs: This function has been disabled
+  self:defaultPrint("PUG standing feature has been disabled.")
+  return nil
 end
 function GuildRoll:getAllPugs()
-  local pugs = {}
-  for i = 1, GetNumGuildMembers(1) do
-    local guildMemberName, _, _, guildMemberLevel, _, _, _, officerNote = GetGuildRosterInfo(i)
-    if officerNote and officerNote ~= '' then
-      local _, _, pugName = string.find(officerNote, "{pug:([^}]+)}")
-      if pugName then
-        pugs[guildMemberName] = pugName
-      end
-    end
-  end
-  return pugs
+  -- NoPugs: This function has been disabled
+  return {}
 end
 function GuildRoll:updateAllPugStanding( force )
-  if not admin() and not force then
-    self:defaultPrint("You don't have permission to perform this action.")
-    return
-  end
-  local pugs = self:getAllPugs()
-  local count = 0
-
-  local packet={}
-  local pi = 0
-  for guildMemberName, pugName in pairs(pugs) do
-	if GuildRoll:inRaid(pugName) then
-		local ep = self:get_ep_v3(guildMemberName) or 0
-		local gp = self:get_gp_v3(guildMemberName) or 0
-		table.insert(packet,pugName..":"..guildMemberName..":"..ep..":"..gp)
-		pi = pi + 1
-		
-		if pi >= 4 then
-			self:sendPugEpUpdatePacket(packet)
-			packet={}
-			pi = 0
-		end
-		--self:sendPugEpUpdate(pugName, ep)
-		count = count + 1
-	end
-  end
-	if pi >0 then
-		self:sendPugEpUpdatePacket(packet)
-		packet={}
-		pi = 0
-	end
-  self:defaultPrint(string.format("Updated "..L["MainStanding"].." for %d Pug player(s)", count))
+  -- NoPugs: This function has been disabled
+  return
 end
 
 
 function GuildRoll:getPugName(name)
-  for i = 1, GetNumGuildMembers(1) do
-      local guildMemberName, _, _, _, _, _, _, officerNote = GetGuildRosterInfo(i)
-      if guildMemberName == name then
-          local _, _, pugName = string.find(officerNote or "", "{pug:([^}]+)}")
-          return pugName
-      end
-  end
+  -- NoPugs: This function has been disabled
   return nil
 end 
 local RaidKey = {[L["Molten Core"]]="MC",[L["Onyxia\'s Lair"]]="ONY",[L["Blackwing Lair"]]="BWL",[L["Ahn\'Qiraj"]]="AQ40",[L["Naxxramas"]]="NAX",["Tower of Karazhan"]="K10",["Upper Tower of Karazhan"]="K40",["???"]="K40"}
@@ -2131,61 +2014,8 @@ function GuildRoll:GetReward()
 end
 
 function GuildRoll:UpdateHostInfo()
- 
-	
-	local ownGuild =(GetGuildInfo("player"))
-	local playerName = UnitName("player")
-	local isInGuild = (guildName) and guildName ~= ""
-	if (GetNumRaidMembers() > 0 ) then -- we entered a raid or raid updated
-
-        if not inRaid then 
-            inRaid = true
-        end
-		local _ ,raidlead = GuildRoll:GetRaidLeader()
-		if (GuildRoll.VARS.HostLeadName ~= raidlead ) then --raid leadership changed or new raid
-			
-			if GuildRoll.VARS.HostLeadName ~= "!" then
-			--leadership changed
-			
-				if raidlead == playerName then
-					GuildRollMSG:DBGMSG("Leadership assigned to you, Sending host info")
-					GuildRoll.VARS.HostGuildName =  ownGuild 
-					GuildRoll.VARS.HostLeadName = playerName
-					GuildRoll:SendHostInfoUpdate(nil)
-				else
-					GuildRollMSG:DBGMSG("Leadership changed, requesting host info")
-					GuildRoll.VARS.HostGuildName = "!"
-					GuildRoll.VARS.HostLeadName ="!"
-					GuildRoll:RequestHostInfo()
-				end
-
-			else
-			
-				if raidlead == UnitName("player") then
-					GuildRollMSG:DBGMSG("Raid Created, Sending host info")
-					GuildRoll.VARS.HostGuildName =  ownGuild 
-					GuildRoll.VARS.HostLeadName = playerName
-					GuildRoll:SendHostInfoUpdate(nil)
-
-				else
-					GuildRollMSG:DBGMSG("Joined Raid, requesting host info")
-					GuildRoll:RequestHostInfo()
-				end
-				
-				
-			end
-		end
-  
-	else -- we left raid
-    if inRaid then
-		GuildRollMSG:DBGMSG("Leaving Raid")
-        inRaid = false
-    end
-		GuildRoll.VARS.HostGuildName = "!"
-		GuildRoll.VARS.HostLeadName ="!"
-	end 
-
- 
+  -- NoPugs: This function has been disabled
+  return
 end
 
 function GuildRoll:GetGuildName()
@@ -2195,11 +2025,8 @@ end
 
 
 function IsPugInHostedRaid()
-	local GuildName = GuildRoll:GetGuildName()
-	
-	--DEFAULT_CHAT_FRAME:AddMessage("GuildName "..GuildName.." GuildRoll.VARS.HostGuildName " .. GuildRoll.VARS.HostGuildName  )
-	
-	return GuildName =="" or GuildRoll.VARS.HostGuildName ~="!" and GuildRoll.VARS.HostGuildName ~= GuildName
+  -- NoPugs: This function has been disabled
+  return false
 end
  
 function GuildRoll:GetRaidLeader()
@@ -2239,41 +2066,8 @@ local lastHostInfoDispatch = 0
 local HostInfoRequestsSinceLastDispatch = 0
 
 function GuildRoll:SendHostInfoUpdate( member , epgp)
-
-	local GuildName = GuildRoll:GetGuildName()
-	if GuildName == nil or GuildName == "" then DEFAULT_CHAT_FRAME:AddMessage("SendHostInfoUpdate : not in guild") return end
-	 
-	-- is raid a guild raid
-	local GuildRules = true
-	-- is the sender a pug
-	
-	local prio = "BULK"
-	local message = string.format("%s:%s",GuildName,tostring(GuildRules))
-	if (member) then
-		local isPug,inGuildName =  GuildRoll:isPug(member)
-	
-		if isPug then
-			local ep,gp
-			if epgp then
- 
-				_,_, ep,gp = string.find(epgp, "{(%d+):(%d+)}")
- 
-				--DEFAULT_CHAT_FRAME:AddMessage(string.format("MainStandinggp %s  %d %d", epgp,  ep,gp)) 
-			else
-				ep = self:get_ep_v3(inGuildName)  
-				gp = self:get_gp_v3(inGuildName)  
-			end
-			prio = "ALERT"
-			message = message ..":"..string.format("%s:%s:%d:%d",member,inGuildName,ep,gp)
-		else
-			if GuildRoll:verifyGuildMember(member,true,true) then
-			
-			else
-				message = message ..":"..string.format("%s:%s:%d:%d",member,"!!",0,0)
-			end
-		end
-	end
-	GuildRoll:SendMessage(GuildRollMSG.HostInfoUpdate,message,prio) 
+  -- NoPugs: This function has been disabled
+  return
 end
 
 
@@ -2283,126 +2077,34 @@ DEFAULT_CHAT_FRAME:AddMessage("Host GuildName " .. GuildRoll.VARS.HostGuildName 
 end
 
 function GuildRoll:ParseHostInfo(  sender , text )
-
-	GuildRollMSG:DBGMSG("Parsing HostInfo:"..text)
-	local GuildName = GuildRoll:GetGuildName()
-	local fields = GuildRoll:strsplitT(':', text)
-	GuildRoll.VARS.HostLeadName = sender or "!"
-	local HostGuildName = fields[1]
-	if HostGuildName then
-		local oldHost = GuildRoll.VARS.HostGuildName 
-		GuildRoll.VARS.HostGuildName =  fields[1] 
-		
-		if oldHost~=GuildRoll.VARS.HostGuildName then
-			self:defaultPrint(string.format("This Raid is hosted by %s.", HostGuildName))
-		end
-		if HostGuildName == GuildName then
-			-- enable guildrules
-		else
-		--is message targetting us
-			local TargetMember = fields[3]
-				if TargetMember == UnitName("player") then
-					-- pug
-					local PugReg = fields[4]
-					
-					if PugReg and PugReg ~= "!!"  then
-						-- registered
-
-						local ep = tonumber(fields[5]) or 0
-						local gp = tonumber(fields[6]) or 0
-						-- update ep/gp cache
-						local key = GuildRoll:GetGuildKey(GuildRoll.VARS.HostGuildName)
-						if not GuildRoll_pugCache[key] then
-							GuildRoll_pugCache[key] = {}
-						end
-						GuildRoll_pugCache[key][fields[3]] = {ep,gp,PugReg}
-						self:defaultPrint(string.format("Updated Standing for %s as %s in guild %s: %d : %d",  TargetMember, PugReg, HostGuildName, ep,gp))
-					else
-						-- announce unregistered
-						self:defaultPrint(string.format("You don't have standing bank character in %s, contact one of their officers for that", HostGuildName))
-					end
-				end
-		end
-	else
-		return
-	end
-	-- update guild ep cache
+  -- NoPugs: This function has been disabled
+  return
 end
 function GuildRoll:RequestHostInfo() 
-	if GetTime()-GuildRollMSG.RequestHostInfoUpdateTS > 5 then
-		GuildRollMSG.RequestHostInfoUpdateTS = GetTime()
-		GuildRoll:SendMessage(GuildRollMSG.RequestHostInfoUpdate,"RequestHostInfoUpdate","ALERT")
-	end
+  -- NoPugs: This function has been disabled
+  return
 end 
 
 
 function GuildRoll:sendPugEpUpdatePacket(packet)
-	
-	
-
-	local updateline = string.format("%s{", GuildRoll:GetGuildName())
-	for i, ep in ipairs(packet) do
-		updateline = updateline .. ep
-		if (i<table.getn(packet)) then 
-			updateline = updateline .. ","
-		end
-		
-		
-	end
-	
-		updateline = updateline .. "}"
-	GuildRollMSG:DBGMSG("Sending a packet")
-	GuildRoll:SendMessage(GuildRollMSG.PugStandingUpdate,updateline,"BULK")
+  -- NoPugs: This function has been disabled
+  return
 end
 
 function GuildRoll:parsePugEpUpdatePacket(message)
-
-	
- local playerName = UnitName("player") 
- local _, _, guildName , packet = string.find(message,"([^{]+){([^}]+)}")
-  local segs = GuildRoll:strsplitT(',', packet)
-  
-  for i, seg in pairs(segs) do
-  
-	local _, _, name,inGuildName, ep, gp = string.find(seg, "(%S+):(%S+):(%d+):(%d+)")
-
-	if playerName == name then
-	 if playerName and inGuildName and ep and gp then
-		
-      if guildName then
-		local key = GuildRoll:GetGuildKey(guildName)
-        if GuildRoll_pugCache == nil then 
-            GuildRoll_pugCache = {}
-        end
-        if  GuildRoll_pugCache[key] == nil then
-          GuildRoll_pugCache[key] = {}
-        end
-        GuildRoll_pugCache[key][playerName] = {ep,gp}
-
-        self:defaultPrint(string.format("Updated Standing for %s in guild %s as %s: %d : %d", playerName, guildName,inGuildName, ep,gp))
-        end
-      else
-        self:defaultPrint("Could not parse guild name from broadcast "  )
-      end
-
-	end
- 
-  end
+  -- NoPugs: This function has been disabled
+  return
 end
 
 
 function GuildRoll:ReportIfPugs()
-	local GuildName = GuildRoll:GetGuildName()
-	if (GuildName and  GuildName == GuildRoll.VARS.HostGuildName and GuildRoll:inRaid(pug)) then
-		GuildRoll:SendHostInfoUpdate( pug)
-	end
+  -- NoPugs: This function has been disabled
+  return
 end
 
 function GuildRoll:ReportPugManualEdit(pug , epgp)
-	local GuildName = GuildRoll:GetGuildName()
-	if (pug and epgp and GuildName and  GuildName == GuildRoll.VARS.HostGuildName and GuildRoll:inRaid(pug)) then
-		GuildRoll:SendHostInfoUpdate( pug, epgp)
-	end
+  -- NoPugs: This function has been disabled
+  return
 end
 
 function GuildRoll:SendMessage(subject, msg , prio)
@@ -2446,27 +2148,7 @@ function GuildRollMSG:OnCHAT_MSG_ADDON( prefix, text, channel, sender)
 				--GuildRollMSG:DBGMSG("Recieved a message" )  
 				
 				local _ ,raidlead = GuildRoll:GetRaidLeader()
-				if (UnitName("player")==raidlead) then
-				--	GuildRollMSG:DBGMSG("as reaidleader" )  
-					if ( string.find( prefix, GuildRollMSG.RequestHostInfoUpdate) and  GuildRoll:inRaid(sender)) then
-						GuildRollMSG:DBGMSG("Recieved a RequestHostInfoUpdate from " .. sender ) 
-						 GuildRoll:SendHostInfoUpdate(sender)
-					end
-				else
-					--GuildRollMSG:DBGMSG("as member" )  
-					
-					if (sender == raidlead) then
-					GuildRollMSG:DBGMSG("from raid leader: " .. sender )  
-						if ( string.find( prefix, GuildRollMSG.HostInfoUpdate)) then
-							GuildRollMSG:DBGMSG("Recieved a HostInfoUpdate from " .. sender ) 
-							GuildRoll:ParseHostInfo( sender, text ) 
-						end
-						if ( string.find( prefix,GuildRollMSG.PugStandingUpdate)) then
-							GuildRollMSG:DBGMSG("Recieved a PugStandingUpdate from " .. sender ) 
-							GuildRoll:parsePugEpUpdatePacket( text )
-						end
-					end
-				end 
+				-- NoPugs: Removed handling for RequestHostInfoUpdate, HostInfoUpdate, and PugStandingUpdate messages
 				
 			end
 		end
