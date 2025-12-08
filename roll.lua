@@ -1,123 +1,84 @@
 -- Ensure GuildRoll_RollPos is initialized with default values
 GuildRoll_RollPos = GuildRoll_RollPos or { x = 400, y = 300 }
-GuildRoll_showRollWindow = true
-
--- Default rank index for Core Raider if not found in guild
-local DEFAULT_REQUIRED_RANK_INDEX = 3
-
--- Variables to track player rank and CSR eligibility
-local playerRankIndex = nil
-local coreRaiderRankIndex = nil
-local isCSRAllowed = false
-
--- Function to update rank information
-local function UpdateRankInfo()
-    if not IsInGuild() then
-        isCSRAllowed = false
-        return
-    end
-    
-    -- Request fresh guild roster data
-    GuildRoster()
-    
-    local playerName = UnitName("player")
-    local numGuildMembers = GetNumGuildMembers(true)
-    
-    -- Find Core Raider rank index by scanning guild members once
-    coreRaiderRankIndex = nil
-    local ranksScanned = {}
-    
-    for i = 1, numGuildMembers do
-        local name, _, rankIndex, _, _, _, _, _, _, _ = GetGuildRosterInfo(i)
-        if name and rankIndex and not ranksScanned[rankIndex] then
-            ranksScanned[rankIndex] = true
-            local numRanks = GuildControlGetNumRanks()
-            -- GuildControlGetRankName expects 1-based index, rankIndex is 0-based
-            if rankIndex >= 0 and rankIndex + 1 <= numRanks then
-                local rankName = GuildControlGetRankName(rankIndex + 1)
-                if rankName == "Core Raider" then
-                    coreRaiderRankIndex = rankIndex
-                end
-            end
-        end
-        
-        -- Also capture player's rank index while we're scanning
-        if name == playerName then
-            playerRankIndex = rankIndex
-        end
-        
-        -- Early exit if we found both
-        if coreRaiderRankIndex and playerRankIndex then
-            break
-        end
-    end
-    
-    -- Use default if Core Raider rank not found
-    if not coreRaiderRankIndex then
-        coreRaiderRankIndex = DEFAULT_REQUIRED_RANK_INDEX
-    end
-    
-    -- Check if CSR is allowed (lower rankIndex = higher rank)
-    if playerRankIndex and coreRaiderRankIndex then
-        isCSRAllowed = (playerRankIndex <= coreRaiderRankIndex)
-    else
-        isCSRAllowed = false
-    end
-end
+GuildRoll_showRollWindow = GuildRoll_showRollWindow == nil and true or GuildRoll_showRollWindow
 
 -- Function to execute commands
 local function ExecuteCommand(command)
-    if command == "roll 100" then
+    if command == "roll 101" then
+        RandomRoll(1, 101)
+    elseif command == "roll 100" then
         RandomRoll(1, 100)
     elseif command == "roll 99" then
         RandomRoll(1, 99)
     elseif command == "roll 98" then
         RandomRoll(1, 98)
     elseif command == "ret ms" then
+        -- simple MS (client random 1-100)
+        RandomRoll(1, 100)
+    elseif command == "ret os" then
+        -- simple OS (client random 1-99) -- no OSPenalty applied
+        RandomRoll(1, 99)
+    elseif command == "ret tmog" then
+        -- transmog roll simple 1-98
+        RandomRoll(1, 98)
+    elseif command == "ret epms" then
+        -- EP-aware MainSpec roll (1+EP .. 100+EP)
         if GuildRoll and GuildRoll.RollCommand then
-            GuildRoll:RollCommand(false, 0)
+            GuildRoll:RollCommand(false, false, false, 0)
         end
     elseif command == "ret sr" then
+        -- EP-aware SR roll (100+EP .. 200+EP)
         if GuildRoll and GuildRoll.RollCommand then
-            GuildRoll:RollCommand(true, 0)
+            GuildRoll:RollCommand(true, false, false, 0)
         end
     elseif command == "ret csr" then
-        -- Use static popup dialog to input bonus
+        -- Use static popup dialog to input CSR weeks (0..15) and validate
         StaticPopupDialogs["RET_CSR_INPUT"] = {
-            text = "Enter number of weeks you SR this item (0-15):",
+            text = "Enter number of weeks you SR this item (0..15):",
             button1 = TEXT(ACCEPT),
             button2 = TEXT(CANCEL),
             hasEditBox = 1,
             maxLetters = 5,
             OnAccept = function(self)
-                local editBox = _G[self:GetParent():GetName().."EditBox"]
-                local input = editBox:GetText()
-                local bonus = GuildRoll:calculateBonus(input)
-                if bonus == nil then
-                    print("Invalid number entered. Please enter a number between 0 and 15.")
+                local editBox = _G[self:GetName().."EditBox"]
+                local number = tonumber(editBox and editBox:GetText())
+                if number ~= nil then
+                    local bonus = GuildRoll:calculateBonus(number)
+                    if bonus == nil then
+                        print("Invalid number entered. Valid values: 0,1 or 2..15")
+                    else
+                        GuildRoll:RollCommand(true, false, false, bonus)
+                    end
                 else
-                    GuildRoll:RollCommand(true, bonus)
+                    print("Invalid number entered.")
                 end
             end,
             OnShow = function(self)
-                _G[self:GetName().."EditBox"]:SetText("")
-                _G[self:GetName().."EditBox"]:SetFocus()
+                local editBox = _G[self:GetName().."EditBox"]
+                if editBox then
+                    editBox:SetText("")
+                    editBox:SetFocus()
+                end
             end,
-            OnHide = function()
-                if ChatFrameEditBox:IsVisible() then
+            OnHide = function(self)
+                if ChatFrameEditBox and ChatFrameEditBox:IsVisible() then
                     ChatFrameEditBox:SetFocus()
                 end
             end,
-            EditBoxOnEnterPressed = function(self)
-                local editBox = _G[self:GetParent():GetName().."EditBox"]
-                local input = editBox:GetText()
-                local bonus = GuildRoll:calculateBonus(input)
-                if bonus == nil then
-                    print("Invalid number entered. Please enter a number between 0 and 15.")
+            EditBoxOnEnterPressed = function(editBox)
+                local parent = editBox:GetParent()
+                local number = tonumber(editBox:GetText())
+                if number ~= nil then
+                    local bonus = GuildRoll:calculateBonus(number)
+                    if bonus == nil then
+                        print("Invalid number entered. Valid values: 0,1 or 2..15")
+                    else
+                        GuildRoll:RollCommand(true, false, false, bonus)
+                    end
                 else
-                    GuildRoll:RollCommand(true, bonus)
+                    print("Invalid number entered.")
                 end
-                self:GetParent():Hide()
+                parent:Hide()
             end,
             EditBoxOnEscapePressed = function(self)
                 self:GetParent():Hide()
@@ -129,12 +90,17 @@ local function ExecuteCommand(command)
         }
         StaticPopup_Show("RET_CSR_INPUT")
     elseif command == "ret show" then
-        GuildRoll_standings:Toggle()
+        if GuildRoll_standings and GuildRoll_standings.Toggle then
+            GuildRoll_standings:Toggle()
+        end
     elseif command == "noice" then
-        local noices ={ {"nice","SAY"},{"noice","SAY"},{"Nice !","YELL"},{"NOICE !","YELL"},{"NOIIICE","YELL"},{"NOYCE !","YELL"},{"niiice","SAY"},{"Errhm, noice","SAY"}}
-        local noice = noices[math.random(1,table.getn(noices))]
-        SendChatMessage(noice[1],noice[2])
-        if noice[2] == "YELL" then DoEmote("cheer") end;
+        local noices = {
+            {"nice","SAY"},{"noice","SAY"},{"Nice !","YELL"},{"NOICE !","YELL"},
+            {"NOIIICE","YELL"},{"NOYCE !","YELL"},{"niiice","SAY"},{"Errhm, noice","SAY"}
+        }
+        local noice = noices[math.random(1,#noices)]
+        SendChatMessage(noice[1], noice[2])
+        if noice[2] == "YELL" then DoEmote("cheer") end
     end
 end
 
@@ -144,16 +110,14 @@ rollFrame:SetWidth(80)
 rollFrame:SetHeight(41)
 rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
 
-
 function GuildRoll:ResetButton()
-rollFrame:SetWidth(80)
-rollFrame:SetHeight(41)
-rollFrame:SetMovable(false)
-rollFrame:ClearAllPoints()
-rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", 400, 300)
-rollFrame:SetMovable(true)
+    rollFrame:SetWidth(80)
+    rollFrame:SetHeight(41)
+    rollFrame:SetMovable(false)
+    rollFrame:ClearAllPoints()
+    rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", 400, 300)
+    rollFrame:SetMovable(true)
 end
-
 
 if not GuildRoll_showRollWindow then
     rollFrame:Hide()
@@ -174,21 +138,25 @@ rollFrame:SetBackdrop({
 local rollButton = CreateFrame("Button", "ShootyRollButton", rollFrame, "UIPanelButtonTemplate")
 rollButton:SetWidth(96)
 rollButton:SetHeight(30)
-rollButton:SetText("The Buttoon")
+rollButton:SetText("Roll")
 rollButton:SetPoint("CENTER", rollFrame, "CENTER")
+-- Ensure the button receives mouse events and sits above parent
+rollButton:EnableMouse(true)
+rollButton:SetFrameLevel((rollFrame:GetFrameLevel() or 0) + 5)
 
 -- Container for roll buttons, initially hidden
 local rollOptionsFrame = CreateFrame("Frame", "RollOptionsFrame", rollFrame)
 rollOptionsFrame:SetPoint("TOP", rollButton, "BOTTOM", 0, -2)
-rollOptionsFrame:SetWidth(70)
-rollOptionsFrame:SetHeight(30)
+rollOptionsFrame:SetWidth(140)
+rollOptionsFrame:SetHeight(160)
 rollOptionsFrame:Hide()
+rollOptionsFrame:SetFrameLevel(rollButton:GetFrameLevel() - 1)
 
 -- Function to create roll option buttons
-local function CreateRollButton(name, parent, command, anchor,width, font)
+local function CreateRollButton(name, parent, command, anchor, width, font)
     local buttonFrame = CreateFrame("Frame", nil, parent)
-    buttonFrame:SetWidth(70)
-    buttonFrame:SetHeight(30)
+    buttonFrame:SetWidth(120)
+    buttonFrame:SetHeight(24)
     buttonFrame:SetPoint("TOP", anchor, "BOTTOM", 0, -2)
 
     buttonFrame:SetBackdrop({
@@ -199,70 +167,104 @@ local function CreateRollButton(name, parent, command, anchor,width, font)
     })
 
     local button = CreateFrame("Button", nil, buttonFrame, "UIPanelButtonTemplate")
-    button:SetWidth(width or 60)
+    button:SetWidth(width or 110)
     button:SetHeight(20)
     button:SetText(name)
     button:SetPoint("CENTER", buttonFrame, "CENTER")
     if font then
-    button:SetFont("Fonts\\FRIZQT__.TTF", 8)
+        pcall(function() button:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 10) end)
     end
     button:SetScript("OnClick", function()
         ExecuteCommand(command)
-        -- Only hide if the command isn't "shooty show"
-        if command ~= "shooty show" then
-            rollOptionsFrame:Hide()
-        end
+        rollOptionsFrame:Hide()
     end)
 
     return buttonFrame
 end
 
- 
--- Roll option buttons configuration
--- Store button frames for later manipulation (e.g., hiding CSR button)
-local buttonFrames = {}
+-- Helper: get player's rankIndex and the rankIndex of the "Core Raider" rank (if found)
+local DEFAULT_REQUIRED_RANK_INDEX = 3 -- fallback if "Core Raider" rank not found; adjust if your guild uses different ordering (0 = Guild Master)
 
-local function CreateButtons()
-    -- Clear any existing buttons
-    for _, frame in pairs(buttonFrames) do
-        frame:Hide()
+-- Safe function to get rank indices; returns (playerRankIndex, requiredRankIndex) or (nil, nil) if not possible
+local function SafeGetPlayerAndRequiredRankIndices()
+    if not IsInGuild() then return nil, nil end
+    -- avoid calling GuildRoster in combat; pcall to avoid throwing errors
+    if GuildRoster then
+        pcall(GuildRoster)
     end
-    buttonFrames = {}
-    
-    local options = {
-        { "MS", "roll 100" },
-        { "OS", "roll 99" },
-        { "Tmog", "roll 98" },
-        { "EP(MS)", "ret ms" },
-        { "SR", "ret sr" },
-    }
-    
-    -- Add CSR button only if allowed
-    if isCSRAllowed then
-        table.insert(options, { "CSR", "ret csr" })
-    end
-    
-    table.insert(options, { "Standings", "ret show" })
-    
-    -- Create roll buttons dynamically with closer spacing
-    local previousButton = rollOptionsFrame
-    for _, option in ipairs(options) do
-        local buttonFrame = CreateRollButton(option[1], rollOptionsFrame, option[2], previousButton, option[3] or 60, option[4] or false)
-        table.insert(buttonFrames, buttonFrame)
-        
-        if previousButton == rollOptionsFrame then
-            -- For the first button, set it relative to the rollOptionsFrame
-            buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)  -- Align with the top of the options frame 
-        else
-            -- For subsequent buttons, set their position based on the previous button
-            buttonFrame:SetPoint("TOP", previousButton, "BOTTOM", 0, 5)  -- Close spacing
+    local num = GetNumGuildMembers and (GetNumGuildMembers(true) or 0) or 0
+    if num <= 0 then return nil, nil end
+    local playerName = UnitName("player")
+    local playerRankIndex, requiredRankIndex
+    for i = 1, num do
+        -- Use pcall to be safe around API quirks
+        local ok, name, rankName, rankIndex = pcall(function() return GetGuildRosterInfo(i) end)
+        if ok and name then
+            local simpleName = string.match(name, "^[^-]+") or name
+            if playerName and simpleName == playerName and playerRankIndex == nil then
+                playerRankIndex = rankIndex
+            end
+            if rankName and type(rankName) == "string" then
+                local rn = rankName:lower()
+                if rn == "core raider" and requiredRankIndex == nil then
+                    requiredRankIndex = rankIndex
+                end
+            end
+            if playerRankIndex and requiredRankIndex then break end
         end
-        previousButton = buttonFrame  -- Update previousButton to the current buttonFrame for the next iteration
     end
+    return playerRankIndex, requiredRankIndex
+end
+
+-- Determine if current player may see CSR button: Core Raider (by rank index) or higher
+local function CanSeeCSR()
+    if not IsInGuild() then return false end
+    local playerRankIndex, requiredRankIndex = SafeGetPlayerAndRequiredRankIndices()
+    if not playerRankIndex then return false end
+    if not requiredRankIndex then
+        requiredRankIndex = DEFAULT_REQUIRED_RANK_INDEX
+    end
+    -- rankIndex: lower number = higher rank
+    return playerRankIndex <= requiredRankIndex
+end
+
+-- Build options list lazily: call CanSeeCSR() only now (not at file-load time)
+local options = {
+    { "MS", "ret ms" },           -- simple 1-100
+    { "OS", "ret os" },           -- simple 1-99
+    { "Tmog", "ret tmog" },       -- simple 1-98
+    { "EP(MS)", "ret epms" },     -- EP-aware MS (1+EP .. 100+EP)
+    { "SR", "ret sr" },           -- EP-aware SR (100+EP .. 200+EP)
+}
+
+-- Add CSR only if allowed by rank (evaluate now)
+if CanSeeCSR() then
+    table.insert(options, { "CSR", "ret csr" })
+end
+
+-- Add remaining/legacy options
+table.insert(options, { "101", "roll 101" })
+table.insert(options, { "100", "roll 100" })
+table.insert(options, { "Standings", "ret show" })
+
+-- Create roll buttons dynamically with closer spacing
+local previousButton = rollOptionsFrame
+for _, option in ipairs(options) do
+    local buttonFrame = CreateRollButton(option[1], rollOptionsFrame, option[2], previousButton, option[3] or 110, option[4] or false)
+
+    if previousButton == rollOptionsFrame then
+        buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)
+    else
+        buttonFrame:SetPoint("TOP", previousButton, "BOTTOM", 0, 5)
+    end
+    previousButton = buttonFrame
 end
 
 -- Toggle roll buttons on Roll button click
 rollButton:SetScript("OnClick", function()
+    -- debug print to verify click handler is run
+    -- This should always print when clicking the button
+    print("ShootyRollButton clicked; rollOptionsFrame shown? ", rollOptionsFrame:IsShown())
     if rollOptionsFrame:IsShown() then
         rollOptionsFrame:Hide()
     else
@@ -270,25 +272,20 @@ rollButton:SetScript("OnClick", function()
     end
 end)
 
--- Fix for dragging functionality for the frame
-rollFrame:SetScript("OnMouseDown", function(_, arg1)
-    if arg1 == "LeftButton" then
+-- Dragging & saving position
+rollFrame:SetScript("OnMouseDown", function(_, button)
+    if button == "LeftButton" then
         rollFrame:StartMoving()
     end
 end)
-
-rollFrame:SetScript("OnMouseUp", function(_, arg1)
-    if arg1 == "LeftButton" then
+rollFrame:SetScript("OnMouseUp", function(_, button)
+    if button == "LeftButton" then
         rollFrame:StopMovingOrSizing()
         GuildRoll_RollPos.x = rollFrame:GetLeft()
         GuildRoll_RollPos.y = rollFrame:GetTop()
     end
 end)
-
-rollFrame:SetScript("OnDragStart", function()
-    rollFrame:StartMoving()
-end)
-
+rollFrame:SetScript("OnDragStart", function() rollFrame:StartMoving() end)
 rollFrame:SetScript("OnDragStop", function()
     rollFrame:StopMovingOrSizing()
     GuildRoll_RollPos.x = rollFrame:GetLeft()
@@ -299,27 +296,50 @@ end)
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
-eventFrame:SetScript("OnEvent", function(self, event)
-    if event == "PLAYER_LOGIN" then
-        if GuildRoll_RollPos.x and GuildRoll_RollPos.y then
-            rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
-        else
-            GuildRoll_RollPos = { x = 400, y = 300 }
-            rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
+eventFrame:SetScript("OnEvent", function(self, event, ...)
+    -- On login or roster update, if the CSR visibility might change, update the UI button list
+    -- Rebuild options only if roster update happened or on login
+    if event == "GUILD_ROSTER_UPDATE" or event == "PLAYER_LOGIN" then
+        -- Recompute CSR visibility
+        local csrVisible = CanSeeCSR()
+        -- If CSR became available and it's not in the options, add it and recreate buttons
+        local foundCSR = false
+        for _, opt in ipairs(options) do
+            if opt[1] == "CSR" then foundCSR = true; break end
         end
-        if not GuildRoll_showRollWindow then
-            rollFrame:Hide()
+        if csrVisible and not foundCSR then
+            table.insert(options, #options - 3, { "CSR", "ret csr" }) -- insert before legacy options
+            -- remove and re-create buttons: simple approach - hide old frames and create new list
+            for i = rollOptionsFrame:GetNumChildren(), 1, -1 do
+                local child = select(i, rollOptionsFrame:GetChildren())
+                if child and child ~= nil and child.GetName and child:GetName() then
+                    child:Hide()
+                    child:SetParent(nil)
+                end
+            end
+            previousButton = rollOptionsFrame
+            for _, option in ipairs(options) do
+                local buttonFrame = CreateRollButton(option[1], rollOptionsFrame, option[2], previousButton, option[3] or 110, option[4] or false)
+                if previousButton == rollOptionsFrame then
+                    buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)
+                else
+                    buttonFrame:SetPoint("TOP", previousButton, "BOTTOM", 0, 5)
+                end
+                previousButton = buttonFrame
+            end
         end
-        -- Initialize rank info and create buttons
-        UpdateRankInfo()
-        CreateButtons()
-    elseif event == "GUILD_ROSTER_UPDATE" then
-        -- Update rank info when guild roster changes
-        local previousCSRAllowed = isCSRAllowed
-        UpdateRankInfo()
-        -- Recreate buttons only if CSR eligibility changed
-        if previousCSRAllowed ~= isCSRAllowed then
-            CreateButtons()
-        end
+    end
+
+    -- Restore position behavior
+    if GuildRoll_RollPos.x and GuildRoll_RollPos.y then
+        rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
+    else
+        GuildRoll_RollPos = { x = 400, y = 300 }
+        rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
+    end
+    if not GuildRoll_showRollWindow then
+        rollFrame:Hide()
+    else
+        rollFrame:Show()
     end
 end)
