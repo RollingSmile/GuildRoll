@@ -1132,7 +1132,7 @@ function GuildRoll:my_epgp_announce(use_main)
     ep,gp = (self:get_ep_v3(self._playerName) or 0), (self:get_gp_v3(self._playerName) or GuildRoll.VARS.baseAE)
   end
   local baseRoll = GuildRoll:GetBaseRollValue(ep,gp)
-  local msg = string.format(L["You now have: %d MainStanding %d AuxStanding + (%d)"], ep,gp,baseRoll)
+  local msg = string.format("You now have: %d "..L["MainStanding"].." (base roll: %d)", ep, baseRoll)
   self:defaultPrint(msg)
 end
 
@@ -1621,13 +1621,12 @@ function GuildRoll:EasyMenu(menuList, menuFrame, anchor, x, y, displayMode, leve
   ToggleDropDownMenu(1, nil, menuFrame, anchor, x, y)
 end
 function GuildRoll:GetRollingGP(gp)
-
+    -- Kept for compatibility but no longer used in roll calculations
     return math.max(-1 * GuildRoll.VARS.AERollCap , math.min(GuildRoll.VARS.AERollCap,gp) )
 end
 function GuildRoll:GetBaseRollValue(ep,gp)
-
-    return  ep + GuildRoll:GetRollingGP(gp)
-
+    -- Returns only EP for roll calculations (GP parameter ignored)
+    return ep
 end
 
 function GuildRoll:RollCommand(isSRRoll, bonus)
@@ -1660,7 +1659,7 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
   
   -- Calculate the roll range based on whether it's an SR roll or not
   local minRoll, maxRoll
-  local baseRoll = GuildRoll:GetBaseRollValue(ep,gp)
+  local baseRoll = ep  -- Use only EP for roll calculations
   -- New EP-aware roll ranges
   if isSRRoll then
     -- SR: 100 + baseRoll to 200 + baseRoll
@@ -1682,20 +1681,20 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
   if minRoll > maxRoll then minRoll = maxRoll end
 
   RandomRoll(minRoll, maxRoll)
-  local cappedGP =  GuildRoll:GetRollingGP(gp)
+  
   -- Prepare the announcement message
   local bonusText = " as "..desc.." of "..hostG
-  local message = string.format("I rolled Main Spec %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp,  bonusText)
+  local message = string.format("I rolled Main Spec %d - %d with %d "..L["MainStanding"].."%s", minRoll, maxRoll, ep, bonusText)
   
   if(isSRRoll) then
-    message = string.format("I rolled SR %d - %d with %d "..L["MainStanding"].." +%d "..L["AuxStanding"].." (%d)%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
+    message = string.format("I rolled SR %d - %d with %d "..L["MainStanding"].."%s", minRoll, maxRoll, ep, bonusText)
   end
 
   if bonus > 0 then
     -- Calculate weeks: bonus = (weeks - 1) * CSRWeekBonus, so weeks = (bonus / CSRWeekBonus) + 1
     local weeks = math.floor(bonus / GuildRoll.VARS.CSRWeekBonus) + 1
     bonusText = string.format(" +%d for %d weeks", bonus, weeks)..bonusText
-    message = string.format("I rolled Cumulative SR %d - %d with %d "..L["MainStanding"].." +%d(%d"..L["AuxStanding"]..")%s", minRoll, maxRoll, ep ,cappedGP, gp, bonusText)
+    message = string.format("I rolled Cumulative SR %d - %d with %d "..L["MainStanding"].."%s", minRoll, maxRoll, ep, bonusText)
   end
   -- Determine the chat channel
   local chatType = UnitInRaid("player") and "RAID" or "SAY"
