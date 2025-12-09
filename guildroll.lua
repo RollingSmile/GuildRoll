@@ -549,7 +549,7 @@ function GuildRoll:delayedInit()
  
   -- init options and comms
   self._options = self:buildMenu()
-  self:RegisterChatCommand({"/GuildRoll","/guildroll","/ret"},self.cmdtable())
+  self:RegisterChatCommand({"/GuildRoll","/guildroll","/groll"},self.cmdtable())
   function GuildRoll:calculateBonus(input)
     local number = tonumber(input)
     if not number or number < 0 or number > 15 then
@@ -562,7 +562,7 @@ function GuildRoll:delayedInit()
     return (number - 1) * GuildRoll.VARS.CSRWeekBonus
   end
   
-  self:RegisterChatCommand({"/retcsr"}, function(input)
+  self:RegisterChatCommand({"/csr"}, function(input)
     local bonus = GuildRoll:calculateBonus(input)
     if bonus == nil then
       self:defaultPrint("Invalid CSR input. Please enter a number between 0 and 15.")
@@ -1763,12 +1763,13 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
     message = string.format("I rolled SR \"%d - %d\" with %d "..L["MainStanding"].."%s", minRoll, maxRoll, ep, bonusText)
   end
 
-  if bonus > 0 then
-    -- Calculate weeks: bonus = (weeks - 1) * CSRWeekBonus, so weeks = (bonus / CSRWeekBonus) + 1
-    local weeks = math.floor(bonus / GuildRoll.VARS.CSRWeekBonus) + 1
-    local csrBonusText = string.format("%d weeks", weeks)
-    message = string.format("I rolled SR \"%d - %d\" with %d "..L["MainStanding"].." + \"%s\"%s", minRoll, maxRoll, ep, csrBonusText, bonusText)
+if bonus > 0 then
+    local weeks = math.floor(bonus / 10)
+    weeks = weeks+1
+    bonusText = string.format(" +%d for %d consecutive weeks", bonus, weeks)
+    message = string.format("I rolled Cumulative SR %d - %d with %d EP + 100 from SR%s", minRoll, maxRoll, ep, bonusText)
   end
+	
   -- Determine the chat channel
   local chatType = UnitInRaid("player") and "RAID" or "SAY"
   
