@@ -1491,15 +1491,16 @@ function GuildRoll:migratePublicMainTags()
   else
     -- No ScheduleEvent available, execute immediately after a delay
     -- This is less ideal but provides a fallback
+    local grSelf = self  -- Capture GuildRoll instance
     local frame = CreateFrame("Frame")
     frame.timer = 0
-    frame:SetScript("OnUpdate", function(self, elapsed)
-      frame.timer = frame.timer + elapsed
-      if frame.timer >= ROSTER_UPDATE_TIMEOUT then
-        frame:SetScript("OnUpdate", nil)
-        if GuildRoll._publicMainMigrationPending then
-          GuildRoll:debugPrint("Main tag migration fallback timeout triggered (manual).")
-          GuildRoll:_migratePublicMainTagsProcess()
+    frame:SetScript("OnUpdate", function(frameObj, elapsed)
+      frameObj.timer = frameObj.timer + elapsed
+      if frameObj.timer >= ROSTER_UPDATE_TIMEOUT then
+        frameObj:SetScript("OnUpdate", nil)
+        if grSelf._publicMainMigrationPending then
+          grSelf:debugPrint("Main tag migration fallback timeout triggered (manual).")
+          grSelf:_migratePublicMainTagsProcess()
         end
       end
     end)
