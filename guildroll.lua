@@ -947,7 +947,7 @@ function GuildRoll:award_raid_gp(gp) -- awards gp to raid members in zone
     end
     self:simpleSay(string.format(L["Giving %d AuxStanding to all raidmembers"],gp))
     self:addToLog(string.format(L["Giving %d AuxStanding to all raidmembers"],gp))    
-    local addonMsg = string.format("RAID;AWARDEP;%s",gp)
+    local addonMsg = string.format("RAID;AWARDGP;%s",gp)
     self:addonMessage(addonMsg,"RAID")
     self:refreshPRTablets() 
   else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
@@ -1693,7 +1693,7 @@ function GuildRoll:GetRollingGP(gp)
     return math.max(-1 * GuildRoll.VARS.AERollCap , math.min(GuildRoll.VARS.AERollCap,gp) )
 end
 -- Returns the base roll value for the player.
--- Now returns only EP (MainStanding). EP (AuxStanding) is no longer included in roll calculations.
+-- Now returns only EP (MainStanding). GP (AuxStanding) is no longer included in roll calculations.
 function GuildRoll:GetBaseRollValue(ep,gp)
 
     return  ep

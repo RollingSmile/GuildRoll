@@ -106,7 +106,7 @@ function GuildRoll_standings:Export()
       return tonumber(a[4]) > tonumber(b[4])
     end)
   guildep_export:Show()
-  local txt = "Name;EP;EP;PR\n"
+  local txt = "Name;EP;GP;PR\n"
   for i,val in ipairs(t) do
     txt = string.format("%s%s;%d;%d;%d\n",txt,val[1],val[2],val[3],val[4])
   end
@@ -305,7 +305,7 @@ local pr_sorter_standings = function(a,b)
     end
 end
 -- Builds a standings table with record:
--- name, class, armor_class, roles, EP, EP, PR
+-- name, class, armor_class, roles, EP, GP, PR
 -- and sorted by PR
 function GuildRoll_standings:BuildStandingsTable()
   local t = { }
