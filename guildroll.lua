@@ -1302,6 +1302,312 @@ function GuildRoll:parseAlt(name,officernote)
   return nil
 end
 
+-- Set the main character for the current player
+-- Conservative behavior: only writes when necessary
+function GuildRoll:SetMain(mainName)
+  if not mainName or mainName == "" then
+    self:defaultPrint("Please specify a main character name.")
+    return
+  end
+  
+  -- Normalize the name
+  mainName = self:camelCase(mainName)
+  local currentPlayer = self._playerName
+  
+  -- Request fresh roster data
+  GuildRoster()
+  
+  -- Find the current player's index and notes
+  local playerIndex, playerPublicNote, playerOfficerNote
+  for i = 1, GetNumGuildMembers(true) do
+    local name, _, _, _, _, _, note, officernote, _, _ = GetGuildRosterInfo(i)
+    if name == currentPlayer then
+      playerIndex = i
+      playerPublicNote = note or ""
+      playerOfficerNote = officernote or ""
+      break
+    end
+  end
+  
+  if not playerIndex then
+    self:defaultPrint("Could not find your character in the guild roster.")
+    return
+  end
+  
+  -- Case 1: mainName == current character (setting self as main)
+  if mainName == currentPlayer then
+    -- Remove {mainName} from public note if present
+    if self:noteHasTag(playerPublicNote, mainName) then
+      local newPublicNote = self:removeTagFromNote(playerPublicNote, mainName)
+      -- Only write if the note actually changed
+      if newPublicNote ~= playerPublicNote then
+        -- Use API with fallback
+        if GuildRosterSetPublicNote then
+          GuildRosterSetPublicNote(playerIndex, newPublicNote)
+        elseif SetGuildRosterPublicNote then
+          SetGuildRosterPublicNote(playerIndex, newPublicNote)
+        end
+        self:defaultPrint(string.format("Removed {%s} from your public note.", mainName))
+      end
+    end
+    -- Do NOT add tag to public note, do NOT touch officer note
+    GuildRoll_main = mainName
+    self:defaultPrint(string.format("Your main has been set to %s (yourself).", mainName))
+  else
+    -- Case 2: mainName != current character (setting an alt)
+    -- Verify main exists in guild
+    local verifiedMain = self:verifyGuildMember(mainName)
+    if not verifiedMain then
+      -- verifyGuildMember already prints error message
+      return
+    end
+    
+    -- Check if officer note already contains {mainName}
+    if self:noteHasTag(playerOfficerNote, mainName) then
+      -- Already in officer note, do nothing
+      GuildRoll_main = mainName
+      self:defaultPrint(string.format("Your main is already set to %s (in officer note).", mainName))
+      self:SetRefresh(true)
+      return
+    end
+    
+    -- Check if public note already contains {mainName}
+    if not self:noteHasTag(playerPublicNote, mainName) then
+      -- Add {mainName} to public note
+      local newPublicNote = self:addTagToNote(playerPublicNote, mainName)
+      -- Only write if the note actually changed
+      if newPublicNote ~= playerPublicNote then
+        -- Use API with fallback
+        if GuildRosterSetPublicNote then
+          GuildRosterSetPublicNote(playerIndex, newPublicNote)
+        elseif SetGuildRosterPublicNote then
+          SetGuildRosterPublicNote(playerIndex, newPublicNote)
+        end
+        self:defaultPrint(string.format("Added {%s} to your public note.", mainName))
+      end
+    end
+    
+    GuildRoll_main = mainName
+    self:defaultPrint(string.format("Your main has been set to %s.", mainName))
+  end
+  
+  -- Refresh standings
+  self:SetRefresh(true)
+end
+
+---------------
+-- Main Tag Migration
+---------------
+-- Constants for migration
+local MIGRATION_COOLDOWN = 60  -- seconds between migrations
+local ROSTER_UPDATE_TIMEOUT = 5  -- seconds to wait for GUILD_ROSTER_UPDATE
+
+-- Request migration of public main tags to officer notes
+-- This is a non-blocking call that schedules the migration
+function GuildRoll:migratePublicMainTags()
+  -- Only run if user can edit officer notes
+  if not CanEditOfficerNote() then
+    return
+  end
+  
+  -- Check cooldown
+  local now = GetTime()
+  if self._lastPublicMainMigration and (now - self._lastPublicMainMigration < MIGRATION_COOLDOWN) then
+    self:debugPrint("Main tag migration on cooldown. Skipping.")
+    return
+  end
+  
+  -- Check if migration is already pending
+  if self._publicMainMigrationPending then
+    self:debugPrint("Main tag migration already pending. Skipping.")
+    return
+  end
+  
+  -- Mark as pending
+  self._publicMainMigrationPending = true
+  
+  -- Request fresh roster data
+  GuildRoster()
+  
+  -- Set up event handler for GUILD_ROSTER_UPDATE
+  local function onRosterUpdate()
+    if self._publicMainMigrationPending then
+      -- Unregister the event
+      if self.UnregisterEvent then
+        pcall(function() self:UnregisterEvent("GUILD_ROSTER_UPDATE", "migratePublicMainTagsEvent") end)
+      end
+      
+      -- Cancel the fallback timer if scheduled
+      if self.CancelScheduledEvent and self:IsEventScheduled("migratePublicMainTagsFallback") then
+        pcall(function() self:CancelScheduledEvent("migratePublicMainTagsFallback") end)
+      end
+      
+      -- Execute the migration
+      self:_migratePublicMainTagsProcess()
+    end
+  end
+  
+  -- Register event handler (with fallback if AceEvent not available)
+  local eventRegistered = false
+  if self.RegisterEvent then
+    local success = pcall(function()
+      self:RegisterEvent("GUILD_ROSTER_UPDATE", onRosterUpdate, "migratePublicMainTagsEvent")
+      eventRegistered = true
+    end)
+    if not success then
+      eventRegistered = false
+    end
+  end
+  
+  -- If event registration failed, create a temporary frame
+  if not eventRegistered then
+    local frame = self._migrationEventFrame
+    if not frame then
+      frame = CreateFrame("Frame")
+      self._migrationEventFrame = frame
+    end
+    frame:SetScript("OnEvent", function()
+      onRosterUpdate()
+      frame:UnregisterEvent("GUILD_ROSTER_UPDATE")
+    end)
+    frame:RegisterEvent("GUILD_ROSTER_UPDATE")
+  end
+  
+  -- Schedule fallback timeout (5 seconds)
+  if self.ScheduleEvent then
+    pcall(function()
+      self:ScheduleEvent("migratePublicMainTagsFallback", function()
+        if self._publicMainMigrationPending then
+          self:debugPrint("Main tag migration fallback timeout triggered.")
+          -- Unregister the event
+          if self.UnregisterEvent then
+            pcall(function() self:UnregisterEvent("GUILD_ROSTER_UPDATE", "migratePublicMainTagsEvent") end)
+          end
+          -- Execute the migration
+          self:_migratePublicMainTagsProcess()
+        end
+      end, ROSTER_UPDATE_TIMEOUT)
+    end)
+  else
+    -- No ScheduleEvent available, execute immediately after a delay
+    -- This is less ideal but provides a fallback
+    local frame = CreateFrame("Frame")
+    frame.timer = 0
+    frame:SetScript("OnUpdate", function()
+      frame.timer = frame.timer + arg1
+      if frame.timer >= ROSTER_UPDATE_TIMEOUT then
+        frame:SetScript("OnUpdate", nil)
+        if self._publicMainMigrationPending then
+          self:debugPrint("Main tag migration fallback timeout triggered (manual).")
+          self:_migratePublicMainTagsProcess()
+        end
+      end
+    end)
+  end
+  
+  self:debugPrint("Main tag migration scheduled. Waiting for roster update...")
+end
+
+-- Internal function: Process the actual migration
+function GuildRoll:_migratePublicMainTagsProcess()
+  -- Clear pending flag
+  self._publicMainMigrationPending = false
+  
+  -- Update cooldown timestamp
+  self._lastPublicMainMigration = GetTime()
+  
+  -- Only run if user can edit officer notes
+  if not CanEditOfficerNote() then
+    self:debugPrint("Cannot edit officer notes. Migration aborted.")
+    return
+  end
+  
+  local migratedCount = 0
+  local totalMembers = GetNumGuildMembers(true)
+  
+  self:debugPrint(string.format("Processing main tag migration for %d guild members...", totalMembers))
+  
+  -- Iterate all guild members
+  for i = 1, totalMembers do
+    local name, _, _, _, _, _, publicNote, officerNote, _, _ = GetGuildRosterInfo(i)
+    
+    if name and publicNote and officerNote then
+      publicNote = publicNote or ""
+      officerNote = officerNote or ""
+      
+      -- Extract all tags from public note
+      local publicTags = self:extractTags(publicNote)
+      local mainLikeTags = {}
+      
+      -- Find main-like tags (those without ':')
+      for _, tag in ipairs(publicTags) do
+        if not string.find(tag, ":") then
+          table.insert(mainLikeTags, tag)
+        end
+      end
+      
+      -- If we found main-like tags in public note, process them
+      if table.getn(mainLikeTags) > 0 then
+        local newOfficerNote = officerNote
+        local newPublicNote = publicNote
+        local officerChanged = false
+        local publicChanged = false
+        
+        -- Remove existing main-like tags from officer note
+        newOfficerNote, officerChanged = self:removeExistingMainLikeTags(newOfficerNote)
+        
+        -- Add the new main-like tags to officer note (last one wins if multiple)
+        for _, tag in ipairs(mainLikeTags) do
+          if not self:noteHasTag(newOfficerNote, tag) then
+            newOfficerNote = self:addTagToNote(newOfficerNote, tag)
+            officerChanged = true
+          end
+        end
+        
+        -- Remove the main-like tags from public note
+        for _, tag in ipairs(mainLikeTags) do
+          if self:noteHasTag(newPublicNote, tag) then
+            newPublicNote = self:removeTagFromNote(newPublicNote, tag)
+            publicChanged = true
+          end
+        end
+        
+        -- Write officer note if changed
+        if officerChanged and newOfficerNote ~= officerNote then
+          -- Use API with fallback
+          if GuildRosterSetOfficerNote then
+            GuildRosterSetOfficerNote(i, newOfficerNote, true)
+          elseif SetGuildRosterOfficerNote then
+            SetGuildRosterOfficerNote(i, newOfficerNote)
+          end
+        end
+        
+        -- Write public note if changed
+        if publicChanged and newPublicNote ~= publicNote then
+          -- Use API with fallback
+          if GuildRosterSetPublicNote then
+            GuildRosterSetPublicNote(i, newPublicNote)
+          elseif SetGuildRosterPublicNote then
+            SetGuildRosterPublicNote(i, newPublicNote)
+          end
+        end
+        
+        if officerChanged or publicChanged then
+          migratedCount = migratedCount + 1
+          self:debugPrint(string.format("Migrated main tags for %s: %s", name, table.concat(mainLikeTags, ", ")))
+        end
+      end
+    end
+  end
+  
+  if migratedCount > 0 then
+    self:defaultPrint(string.format("Migrated main tags for %d guild members from public to officer notes.", migratedCount))
+    self:SetRefresh(true)
+  else
+    self:debugPrint("No main tags found to migrate.")
+  end
+end
+
 
 ------------
 -- Logging
@@ -1339,6 +1645,87 @@ end
 function GuildRoll:strsplitT(delimiter, subject)
  local tbl = {GuildRoll:strsplit(delimiter, subject)}
  return tbl
+end
+
+------------
+-- Note Tag Helper Functions
+------------
+-- Safely escape special Lua pattern characters
+function GuildRoll:escapePattern(s)
+  if not s then return "" end
+  -- Escape special Lua pattern characters: ( ) . % + - * ? [ ] ^ $
+  return (string.gsub(s, "[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%1"))
+end
+
+-- Extract all tags from a note (returns array of tag names without braces)
+function GuildRoll:extractTags(note)
+  if not note or note == "" then return {} end
+  local tags = {}
+  for tag in string.gfind(note, "{([^}]+)}") do
+    table.insert(tags, tag)
+  end
+  return tags
+end
+
+-- Remove a specific tag from a note and clean up extra spaces
+function GuildRoll:removeTagFromNote(note, tag)
+  if not note or note == "" or not tag or tag == "" then return note end
+  local escapedTag = self:escapePattern(tag)
+  local pattern = "{" .. escapedTag .. "}"
+  local newNote = string.gsub(note, pattern, "")
+  -- Clean up multiple spaces
+  newNote = string.gsub(newNote, "%s+", " ")
+  -- Trim leading/trailing spaces
+  newNote = string.gsub(newNote, "^%s+", "")
+  newNote = string.gsub(newNote, "%s+$", "")
+  return newNote
+end
+
+-- Check if a note contains a specific tag
+function GuildRoll:noteHasTag(note, tag)
+  if not note or note == "" or not tag or tag == "" then return false end
+  local escapedTag = self:escapePattern(tag)
+  local pattern = "{" .. escapedTag .. "}"
+  return string.find(note, pattern) ~= nil
+end
+
+-- Add a tag to a note (avoiding duplicates)
+function GuildRoll:addTagToNote(note, tag)
+  if not tag or tag == "" then return note end
+  note = note or ""
+  
+  -- Check if tag already exists
+  if self:noteHasTag(note, tag) then
+    return note
+  end
+  
+  -- Add tag with proper spacing
+  local newNote = note
+  if newNote ~= "" and not string.find(newNote, "%s$") then
+    newNote = newNote .. " "
+  end
+  newNote = newNote .. "{" .. tag .. "}"
+  return newNote
+end
+
+-- Remove all main-like tags (tags without ':') from officer note
+-- Returns: (modifiedNote, wasChanged)
+function GuildRoll:removeExistingMainLikeTags(officerNote)
+  if not officerNote or officerNote == "" then return officerNote, false end
+  
+  local tags = self:extractTags(officerNote)
+  local newNote = officerNote
+  local changed = false
+  
+  for _, tag in ipairs(tags) do
+    -- Main-like tags are those that do NOT contain ':'
+    if not string.find(tag, ":") then
+      newNote = self:removeTagFromNote(newNote, tag)
+      changed = true
+    end
+  end
+  
+  return newNote, changed
 end
 
  function GuildRoll:verifyGuildMember(name,silent)
@@ -1560,8 +1947,16 @@ StaticPopupDialogs["RET_EP_SET_MAIN"] = {
   maxLetters = 12,
   OnAccept = function()
     local editBox = getglobal(this:GetParent():GetName().."EditBox")
-    local name = GuildRoll:camelCase(editBox:GetText())
-    GuildRoll_main = GuildRoll:verifyGuildMember(name)
+    local name = editBox:GetText()
+    if name and name ~= "" then
+      -- Use the new SetMain function which handles note tagging
+      if GuildRoll and GuildRoll.SetMain then
+        GuildRoll:SetMain(name)
+      else
+        -- Fallback to old behavior if SetMain not available
+        GuildRoll_main = GuildRoll:verifyGuildMember(GuildRoll:camelCase(name))
+      end
+    end
   end,
   OnShow = function()
     getglobal(this:GetName().."EditBox"):SetText(GuildRoll_main or "")
@@ -1575,7 +1970,16 @@ StaticPopupDialogs["RET_EP_SET_MAIN"] = {
   end,
   EditBoxOnEnterPressed = function()
     local editBox = getglobal(this:GetParent():GetName().."EditBox")
-    GuildRoll_main = GuildRoll:verifyGuildMember(editBox:GetText())
+    local name = editBox:GetText()
+    if name and name ~= "" then
+      -- Use the new SetMain function which handles note tagging
+      if GuildRoll and GuildRoll.SetMain then
+        GuildRoll:SetMain(name)
+      else
+        -- Fallback to old behavior if SetMain not available
+        GuildRoll_main = GuildRoll:verifyGuildMember(editBox:GetText())
+      end
+    end
     this:GetParent():Hide()
   end,
   EditBoxOnEscapePressed = function()
