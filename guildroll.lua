@@ -1387,9 +1387,10 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
         c[class].args[name].set = function(v) GuildRoll:givename_gp(name, tonumber(v)) GuildRoll:refreshPRTablets() end
       end
       c[class].args[name].validate = function(v) 
-        return (type(v) == "number" or tonumber(v)) 
-          and tonumber(v) >= GuildRoll.VARS.minAward 
-          and tonumber(v) <= GuildRoll.VARS.maxAward 
+        local num = tonumber(v)
+        return (type(v) == "number" or num) 
+          and num >= GuildRoll.VARS.minAward 
+          and num <= GuildRoll.VARS.maxAward 
       end
     end
   end
