@@ -1493,13 +1493,13 @@ function GuildRoll:migratePublicMainTags()
     -- This is less ideal but provides a fallback
     local frame = CreateFrame("Frame")
     frame.timer = 0
-    frame:SetScript("OnUpdate", function()
-      frame.timer = frame.timer + arg1
+    frame:SetScript("OnUpdate", function(self, elapsed)
+      frame.timer = frame.timer + elapsed
       if frame.timer >= ROSTER_UPDATE_TIMEOUT then
         frame:SetScript("OnUpdate", nil)
-        if self._publicMainMigrationPending then
-          self:debugPrint("Main tag migration fallback timeout triggered (manual).")
-          self:_migratePublicMainTagsProcess()
+        if GuildRoll._publicMainMigrationPending then
+          GuildRoll:debugPrint("Main tag migration fallback timeout triggered (manual).")
+          GuildRoll:_migratePublicMainTagsProcess()
         end
       end
     end)
@@ -1531,7 +1531,7 @@ function GuildRoll:_migratePublicMainTagsProcess()
   for i = 1, totalMembers do
     local name, _, _, _, _, _, publicNote, officerNote, _, _ = GetGuildRosterInfo(i)
     
-    if name and publicNote and officerNote then
+    if name then
       publicNote = publicNote or ""
       officerNote = officerNote or ""
       
@@ -1658,6 +1658,9 @@ function GuildRoll:escapePattern(s)
 end
 
 -- Extract all tags from a note (returns array of tag names without braces)
+-- Note: This extracts ALL tags including metadata tags like {EP:GP}. 
+-- Use filtering logic (e.g., checking for ':') to distinguish main-like tags from metadata tags.
+-- This is intentionally more permissive than parseAlt's pattern which validates character names.
 function GuildRoll:extractTags(note)
   if not note or note == "" then return {} end
   local tags = {}
@@ -1977,7 +1980,7 @@ StaticPopupDialogs["RET_EP_SET_MAIN"] = {
         GuildRoll:SetMain(name)
       else
         -- Fallback to old behavior if SetMain not available
-        GuildRoll_main = GuildRoll:verifyGuildMember(editBox:GetText())
+        GuildRoll_main = GuildRoll:verifyGuildMember(GuildRoll:camelCase(editBox:GetText()))
       end
     end
     this:GetParent():Hide()
