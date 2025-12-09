@@ -1150,17 +1150,53 @@ function GuildRoll:OnTooltipUpdate()
   T:SetHint(hint)
 end
 
-function GuildRoll:OnClick()
+function GuildRoll:OnClick(button)
+  -- default to LeftButton if unknown
+  button = button or "LeftButton"
+
+  -- Right click -> open menu/options (preserve existing menu behavior)
+  if button == "RightButton" then
+    self:OnMenuRequest()
+    return
+  end
+
+  -- For left-button clicks, inspect modifiers
+  local alt = IsAltKeyDown()
+  local ctrl = IsControlKeyDown()
+  local shift = IsShiftKeyDown()
   local is_admin = admin()
-  if (IsControlKeyDown() and IsShiftKeyDown() and is_admin) then
-    GuildRoll_logs:Toggle()
-  elseif (IsControlKeyDown() and IsAltKeyDown() and is_admin) then
-    GuildRollAlts:Toggle()
-  elseif (IsShiftKeyDown() and is_admin) then
-   -- GuildRoll_loot:Toggle()      
-  elseif (IsAltKeyDown() and is_admin) then
-  --  GuildRoll_bids:Toggle()
-  else
+
+  -- Alt + Click -> toggle Alts (available to all)
+  if alt and not ctrl and not shift then
+    if GuildRollAlts and GuildRollAlts.Toggle then
+      GuildRollAlts:Toggle()
+    end
+    return
+  end
+
+  -- Ctrl + Click -> toggle Logs (admin only)
+  if ctrl and not alt and not shift and is_admin then
+    if GuildRoll_logs and GuildRoll_logs.Toggle then
+      GuildRoll_logs:Toggle()
+    end
+    return
+  end
+
+  -- Shift + Click -> toggle the roll UI frame (everyone)
+  if shift and not alt and not ctrl then
+    local f = _G and _G["GuildEpRollFrame"]
+    if f then
+      if f:IsShown() then
+        f:Hide()
+      else
+        f:Show()
+      end
+    end
+    return
+  end
+
+  -- Default left click without modifiers: toggle Standings
+  if GuildRoll_standings and GuildRoll_standings.Toggle then
     GuildRoll_standings:Toggle()
   end
 end
