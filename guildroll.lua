@@ -50,6 +50,10 @@ local guildep_debugchat
 local running_check,running_bid
 local partyUnit,raidUnit = {},{}
 local hexColorQuality = {}
+-- Forward-declare RaidKey e zone_multipliers prima che vengano usati
+-- (la mappatura completa verrà assegnata più sotto; qui assicuriamo che non siano nil)
+local RaidKey = {}
+local zone_multipliers = {}
 
 local options
 do
@@ -1393,7 +1397,7 @@ function GuildRoll:make_escable(framename,operation)
 end
 
 local raidZones = {[L["Molten Core"]]="T1",[L["Onyxia\'s Lair"]]="T1.5",[L["Blackwing Lair"]]="T2",[L["Ahn\'Qiraj"]]="T2.5",[L["Naxxramas"]]="T3"}
-local zone_multipliers = {
+zone_multipliers = {
   ["T3"] =   {["T3"]=1,["T2.5"]=0.75,["T2"]=0.5,["T1.5"]=0.25,["T1"]=0.25},
   ["T2.5"] = {["T3"]=1,["T2.5"]=1,   ["T2"]=0.7,["T1.5"]=0.4, ["T1"]=0.4},
   ["T2"] =   {["T3"]=1,["T2.5"]=1,   ["T2"]=1,  ["T1.5"]=0.5, ["T1"]=0.5},
@@ -1792,7 +1796,7 @@ if bonus > 0 then
   SendChatMessage(message, chatType)
 end
 
-local RaidKey = {[L["Molten Core"]]="MC",[L["Onyxia\'s Lair"]]="ONY",[L["Blackwing Lair"]]="BWL",[L["Ahn\'Qiraj"]]="AQ40",[L["Naxxramas"]]="NAX",["Tower of Karazhan"]="K10",["Upper Tower of Karazhan"]="K40",["???"]="K40"}
+RaidKey = {[L["Molten Core"]]="MC",[L["Onyxia\'s Lair"]]="ONY",[L["Blackwing Lair"]]="BWL",[L["Ahn\'Qiraj"]]="AQ40",[L["Naxxramas"]]="NAX",["Tower of Karazhan"]="K10",["Upper Tower of Karazhan"]="K40",["???"]="K40"}
 function GuildRoll:GetReward()
 
    local raw = string.gsub(string.gsub(GetGuildInfoText(),"\n","#")," ","")
