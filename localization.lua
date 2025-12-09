@@ -196,6 +196,8 @@ Results will print here when done.]],
   ["Your main has been set to %s"] = true,
   ["Alts"] = true,
   ["New Minimum MainStanding"] = "New Minimum EP",
+  ["CSR Threshold"] = true,
+  ["Maximum rank index allowed to view CSR"] = "Maximum rank index allowed to view CSR (0 = highest rank)",
 } end)
 
 L:RegisterTranslations("zhCN", function() return {
@@ -402,4 +404,6 @@ L:RegisterTranslations("zhCN", function() return {
   ["Minimum MainStanding"] = "最小值 EP",
   ["Set Minimum MainStanding"] = "设置最小值 EP",
   ["New Minimum MainStanding"] = "新最小值 EP",
+  ["CSR Threshold"] = "CSR 阈值",
+  ["Maximum rank index allowed to view CSR"] = "允许查看 CSR 的最大 rank 索引 (0 = 最高职务)",
 } end)

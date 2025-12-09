@@ -353,6 +353,24 @@ function GuildRoll:buildMenu()
       end,
       hidden = function() return not admin() end,
     }
+    options.args["csr_threshold"] = {
+      type = "range",
+      name = L["CSR Threshold"],
+      desc = L["Maximum rank index allowed to view CSR"],
+      order = 119,
+      get = function() return tonumber(GuildRoll_CSRThreshold) or 3 end,
+      set = function(v) 
+        GuildRoll_CSRThreshold = math.floor(v)
+        -- Trigger roll UI rebuild if available
+        if GuildRoll and GuildRoll.RebuildRollOptions then
+          GuildRoll:RebuildRollOptions()
+        end
+      end,
+      min = 0,
+      max = 10,
+      step = 1,
+      hidden = function() return not (CanEditOfficerNote and CanEditOfficerNote()) end,
+    }
     options.args["reset"] = {
      type = "execute",
      name = L["Reset Standing"],
