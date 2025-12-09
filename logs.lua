@@ -15,15 +15,24 @@ function GuildRoll:personalLogAdd(target, action)
   if not target or not action then return end
   local name = target
   local ts = date("%Y-%m-%d %H:%M:%S")
+  
+  -- Add to runtime cache
   GuildRoll_personalLogs[name] = GuildRoll_personalLogs[name] or {}
   table.insert(GuildRoll_personalLogs[name], {ts, action})
+  
+  -- Add to persistent storage
   GuildRoll_personalLogSaved[name] = GuildRoll_personalLogSaved[name] or {}
   table.insert(GuildRoll_personalLogSaved[name], {ts, action})
+  
+  -- Trim to last 500 entries efficiently
   local max_keep = 500
   if #GuildRoll_personalLogSaved[name] > max_keep then
-    for i = 1, (#GuildRoll_personalLogSaved[name] - max_keep) do
-      table.remove(GuildRoll_personalLogSaved[name], 1)
+    local newLog = {}
+    local startIdx = #GuildRoll_personalLogSaved[name] - max_keep + 1
+    for i = startIdx, #GuildRoll_personalLogSaved[name] do
+      table.insert(newLog, GuildRoll_personalLogSaved[name][i])
     end
+    GuildRoll_personalLogSaved[name] = newLog
   end
 end
 

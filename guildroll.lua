@@ -881,11 +881,12 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
 end
 
 function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_action)
-  -- Get previous values for logging
+  officernote = self:init_notes_v3(guild_index,name,officernote)
+  
+  -- Get previous values for logging (after note initialization)
   local prevEP = self:get_ep_v3(name,officernote) or 0
   local prevGP = self:get_gp_v3(name,officernote) or 0
   
-  officernote = self:init_notes_v3(guild_index,name,officernote)
   local newnote
   if ( ep ~= nil) then 
    -- ep = math.max(0,ep)
