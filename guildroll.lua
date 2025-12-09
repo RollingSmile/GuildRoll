@@ -16,6 +16,8 @@ GuildRoll.VARS = {
   baseawardpoints = 10,
   decay = 0.5,
   max = 1000,
+  minAward = -100,
+  maxAward = 100,
   timeout = 60,
   minlevel = 1,
   maxloglines = 500,
@@ -999,6 +1001,16 @@ function GuildRoll:get_gp_v3(getname,officernote) -- gets gp by name or officern
 end
 
 function GuildRoll:award_raid_ep(ep) -- awards ep to raid members in zone
+  -- Validate input
+  if type(ep) ~= "number" then
+    UIErrorsFrame:AddMessage("Invalid EP value: not a number", 1.0, 0.0, 0.0, 1.0)
+    return
+  end
+  if ep < GuildRoll.VARS.minAward or ep > GuildRoll.VARS.maxAward then
+    UIErrorsFrame:AddMessage("EP value out of range (" .. GuildRoll.VARS.minAward .. " to " .. GuildRoll.VARS.maxAward .. ")", 1.0, 0.0, 0.0, 1.0)
+    return
+  end
+  
   if GetNumRaidMembers()>0 then
 	local award = {}
     for i = 1, GetNumRaidMembers(true) do
@@ -1016,6 +1028,16 @@ function GuildRoll:award_raid_ep(ep) -- awards ep to raid members in zone
   else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
 end
 function GuildRoll:award_raid_gp(gp) -- awards gp to raid members in zone
+  -- Validate input
+  if type(gp) ~= "number" then
+    UIErrorsFrame:AddMessage("Invalid GP value: not a number", 1.0, 0.0, 0.0, 1.0)
+    return
+  end
+  if gp < GuildRoll.VARS.minAward or gp > GuildRoll.VARS.maxAward then
+    UIErrorsFrame:AddMessage("GP value out of range (" .. GuildRoll.VARS.minAward .. " to " .. GuildRoll.VARS.maxAward .. ")", 1.0, 0.0, 0.0, 1.0)
+    return
+  end
+  
   if not (IsGuildLeader()) then return end
   if GetNumRaidMembers()>0 then
 	local award = {}
@@ -1048,6 +1070,16 @@ end
 
 function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single character
   if not (admin()) then return end
+
+  -- Validate EP value
+  if type(ep) ~= "number" then
+    self:defaultPrint("Invalid EP value")
+    return false, getname
+  end
+  if ep < GuildRoll.VARS.minAward or ep > GuildRoll.VARS.maxAward then
+    self:defaultPrint("EP value out of range (" .. GuildRoll.VARS.minAward .. " to " .. GuildRoll.VARS.maxAward .. ")")
+    return false, getname
+  end
 
   -- PUG support removed: do not call self:isPug
   local postfix, alt = ""
@@ -1098,6 +1130,16 @@ end
 
 function GuildRoll:givename_gp(getname,gp,block) -- awards gp to a single character
   if not (IsGuildLeader()) then return end
+
+  -- Validate GP value
+  if type(gp) ~= "number" then
+    self:defaultPrint("Invalid GP value")
+    return false, getname
+  end
+  if gp < GuildRoll.VARS.minAward or gp > GuildRoll.VARS.maxAward then
+    self:defaultPrint("GP value out of range (" .. GuildRoll.VARS.minAward .. " to " .. GuildRoll.VARS.maxAward .. ")")
+    return false, getname
+  end
 
   -- PUG support removed: do not call self:isPug
   local postfix, alt = ""
@@ -1344,7 +1386,11 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
         c[class].args[name].get = false
         c[class].args[name].set = function(v) GuildRoll:givename_gp(name, tonumber(v)) GuildRoll:refreshPRTablets() end
       end
-      c[class].args[name].validate = function(v) return (type(v) == "number" or tonumber(v)) and tonumber(v) < GuildRoll.VARS.max end
+      c[class].args[name].validate = function(v) 
+        return (type(v) == "number" or tonumber(v)) 
+          and tonumber(v) >= GuildRoll.VARS.minAward 
+          and tonumber(v) <= GuildRoll.VARS.maxAward 
+      end
     end
   end
   return c
@@ -1736,11 +1782,11 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
     local editBox = getglobal(this:GetParent():GetName().."EditBox")
     local epValue = tonumber(editBox:GetText())
     if not epValue then
-      GuildRoll:defaultPrint("Invalid EP value entered.")
+      UIErrorsFrame:AddMessage("Invalid EP value entered.", 1.0, 0.0, 0.0, 1.0)
       return
     end
-    if epValue < 0 or epValue >= GuildRoll.VARS.max then
-      GuildRoll:defaultPrint("EP value must be between 0 and " .. GuildRoll.VARS.max)
+    if epValue < GuildRoll.VARS.minAward or epValue > GuildRoll.VARS.maxAward then
+      UIErrorsFrame:AddMessage("EP value must be between " .. GuildRoll.VARS.minAward .. " and " .. GuildRoll.VARS.maxAward, 1.0, 0.0, 0.0, 1.0)
       return
     end
     if not (IsGuildLeader() or CanEditOfficerNote()) then
@@ -1753,10 +1799,20 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
     local parent = this:GetParent()
     local editBox = getglobal(parent:GetName().."EditBox")
     local epValue = tonumber(editBox:GetText())
-    if epValue and epValue >= 0 and epValue < GuildRoll.VARS.max and (IsGuildLeader() or CanEditOfficerNote()) then
-      GuildRoll:award_raid_ep(epValue)
-      parent:Hide()
+    if not epValue then
+      UIErrorsFrame:AddMessage("Invalid EP value entered.", 1.0, 0.0, 0.0, 1.0)
+      return
     end
+    if epValue < GuildRoll.VARS.minAward or epValue > GuildRoll.VARS.maxAward then
+      UIErrorsFrame:AddMessage("EP value must be between " .. GuildRoll.VARS.minAward .. " and " .. GuildRoll.VARS.maxAward, 1.0, 0.0, 0.0, 1.0)
+      return
+    end
+    if not (IsGuildLeader() or CanEditOfficerNote()) then
+      UIErrorsFrame:AddMessage("You don't have permission to award EP.", 1.0, 0.0, 0.0, 1.0)
+      return
+    end
+    GuildRoll:award_raid_ep(epValue)
+    parent:Hide()
   end,
   EditBoxOnEscapePressed = function()
     this:GetParent():Hide()
