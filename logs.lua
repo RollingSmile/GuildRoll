@@ -158,7 +158,7 @@ function GuildRoll:ShowPersonalLog(name)
   local logs = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
   
   -- Try to use guildep_export frame from standings.lua if available
-  if guildep_export then
+  if guildep_export and guildep_export.title and guildep_export.edit then
     guildep_export.title:SetText("Personal Log: " .. name)
     local text = ""
     for i = table.getn(logs), 1, -1 do
@@ -167,8 +167,8 @@ function GuildRoll:ShowPersonalLog(name)
         text = text .. entry[1] .. " - " .. entry[2] .. "\n"
       end
     end
-    guildep_export.log:SetText(text)
-    guildep_export.log:HighlightText()
+    guildep_export.edit:SetText(text)
+    guildep_export.edit:HighlightText()
     guildep_export:Show()
   else
     -- Fallback to chat frame
@@ -189,7 +189,7 @@ function GuildRoll:SavePersonalLog(name)
   local logs = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
   
   -- Try to use guildep_export frame from standings.lua if available
-  if guildep_export then
+  if guildep_export and guildep_export.title and guildep_export.edit then
     guildep_export.title:SetText("Save Personal Log: " .. name)
     local text = ""
     for i = table.getn(logs), 1, -1 do
@@ -198,8 +198,8 @@ function GuildRoll:SavePersonalLog(name)
         text = text .. entry[1] .. " - " .. entry[2] .. "\n"
       end
     end
-    guildep_export.log:SetText(text)
-    guildep_export.log:HighlightText()
+    guildep_export.edit:SetText(text)
+    guildep_export.edit:HighlightText()
     guildep_export:Show()
   else
     -- Fallback to chat frame
