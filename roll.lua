@@ -1,6 +1,40 @@
 -- Ensure GuildRoll_RollPos is initialized with default values
 GuildRoll_RollPos = GuildRoll_RollPos or { x = 400, y = 300 }
 GuildRoll_showRollWindow = GuildRoll_showRollWindow == nil and true or GuildRoll_showRollWindow
+-- Initialize CSR threshold (default = 3, meaning rank index 0-3 can see CSR)
+GuildRoll_CSRThreshold = GuildRoll_CSRThreshold or 3
+
+-- Helper: Check if player has permission to view CSR based on rank index
+local function PlayerHasCSRPermission()
+    if not IsInGuild() then
+        return false
+    end
+    
+    local threshold = tonumber(GuildRoll_CSRThreshold) or 3
+    local playerName = UnitName("player")
+    
+    -- Ensure guild roster is available
+    local numMembers = GetNumGuildMembers()
+    if numMembers == 0 then
+        GuildRoster()
+        return false
+    end
+    
+    -- Find player in guild roster
+    for i = 1, numMembers do
+        local name, rank, rankIndex = GetGuildRosterInfo(i)
+        -- Strip realm suffix if present
+        if name then
+            name = string.gsub(name, "%-[^%-]+$", "")
+        end
+        
+        if name == playerName then
+            return rankIndex <= threshold
+        end
+    end
+    
+    return false
+end
 
 -- Helper: try to find the EditBox for a StaticPopup dialog robustly
 local function GetVisibleStaticPopupEditBox(dialog)
@@ -204,17 +238,30 @@ local function CreateRollButton(name, parent, command, anchor, width, font)
     return buttonFrame
 end
 
--- Build options list lazily: EP-aware options + CSR (if permitted) + numeric legacy rolls + standings
-local options = {
+-- Function to build dynamic roll options list
+local function BuildRollOptions()
+    local opts = {
         { "EP(MS)", "roll ep" },
         { "SR", "roll sr" },
-        { "CSR", "roll csr" },
-        { "101", "roll 101" },
-        { "100", "roll 100" },
-        { "99", "roll 99" },
-        { "98", "roll 98" },
-        { "Standings", "show ep" }
-}
+    }
+    
+    -- Add CSR only if player has permission
+    if PlayerHasCSRPermission() then
+        table.insert(opts, { "CSR", "roll csr" })
+    end
+    
+    -- Add numeric rolls and standings
+    table.insert(opts, { "101", "roll 101" })
+    table.insert(opts, { "100", "roll 100" })
+    table.insert(opts, { "99", "roll 99" })
+    table.insert(opts, { "98", "roll 98" })
+    table.insert(opts, { "Standings", "show ep" })
+    
+    return opts
+end
+
+-- Build initial options list
+local options = BuildRollOptions()
 
 -- Create roll buttons dynamically with closer spacing
 local previousButton = rollOptionsFrame
@@ -237,6 +284,35 @@ rollButton:SetScript("OnClick", function()
         rollOptionsFrame:Show()
     end
 end)
+
+-- Public function to rebuild roll options (called from menu when threshold changes)
+function GuildRoll:RebuildRollOptions()
+    -- Clear existing option widgets
+    if rollOptionsFrame then
+        for i = rollOptionsFrame:GetNumChildren(), 1, -1 do
+            local child = select(i, rollOptionsFrame:GetChildren())
+            if child then
+                child:Hide()
+                child:SetParent(nil)
+            end
+        end
+    end
+    
+    -- Rebuild options list
+    local newOptions = BuildRollOptions()
+    
+    -- Recreate buttons
+    local previousButton = rollOptionsFrame
+    for _, opt in ipairs(newOptions) do
+        local buttonFrame = CreateRollButton(opt[1], rollOptionsFrame, opt[2], previousButton, opt[3] or 110, opt[4] or false)
+        if previousButton == rollOptionsFrame then
+            buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)
+        else
+            buttonFrame:SetPoint("TOP", previousButton, "BOTTOM", 0, 5)
+        end
+        previousButton = buttonFrame
+    end
+end
 
 -- Dragging & saving position
 rollFrame:SetScript("OnMouseDown", function(_, button)
@@ -263,33 +339,15 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
 
--- Safer rebuild handler: update cache first, then rebuild the options list deterministically
+-- Event handler: rebuild options when player logs in or guild roster updates
 eventFrame:SetScript("OnEvent", function(self, event, ...)
     if event ~= "GUILD_ROSTER_UPDATE" and event ~= "PLAYER_LOGIN" then
         return
     end
     
-    -- Clear existing option widgets safely
-    if rollOptionsFrame then
-        for i = rollOptionsFrame:GetNumChildren(), 1, -1 do
-            local child = select(i, rollOptionsFrame:GetChildren())
-            if child then
-                child:Hide()
-                child:SetParent(nil)
-            end
-        end
-    end
-
-    -- Recreate buttons under the rollOptionsFrame
-    previousButton = rollOptionsFrame
-    for _, opt in ipairs(newOptions) do
-        local buttonFrame = CreateRollButton(opt[1], rollOptionsFrame, opt[2], previousButton, opt[3] or 110, opt[4] or false)
-        if previousButton == rollOptionsFrame then
-            buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)
-        else
-            buttonFrame:SetPoint("TOP", previousButton, "BOTTOM", 0, 5)
-        end
-        previousButton = buttonFrame
+    -- Rebuild roll options to update CSR visibility
+    if GuildRoll and GuildRoll.RebuildRollOptions then
+        GuildRoll:RebuildRollOptions()
     end
 
     -- Restore saved position behavior
