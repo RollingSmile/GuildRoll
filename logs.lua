@@ -7,6 +7,26 @@ local L = AceLibrary("AceLocale-2.2"):new("guildroll")
 GuildRoll_logs = GuildRoll:NewModule("GuildRoll_logs", "AceDB-2.0")
 GuildRoll_logs.tmp = CP:Acquire()
 
+-- Persistent per-character saved-personal logs
+GuildRoll_personalLogSaved = GuildRoll_personalLogSaved or {} -- saved between sessions (SavedVariable if added to .toc)
+GuildRoll_personalLogs = GuildRoll_personalLogs or {} -- runtime cache
+
+function GuildRoll:personalLogAdd(target, action)
+  if not target or not action then return end
+  local name = target
+  local ts = date("%Y-%m-%d %H:%M:%S")
+  GuildRoll_personalLogs[name] = GuildRoll_personalLogs[name] or {}
+  table.insert(GuildRoll_personalLogs[name], {ts, action})
+  GuildRoll_personalLogSaved[name] = GuildRoll_personalLogSaved[name] or {}
+  table.insert(GuildRoll_personalLogSaved[name], {ts, action})
+  local max_keep = 500
+  if #GuildRoll_personalLogSaved[name] > max_keep then
+    for i = 1, (#GuildRoll_personalLogSaved[name] - max_keep) do
+      table.remove(GuildRoll_personalLogSaved[name], 1)
+    end
+  end
+end
+
 function GuildRoll_logs:OnEnable()
   if not T:IsRegistered("GuildRoll_logs") then
     T:Register("GuildRoll_logs",
@@ -102,8 +122,18 @@ function GuildRoll_logs:reverse(arr)
 end
 
 function GuildRoll_logs:BuildLogsTable()
-  -- {timestamp,line}
-  return self:reverse(GuildRoll_log)
+  -- Check if user is officer - show global log
+  -- Otherwise show personal log
+  local isOfficer = CanEditOfficerNote()
+  if isOfficer then
+    -- {timestamp,line}
+    return self:reverse(GuildRoll_log)
+  else
+    -- Show personal log for current player
+    local playerName = UnitName("player")
+    local personalLog = GuildRoll_personalLogs[playerName] or {}
+    return self:reverse(personalLog)
+  end
 end
 
 function GuildRoll_logs:OnTooltipUpdate()
@@ -122,5 +152,67 @@ function GuildRoll_logs:OnTooltipUpdate()
   end  
 end
 
+-- Helper function to show personal log
+function GuildRoll:ShowPersonalLog(name)
+  name = name or UnitName("player")
+  local logs = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
+  
+  -- Try to use guildep_export frame from standings.lua if available
+  if guildep_export then
+    guildep_export.title:SetText("Personal Log: " .. name)
+    local text = ""
+    for i = table.getn(logs), 1, -1 do
+      local entry = logs[i]
+      if entry and entry[1] and entry[2] then
+        text = text .. entry[1] .. " - " .. entry[2] .. "\n"
+      end
+    end
+    guildep_export.log:SetText(text)
+    guildep_export.log:HighlightText()
+    guildep_export:Show()
+  else
+    -- Fallback to chat frame
+    DEFAULT_CHAT_FRAME:AddMessage("=== Personal Log for " .. name .. " ===")
+    for i = table.getn(logs), 1, -1 do
+      local entry = logs[i]
+      if entry and entry[1] and entry[2] then
+        DEFAULT_CHAT_FRAME:AddMessage(entry[1] .. " - " .. entry[2])
+      end
+    end
+    DEFAULT_CHAT_FRAME:AddMessage("=== End of Log ===")
+  end
+end
+
+-- Helper function to save personal log to chat for copy-paste
+function GuildRoll:SavePersonalLog(name)
+  name = name or UnitName("player")
+  local logs = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
+  
+  -- Try to use guildep_export frame from standings.lua if available
+  if guildep_export then
+    guildep_export.title:SetText("Save Personal Log: " .. name)
+    local text = ""
+    for i = table.getn(logs), 1, -1 do
+      local entry = logs[i]
+      if entry and entry[1] and entry[2] then
+        text = text .. entry[1] .. " - " .. entry[2] .. "\n"
+      end
+    end
+    guildep_export.log:SetText(text)
+    guildep_export.log:HighlightText()
+    guildep_export:Show()
+  else
+    -- Fallback to chat frame
+    DEFAULT_CHAT_FRAME:AddMessage("=== Personal Log for " .. name .. " (Copy from chat) ===")
+    for i = table.getn(logs), 1, -1 do
+      local entry = logs[i]
+      if entry and entry[1] and entry[2] then
+        DEFAULT_CHAT_FRAME:AddMessage(entry[1] .. " - " .. entry[2])
+      end
+    end
+    DEFAULT_CHAT_FRAME:AddMessage("=== End of Log ===")
+  end
+end
+
 -- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_discount,GuildRoll_log,GuildRoll_dbver,GuildRoll_looted
--- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs
+-- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs,GuildRoll_personalLogSaved,GuildRoll_personalLogs

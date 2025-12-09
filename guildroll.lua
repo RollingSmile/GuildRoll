@@ -133,6 +133,24 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       end,
       order = 10,
     },
+    mylog = {
+      type = "execute",
+      name = "Show Personal Log",
+      desc = "Show your personal EP/GP log",
+      func = function() 
+        GuildRoll:ShowPersonalLog()
+      end,
+      order = 11,
+    },
+    savelog = {
+      type = "execute",
+      name = "Save Personal Log",
+      desc = "Save your personal EP/GP log for export",
+      func = function() 
+        GuildRoll:SavePersonalLog()
+      end,
+      order = 12,
+    },
   }},
 {type = "group", handler = GuildRoll, args = {
     show = {
@@ -198,6 +216,24 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       GuildRoll:RollCommand(true, bonus)
       end,
       order = 8,
+    },
+    mylog = {
+      type = "execute",
+      name = "Show Personal Log",
+      desc = "Show your personal EP/GP log",
+      func = function() 
+        GuildRoll:ShowPersonalLog()
+      end,
+      order = 9,
+    },
+    savelog = {
+      type = "execute",
+      name = "Save Personal Log",
+      desc = "Save your personal EP/GP log for export",
+      func = function() 
+        GuildRoll:SavePersonalLog()
+      end,
+      order = 10,
     },
   }}
 GuildRoll.cmdtable = function() 
@@ -845,6 +881,10 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
 end
 
 function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_action)
+  -- Get previous values for logging
+  local prevEP = self:get_ep_v3(name,officernote) or 0
+  local prevGP = self:get_gp_v3(name,officernote) or 0
+  
   officernote = self:init_notes_v3(guild_index,name,officernote)
   local newnote
   if ( ep ~= nil) then 
@@ -869,6 +909,25 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
   end
   if (newnote) then 
     GuildRosterSetOfficerNote(guild_index,newnote,true)
+    
+    -- Add personal logging
+    local actor = UnitName("player")
+    local logMsg = ""
+    if ep ~= nil and gp ~= nil then
+      local changeEP = ep - prevEP
+      local changeGP = gp - prevGP
+      logMsg = string.format("EP: %d -> %d (%+d), GP: %d -> %d (%+d) by %s", prevEP, ep, changeEP, prevGP, gp, changeGP, actor)
+    elseif ep ~= nil then
+      local changeEP = ep - prevEP
+      logMsg = string.format("EP: %d -> %d (%+d) by %s", prevEP, ep, changeEP, actor)
+    elseif gp ~= nil then
+      local changeGP = gp - prevGP
+      logMsg = string.format("GP: %d -> %d (%+d) by %s", prevGP, gp, changeGP, actor)
+    end
+    
+    if logMsg ~= "" then
+      self:personalLogAdd(name, logMsg)
+    end
   end
 end
 
