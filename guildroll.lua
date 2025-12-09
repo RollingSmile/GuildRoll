@@ -363,7 +363,7 @@ function GuildRoll:buildMenu()
     -- desc = string.format(L["Resets everyone\'s AuxStanding to 0/%d (Admin only)."],GuildRoll.VARS.baseAE),
     -- order = 122,
     -- hidden = function() return not (IsGuildLeader()) end,
-    -- func = function() StaticPopup_Show("RET_GP_CONFIRM_RESET") end
+    -- func = function() StaticPopup_Show("RET_EP_CONFIRM_RESET") end
     -- }
 
   end
@@ -1221,7 +1221,7 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
     usage = "<EP>"
   elseif epgp == "AuxStanding" then
     desc = L["Account AuxStanding to %s."]
-    usage = "<GP>"
+    usage = "<EP>"
   end
   local c = { }
   for i,member in ipairs(roster) do
@@ -1578,7 +1578,7 @@ StaticPopupDialogs["RET_EP_CONFIRM_RESET"] = {
   showAlert = 1,
   hideOnEscape = 1
 }
-StaticPopupDialogs["RET_GP_CONFIRM_RESET"] = {
+StaticPopupDialogs["RET_EP_CONFIRM_RESET"] = {
   text = L["|cffff0000Are you sure you want to Reset ALL AuxStanding?|r"],
   button1 = TEXT(OKAY),
   button2 = TEXT(CANCEL),
