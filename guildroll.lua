@@ -1,24 +1,3 @@
--- Compatibility shim: define a safe global `select` if it's missing.
--- This avoids modifying Libs while preventing crashes when the runtime
--- environment doesn't provide the global `select` function.
--- The shim implements the common usages: select('#', ...) and select(i, ...).
-if select == nil then
-  local function __guildroll_safe_select(idx, ...)
-    local args = { ... }
-    if idx == '#' then
-      -- count arguments (note: stops at first nil; matches many common uses)
-      return #args
-    end
-    local n = tonumber(idx)
-    if not n then return nil end
-    if n >= 1 then
-      return args[n]
-    end
-    return nil
-  end
-  select = __guildroll_safe_select
-end
-
 GuildRoll = AceLibrary("AceAddon-2.0"):new("AceConsole-2.0", "AceHook-2.1", "AceDB-2.0", "AceDebug-2.0", "AceEvent-2.0", "AceModuleCore-2.0", "FuBarPlugin-2.0")
 GuildRoll:SetModuleMixins("AceDebug-2.0")
 local D = AceLibrary("Dewdrop-2.0")-- Standings table
