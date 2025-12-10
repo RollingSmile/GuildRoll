@@ -336,7 +336,15 @@ function GuildRoll:ShowPersonalLog()
   currentPersonalName = name
   lastPersonalShown = name
 
-  if T and T.IsAttached and pcall(function() return T:IsAttached("GuildRoll_personal_logs") end) and T:IsAttached("GuildRoll_personal_logs") then
+  local isAttached = false
+  if T and T.IsAttached then
+    local ok, result = pcall(function() return T:IsAttached("GuildRoll_personal_logs") end)
+    if ok then
+      isAttached = result
+    end
+  end
+
+  if isAttached then
     pcall(function() T:Open("GuildRoll_personal_logs") end)
     pcall(function() GuildRoll_logs:RefreshPersonal() end)
 
