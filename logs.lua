@@ -164,6 +164,7 @@ end
 -- Personal log Tablet support
 local personalTabletRegistered = false
 local currentPersonalName = nil
+local lastPersonalShown = nil -- track the name currently being shown in the detached personal window
 
 function GuildRoll_logs:registerPersonalTablet()
   if personalTabletRegistered then return end
@@ -265,16 +266,35 @@ end
 -- Helper function to show personal log
 function GuildRoll:ShowPersonalLog(name)
   name = name or UnitName("player")
-  currentPersonalName = name
-  -- Register personal tablet (once)
+  -- Ensure personal tablet registered
   GuildRoll_logs:registerPersonalTablet()
-  -- Open and detach so it becomes a window like the admin logs
-  -- Open only if it's not already attached (prevents creating duplicate frames)
-  if not T:IsAttached("GuildRoll_personal_logs") then
+
+  -- If the tablet is currently attached (i.e. hidden / docked), we want to detach (show) it.
+  -- If it's currently detached (visible), then:
+  --   - if it's already showing the same name, attach it (hide)
+  --   - if it's showing a different name, update/refresh the shown content (do not create a new frame)
+  if T:IsAttached("GuildRoll_personal_logs") then
+    -- Hidden/docked -> show for this name
+    currentPersonalName = name
+    lastPersonalShown = name
+    -- Open (ensure registered window exists), refresh and detach to show
     T:Open("GuildRoll_personal_logs")
+    GuildRoll_logs:RefreshPersonal()
+    T:Detach("GuildRoll_personal_logs")
+    GuildRoll_logs:setHideScriptPersonal()
+  else
+    -- Detached / visible
+    if lastPersonalShown == name then
+      -- Same name visible -> hide (attach)
+      T:Attach("GuildRoll_personal_logs")
+      lastPersonalShown = nil
+    else
+      -- Different name visible -> update displayed name and refresh contents
+      currentPersonalName = name
+      lastPersonalShown = name
+      GuildRoll_logs:RefreshPersonal()
+    end
   end
-  T:Detach("GuildRoll_personal_logs")
-  GuildRoll_logs:setHideScriptPersonal()
 end
 
 -- Helper function to save personal log to chat for copy-paste (internal fallback only)
