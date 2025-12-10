@@ -1314,8 +1314,18 @@ function GuildRoll:SetMain(mainName)
   mainName = self:camelCase(mainName)
   local currentPlayer = self._playerName
   
-  -- Request fresh roster data
+  -- Request fresh roster data to ensure we have offline members too
   GuildRoster()
+  
+  -- First, verify that the main character exists in guild (including offline members)
+  -- This check happens for all cases, even when setting self as main
+  if mainName ~= currentPlayer then
+    local verifiedMain = self:verifyGuildMember(mainName)
+    if not verifiedMain then
+      -- verifyGuildMember already prints error message
+      return
+    end
+  end
   
   -- Find the current player's index and notes
   local playerIndex, playerPublicNote, playerOfficerNote
@@ -1334,51 +1344,25 @@ function GuildRoll:SetMain(mainName)
     return
   end
   
-  -- Case 1: mainName == current character (setting self as main)
-  if mainName == currentPlayer then
-    -- When setting self as main, still write to public note
-    -- This ensures the main tag is visible even when you are the main
-    if not self:noteHasTag(playerPublicNote, mainName) then
-      local newPublicNote = self:addTagToPublicNote(playerPublicNote, mainName)
-      -- Only write if the note actually changed
-      if newPublicNote ~= playerPublicNote then
-        -- Use API with fallback
-        if GuildRosterSetPublicNote then
-          GuildRosterSetPublicNote(playerIndex, newPublicNote)
-        elseif SetGuildRosterPublicNote then
-          SetGuildRosterPublicNote(playerIndex, newPublicNote)
-        end
-        self:defaultPrint(string.format("Added {%s} to your public note.", mainName))
+  -- Write to public note for both mains and alts
+  if not self:noteHasTag(playerPublicNote, mainName) then
+    local newPublicNote = self:addTagToPublicNote(playerPublicNote, mainName)
+    -- Only write if the note actually changed
+    if newPublicNote ~= playerPublicNote then
+      -- Use API with fallback
+      if GuildRosterSetPublicNote then
+        GuildRosterSetPublicNote(playerIndex, newPublicNote)
+      elseif SetGuildRosterPublicNote then
+        SetGuildRosterPublicNote(playerIndex, newPublicNote)
       end
+      self:defaultPrint(string.format("Added {%s} to your public note.", mainName))
     end
-    GuildRoll_main = mainName
+  end
+  
+  GuildRoll_main = mainName
+  if mainName == currentPlayer then
     self:defaultPrint(string.format("Your main has been set to %s (yourself).", mainName))
   else
-    -- Case 2: mainName != current character (setting an alt)
-    -- Verify main exists in guild
-    local verifiedMain = self:verifyGuildMember(mainName)
-    if not verifiedMain then
-      -- verifyGuildMember already prints error message
-      return
-    end
-    
-    -- Always write to public note (with 31 char limit and right-aligned tag)
-    if not self:noteHasTag(playerPublicNote, mainName) then
-      -- Use the new function that handles 31 char limit
-      local newPublicNote = self:addTagToPublicNote(playerPublicNote, mainName)
-      -- Only write if the note actually changed
-      if newPublicNote ~= playerPublicNote then
-        -- Use API with fallback
-        if GuildRosterSetPublicNote then
-          GuildRosterSetPublicNote(playerIndex, newPublicNote)
-        elseif SetGuildRosterPublicNote then
-          SetGuildRosterPublicNote(playerIndex, newPublicNote)
-        end
-        self:defaultPrint(string.format("Added {%s} to your public note.", mainName))
-      end
-    end
-    
-    GuildRoll_main = mainName
     self:defaultPrint(string.format("Your main has been set to %s.", mainName))
   end
   
@@ -1724,7 +1708,7 @@ function GuildRoll:prependTagToNote(note, tag)
 end
 
 -- Add tag to public note with 31 character limit, placing tag as far right as possible
--- If tag doesn't fit, removes text from the beginning to make room
+-- If tag doesn't fit, removes text from the RIGHT (end) to make room, keeping leftmost text
 function GuildRoll:addTagToPublicNote(note, tag)
   if not tag or tag == "" then return note end
   note = note or ""
@@ -1744,8 +1728,8 @@ function GuildRoll:addTagToPublicNote(note, tag)
   end
   
   -- Calculate available space for existing text
-  -- We want: existingText + " " + {tag}
-  local availableForText = maxLength - tagLength - 1  -- -1 for the space before tag
+  -- We want: existingText + {tag} (no space between for tight fit)
+  local availableForText = maxLength - tagLength
   
   if availableForText <= 0 then
     -- Tag itself is too long or takes all space, just return the tag
@@ -1756,13 +1740,13 @@ function GuildRoll:addTagToPublicNote(note, tag)
   local textLength = string.len(existingText)
   
   if textLength <= availableForText then
-    -- Everything fits, add tag at the end with a space
-    return existingText .. " " .. tagText
+    -- Everything fits, add tag at the end directly (no space)
+    return existingText .. tagText
   else
-    -- Need to trim from the beginning to make room
-    -- Keep the rightmost characters that fit
-    local trimmedText = string.sub(existingText, textLength - availableForText + 1)
-    return trimmedText .. " " .. tagText
+    -- Need to trim from the END to make room
+    -- Keep the leftmost characters that fit
+    local trimmedText = string.sub(existingText, 1, availableForText)
+    return trimmedText .. tagText
   end
 end
 
