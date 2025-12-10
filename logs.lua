@@ -74,42 +74,23 @@ function GuildRoll_logs:Refresh()
   pcall(function() T:Refresh("GuildRoll_logs") end)
 end
 
--- helper: find an existing detached Tablet20DetachedFrame owned by 'ownerName'
-local function findDetachedFrame(ownerName)
-  for i = 1, 100 do
-    local name = string.format("Tablet20DetachedFrame%d", i)
-    local f = _G[name]
-    if f then
-      -- some Tablet detached frames might exist without owner field; guard
-      if f.owner and f.owner == ownerName then
-        return f
-      end
-    end
-  end
-  return nil
-end
-
 function GuildRoll_logs:setHideScript()
-  for i = 1, 100 do
-    local tablet = _G[string.format("Tablet20DetachedFrame%d", i)]
-    if (tablet) then
-      if tablet.owner ~= nil and tablet.owner == "GuildRoll_logs" then
-        GuildRoll:make_escable(string.format("Tablet20DetachedFrame%d",i),"add")
-        -- Remove any previous handler and add robust one using frame parameter
-        tablet:SetScript("OnHide", nil)
-        tablet:SetScript("OnHide", function(frame)
-            -- Protect call with pcall to avoid Tablet errors
-            pcall(function()
-              if T and T.IsAttached and not T:IsAttached("GuildRoll_logs") then
-                T:Attach("GuildRoll_logs")
-              end
-              if frame and frame.SetScript then
-                frame:SetScript("OnHide", nil)
-              end
-            end)
+  local frame = GuildRoll:FindDetachedFrame("GuildRoll_logs")
+  if frame then
+    GuildRoll:make_escable(frame:GetName(), "add")
+    if frame.SetScript then
+      frame:SetScript("OnHide", nil)
+      frame:SetScript("OnHide", function(f)
+          -- Protect call with pcall to avoid Tablet errors
+          pcall(function()
+            if T and T.IsAttached and not T:IsAttached("GuildRoll_logs") then
+              T:Attach("GuildRoll_logs")
+            end
+            if f and f.SetScript then
+              f:SetScript("OnHide", nil)
+            end
           end)
-        break
-      end
+        end)
     end
   end
 end
@@ -221,24 +202,21 @@ function GuildRoll_logs:RefreshPersonal()
 end
 
 function GuildRoll_logs:setHideScriptPersonal()
-  for i = 1, 100 do
-    local tablet = _G[string.format("Tablet20DetachedFrame%d", i)]
-    if (tablet) then
-      if tablet.owner ~= nil and tablet.owner == "GuildRoll_personal_logs" then
-        GuildRoll:make_escable(string.format("Tablet20DetachedFrame%d",i),"add")
-        tablet:SetScript("OnHide", nil)
-        tablet:SetScript("OnHide", function(frame)
-            pcall(function()
-              if T and T.IsAttached and not T:IsAttached("GuildRoll_personal_logs") then
-                T:Attach("GuildRoll_personal_logs")
-              end
-              if frame and frame.SetScript then
-                frame:SetScript("OnHide", nil)
-              end
-            end)
+  local frame = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
+  if frame then
+    GuildRoll:make_escable(frame:GetName(), "add")
+    if frame.SetScript then
+      frame:SetScript("OnHide", nil)
+      frame:SetScript("OnHide", function(f)
+          pcall(function()
+            if T and T.IsAttached and not T:IsAttached("GuildRoll_personal_logs") then
+              T:Attach("GuildRoll_personal_logs")
+            end
+            if f and f.SetScript then
+              f:SetScript("OnHide", nil)
+            end
           end)
-        break
-      end
+        end)
     end
   end
 end
@@ -312,7 +290,7 @@ function GuildRoll:ShowPersonalLog(name)
   GuildRoll_logs:registerPersonalTablet()
 
   -- Find any existing detached frame for this personal tablet
-  local detached = findDetachedFrame("GuildRoll_personal_logs")
+  local detached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
   local detachedVisible = (detached and detached:IsShown())
 
   -- If there's a visible detached frame
@@ -370,7 +348,7 @@ function GuildRoll:ShowPersonalLog(name)
   end
   
   -- Check again if a detached frame was created
-  local alreadyDetached = findDetachedFrame("GuildRoll_personal_logs")
+  local alreadyDetached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
   if not alreadyDetached then
     -- Create detached frame
     pcall(function()

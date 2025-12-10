@@ -1572,22 +1572,19 @@ GuildRoll.cannotDetachTooltip = true
 GuildRoll.tooltipHiddenWhenEmpty = false
 GuildRoll.independentProfile = true
 
--- helper function: check if a detached frame with any of the given owner names already exists
+-- Constant for maximum number of detached frames to scan
 local MAX_DETACHED_FRAMES = 100
 
-local function hasDetachedOwner(...)
-  local ownerNames = {...}
+-- Shared method: find an existing detached Tablet frame by owner name
+function GuildRoll:FindDetachedFrame(ownerName)
+  if not ownerName then return nil end
   for i = 1, MAX_DETACHED_FRAMES do
     local f = _G[string.format("Tablet20DetachedFrame%d", i)]
-    if f and f.owner then
-      for _, ownerName in ipairs(ownerNames) do
-        if f.owner == ownerName then
-          return true
-        end
-      end
+    if f and f.owner and f.owner == ownerName then
+      return f
     end
   end
-  return false
+  return nil
 end
 
 function GuildRoll:OnTooltipUpdate()
@@ -1635,7 +1632,7 @@ function GuildRoll:OnClick(button)
       end
     else
       -- Not admin: fallback to personal log, but avoid duplicates
-      if not hasDetachedOwner("GuildRoll_logs", "GuildRoll") then
+      if not self:FindDetachedFrame("GuildRoll_logs") and not self:FindDetachedFrame("GuildRoll_personal_logs") then
         if GuildRoll and GuildRoll.ShowPersonalLog then
           pcall(function() GuildRoll:ShowPersonalLog() end)
         elseif GuildRoll and GuildRoll.SavePersonalLog then
@@ -1648,7 +1645,7 @@ function GuildRoll:OnClick(button)
   
   -- Ctrl+Click: Open personal log (avoid duplicates)
   if ctrl and not shift and not alt then
-    if not hasDetachedOwner("GuildRoll_logs", "GuildRoll") then
+    if not self:FindDetachedFrame("GuildRoll_logs") and not self:FindDetachedFrame("GuildRoll_personal_logs") then
       if GuildRoll and GuildRoll.ShowPersonalLog then
         pcall(function() GuildRoll:ShowPersonalLog() end)
       elseif GuildRoll and GuildRoll.SavePersonalLog then

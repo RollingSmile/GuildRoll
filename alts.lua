@@ -40,22 +40,22 @@ function GuildRollAlts:Refresh()
 end
 
 function GuildRollAlts:setHideScript()
-  local i = 1
-  local tablet = getglobal(string.format("Tablet20DetachedFrame%d",i))
-  while (tablet) and i<100 do
-    if tablet.owner ~= nil and tablet.owner == "GuildRollAlts" then
-      GuildRoll:make_escable(string.format("Tablet20DetachedFrame%d",i),"add")
-      tablet:SetScript("OnHide",nil)
-      tablet:SetScript("OnHide",function()
-          if not T:IsAttached("GuildRollAlts") then
-            T:Attach("GuildRollAlts")
-            this:SetScript("OnHide",nil)
-          end
+  local frame = GuildRoll:FindDetachedFrame("GuildRollAlts")
+  if frame then
+    GuildRoll:make_escable(frame:GetName(), "add")
+    if frame.SetScript then
+      frame:SetScript("OnHide", nil)
+      frame:SetScript("OnHide", function(f)
+          pcall(function()
+            if T and T.IsAttached and not T:IsAttached("GuildRollAlts") then
+              T:Attach("GuildRollAlts")
+            end
+            if f and f.SetScript then
+              f:SetScript("OnHide", nil)
+            end
+          end)
         end)
-      break
-    end    
-    i = i+1
-    tablet = getglobal(string.format("Tablet20DetachedFrame%d",i))
+    end
   end
 end
 
