@@ -402,45 +402,97 @@ function GuildRoll:buildMenu()
       end,
       hidden = function() return not admin() end,
     }
-    -- CSR Threshold: show guild rank names where possible
-    options.args["csr_threshold"] = {
-      type = "select",
-      name = L["CSR Threshold"],
-      desc = L["Maximum rank index allowed to view CSR"],
-      order = 119,
-      values = function()
-        local values = {}
-        -- Try to populate from GuildControl API (Turtle WoW / 1.12)
-        if GuildControlGetNumRanks and GuildControlGetRankName then
-          local num = GuildControlGetNumRanks() or 0
-          for i = 0, math.max(0, num - 1) do
-            -- Be robust to 0-based or 1-based GuildControlGetRankName
-            local name = GuildControlGetRankName(i)
-            if not name then name = GuildControlGetRankName(i + 1) end
-            if name and name ~= "" then
-              values[tostring(i)] = name
-            end
+    -- Radio-like rank selector for CSR threshold
+    local function BuildCSRRankRadioGroup(container)
+      container.args = container.args or {}
+
+      container.args["info"] = {
+        type = "header",
+        name = "Select a rank: players with rankIndex <= selected will see the CSR button.",
+      }
+
+      -- Collect rank names from guild roster if available
+      local ranks = {}
+      local maxIndex = -1
+      local num = GetNumGuildMembers and GetNumGuildMembers(1) or 0
+      if num and num > 0 then
+        for i = 1, num do
+          local name, rank, rankIndex = GetGuildRosterInfo(i)
+          if rank and rankIndex then
+            ranks[rankIndex] = rank
+            if rankIndex > maxIndex then maxIndex = rankIndex end
           end
         end
-        -- Fallback: numeric labels 0..9
-        if next(values) == nil then
-          for i = 0, 9 do values[tostring(i)] = tostring(i) end
+      end
+
+      -- If roster not ready, use standard placeholders
+      if maxIndex < 0 then
+        maxIndex = 4
+        ranks = { [0] = "GuildMaster", [1] = "Officer", [2] = "Veteran", [3] = "Member", [4] = "Initiate" }
+      end
+
+      for idx = 0, maxIndex do
+        local rankName = ranks[idx] or ("Rank " .. tostring(idx))
+        local key = "rank_" .. tostring(idx)
+        container.args[key] = {
+          type = "toggle",
+          name = rankName,
+          desc = "Set '" .. rankName .. "' (index " .. tostring(idx) .. ") as CSR threshold.",
+          -- Radio behavior: true only if the threshold is exactly this index
+          get = function() return tonumber(GuildRoll_CSRThreshold) == idx end,
+          set = function(v)
+            if v then
+              GuildRoll_CSRThreshold = idx
+              if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
+              -- Share settings to guild if admin
+              if (IsGuildLeader()) then
+                GuildRoll:shareSettings(true)
+              end
+            end
+            -- Don't allow deselection; user must select a different rank or use Clear button
+          end,
+        }
+      end
+
+      container.args["clear"] = {
+        type = "execute",
+        name = "Clear selection",
+        desc = "Remove the threshold (disables CSR for all players).",
+        func = function()
+          GuildRoll_CSRThreshold = nil
+          if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
+          -- Share settings to guild if admin
+          if (IsGuildLeader()) then
+            GuildRoll:shareSettings(true)
+          end
         end
-        return values
-      end,
-      get = function() return tostring(tonumber(GuildRoll_CSRThreshold) or 3) end,
-      set = function(v)
-        GuildRoll_CSRThreshold = tonumber(v)
-        -- Trigger local roll UI rebuild immediately
-        if GuildRoll and GuildRoll.RebuildRollOptions then
-          GuildRoll:RebuildRollOptions()
-        end
-        if (IsGuildLeader()) then
-          GuildRoll:shareSettings(true)
-        end
-      end,
+      }
+    end
+
+    -- Add the group to options (replaces the old csr_threshold in options.args)
+    options.args["csr_rank_selector"] = {
+      type = "group",
+      name = L["CSR Threshold"],
+      desc = L["Maximum rank index allowed to view CSR"],
+      args = {},
       hidden = function() return not admin() end,
+      order = 119,
     }
+    BuildCSRRankRadioGroup(options.args["csr_rank_selector"])
+
+    -- Dynamically update rank names when roster changes (create frame only once)
+    if not self._csr_update_frame then
+      self._csr_update_frame = CreateFrame("Frame")
+      self._csr_update_frame:RegisterEvent("GUILD_ROSTER_UPDATE")
+      self._csr_update_frame:SetScript("OnEvent", function()
+        -- Rebuild toggles with updated names
+        if options and options.args and options.args["csr_rank_selector"] then
+          BuildCSRRankRadioGroup(options.args["csr_rank_selector"])
+        end
+        -- Refresh Dewdrop/Tablet menu if necessary
+        if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
+      end)
+    end
     options.args["reset"] = {
      type = "execute",
      name = L["Reset Standing"],
