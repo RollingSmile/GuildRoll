@@ -374,13 +374,8 @@ function GuildRoll:buildMenu()
       usage = "<MainChar>",
       get = function() return GuildRoll_main end,
       set = function(v) 
-        local verified = GuildRoll:verifyGuildMember(v, true)
-        if verified then
-          GuildRoll:ProcessSetMainInput(verified)
-        else
-          -- Show popup if verification fails
-          StaticPopup_Show("GUILDROLL_SET_MAIN_PROMPT")
-        end
+        -- ProcessSetMainInput handles verification internally
+        GuildRoll:ProcessSetMainInput(v)
       end,
     }    
     options.args["migrate_main_tags"] = {
@@ -1964,7 +1959,9 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
     -- Check if public note contains MAIN_TAG
     if string.find(publicNote, MAIN_TAG, 1, true) then
       -- Remove only first occurrence of MAIN_TAG from public note
-      local newPublic = string.gsub(publicNote, MAIN_TAG, "", 1)
+      -- Escape pattern characters for safe replacement
+      local escapedTag = string.gsub(MAIN_TAG, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+      local newPublic = string.gsub(publicNote, escapedTag, "", 1)
       
       -- Insert MAIN_TAG before {EP:GP} in officer note
       local newOfficer = _insertTagBeforeEP(officerNote, MAIN_TAG)
@@ -2027,7 +2024,7 @@ function GuildRoll:strsplitT(delimiter, subject)
 end
 
  function GuildRoll:verifyGuildMember(name,silent)
-	GuildRoll:verifyGuildMember(name,silent,false)
+	return GuildRoll:verifyGuildMember(name,silent,false)
  end
 function GuildRoll:verifyGuildMember(name,silent,ignorelevel)
   for i=1,GetNumGuildMembers(1) do
