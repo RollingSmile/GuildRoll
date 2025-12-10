@@ -959,12 +959,6 @@ function GuildRoll:update_ep_v3(getname,ep)
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
     if (name==getname) then 
       self:update_epgp_v3(ep,nil,i,name,officernote)
-      -- Send simplified message to the player
-      if getname == UnitName("player") then
-        self:defaultPrint(string.format(L["You now have (short)"], ep))
-      else
-        pcall(function() SendChatMessage(string.format("guildroll: " .. L["You now have (short)"], ep), "WHISPER", nil, getname) end)
-      end
     end
   end  
 end
@@ -1026,18 +1020,40 @@ function GuildRoll:award_raid_ep(ep) -- awards ep to raid members in zone
 		 table.insert (award, mName)
       end
     end
-    local msg = string.format(L["Giving %d MainStanding to all raidmembers"],ep)
-    self:simpleSay(msg)
-    self:adminSay(msg)
-    self:addToLog(msg)    
+    self:simpleSay(string.format(L["Giving %d MainStanding to all raidmembers"],ep))
+    self:addToLog(string.format(L["Giving %d MainStanding to all raidmembers"],ep))    
     local addonMsg = string.format("RAID;AWARD;%s",ep)
     self:addonMessage(addonMsg,"RAID")
     self:refreshPRTablets() 
   else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
 end
-function GuildRoll:award_raid_gp(gp) -- DEPRECATED: AuxStanding removed
-  self:debugPrint("award_raid_gp is deprecated - AuxStanding functionality has been removed")
-  return
+function GuildRoll:award_raid_gp(gp) -- awards gp to raid members in zone
+  -- Validate input
+  if type(gp) ~= "number" then
+    UIErrorsFrame:AddMessage("Invalid GP value entered.", 1.0, 0.0, 0.0, 1.0)
+    return
+  end
+  if gp < GuildRoll.VARS.minAward or gp > GuildRoll.VARS.maxAward then
+    UIErrorsFrame:AddMessage("GP value out of range (" .. GuildRoll.VARS.minAward .. " to " .. GuildRoll.VARS.maxAward .. ")", 1.0, 0.0, 0.0, 1.0)
+    return
+  end
+  
+  if not (IsGuildLeader()) then return end
+  if GetNumRaidMembers()>0 then
+	local award = {}
+    for i = 1, GetNumRaidMembers(true) do
+      local name, rank, subgroup, level, class, fileName, zone, online, isDead = GetRaidRosterInfo(i)
+      if level >= GuildRoll.VARS.minlevel then
+		local _,mName =  self:givename_gp(name,gp,award)
+		 table.insert (award, mName)
+      end
+    end
+    self:simpleSay(string.format(L["Giving %d AuxStanding to all raidmembers"],gp))
+    self:addToLog(string.format(L["Giving %d AuxStanding to all raidmembers"],gp))    
+    local addonMsg = string.format("RAID;AWARDGP;%s",gp)
+    self:addonMessage(addonMsg,"RAID")
+    self:refreshPRTablets() 
+  else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
 end
 
 function GuildRoll:PromptAwardRaidEP()
@@ -1086,19 +1102,11 @@ function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single charac
   local old =  (self:get_ep_v3(getname) or 0)
   local newep = ep + old
   self:update_ep_v3(getname,newep)
-  
-  -- Always announce to officers and log
-  local msg
+  self:debugPrint(string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep))
   if ep < 0 then
-    msg = string.format(L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
-  else
-    msg = string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
-  end
-  self:adminSay(msg)
-  self:defaultPrint(msg)
-  self:addToLog(msg)
-  
-  if ep < 0 then
+    local msg = string.format(L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
+    self:adminSay(msg)
+    self:addToLog(msg)
     local addonMsg = string.format("%s;%s;%s",getname,"MainStanding",ep)
     self:addonMessage(addonMsg,"GUILD")
   end
@@ -1116,8 +1124,53 @@ if not t then return nil end
 return nil
 end
 
-function GuildRoll:givename_gp(getname,gp,block) -- DEPRECATED: AuxStanding removed
-  self:debugPrint("givename_gp is deprecated - AuxStanding functionality has been removed")
+function GuildRoll:givename_gp(getname,gp)
+  return GuildRoll:givename_gp(getname,gp,nil)
+end
+
+function GuildRoll:givename_gp(getname,gp,block) -- awards gp to a single character
+  if not (IsGuildLeader()) then return end
+
+  -- Validate GP value
+  if type(gp) ~= "number" then
+    self:defaultPrint("Invalid GP value entered.")
+    return false, getname
+  end
+  if gp < GuildRoll.VARS.minAward or gp > GuildRoll.VARS.maxAward then
+    self:defaultPrint("GP value out of range (" .. GuildRoll.VARS.minAward .. " to " .. GuildRoll.VARS.maxAward .. ")")
+    return false, getname
+  end
+
+  -- PUG support removed: do not call self:isPug
+  local postfix, alt = ""
+
+  -- Keep alt -> main handling if Altspool is enabled
+  if (GuildRollAltspool) then
+    local main = self:parseAlt(getname)
+    if (main) then
+      alt = getname
+      getname = main
+      gp = self:num_round(GuildRoll_altpercent*gp)
+      postfix = string.format(L[", %s\'s Main."],alt)
+    end
+  end
+
+  if GuildRoll:TFind(block, getname) then
+    self:debugPrint(string.format("Skipping %s%s, already awarded.",getname,postfix))
+    return false, getname
+  end
+
+  local old =  (self:get_gp_v3(getname) or 0)
+  local newgp = gp + old
+  self:update_gp_v3(getname,newgp)
+  self:debugPrint(string.format(L["Giving %d AuxStanding to %s%s. (Previous: %d, New: %d)"],gp,getname,postfix,old,newgp))
+  if gp < 0 then
+    local msg = string.format(L["%s AuxStanding Penalty to %s%s. (Previous: %d, New: %d)"],gp,getname,postfix,old,newgp)
+    self:adminSay(msg)
+    self:addToLog(msg)
+    local addonMsg = string.format("%s;%s;%s",getname,"AuxStanding",gp)
+    self:addonMessage(addonMsg,"GUILD")
+  end
   return false, getname
 end
 
@@ -1331,8 +1384,7 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
         c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshPRTablets() end
       elseif epgp == "AuxStanding" then
         c[class].args[name].get = false
-        -- AuxStanding functionality removed - no-op
-        c[class].args[name].set = function(v) GuildRoll:debugPrint("AuxStanding functionality has been removed") end
+        c[class].args[name].set = function(v) GuildRoll:givename_gp(name, tonumber(v)) GuildRoll:refreshPRTablets() end
       end
       c[class].args[name].validate = function(v) 
         local num = tonumber(v)
