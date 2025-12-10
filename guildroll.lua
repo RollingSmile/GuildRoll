@@ -1449,15 +1449,31 @@ function GuildRoll:OnClick(button)
   local ctrl = IsControlKeyDown()
   local shift = IsShiftKeyDown()
   local is_admin = admin()
-  if alt and not ctrl and not shift then
-    if GuildRollAlts and GuildRollAlts.Toggle then
-      GuildRollAlts:Toggle()
+  
+  -- Ctrl+Shift+Click: Open global admin log (if admin), otherwise fallback to personal log
+  if ctrl and shift and not alt then
+    if is_admin then
+      -- Admin: show global admin log
+      if GuildRoll_logs and GuildRoll_logs.Toggle then
+        GuildRoll_logs:Toggle(true)
+      end
+    else
+      -- Not admin: fallback to personal log
+      GuildRoll:ShowPersonalLog()
     end
     return
   end
-  if ctrl and not alt and not shift and is_admin then
-    if GuildRoll_logs and GuildRoll_logs.Toggle then
-      GuildRoll_logs:Toggle()
+  
+  -- Ctrl+Click: Open personal log
+  if ctrl and not shift and not alt then
+    GuildRoll:ShowPersonalLog()
+    return
+  end
+  
+  -- Preserve existing behaviors
+  if alt and not ctrl and not shift then
+    if GuildRollAlts and GuildRollAlts.Toggle then
+      GuildRollAlts:Toggle()
     end
     return
   end
