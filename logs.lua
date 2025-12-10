@@ -322,48 +322,11 @@ function GuildRoll:ShowPersonalLog()
   -- Ensure the personal tablet is registered
   GuildRoll_logs:registerPersonalTablet()
 
-  -- Find any existing detached frame for the personal tablet
-  local detached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
-  local detachedVisible = (detached and detached:IsShown())
-
-  -- Helper: clear Tablet owner safely to avoid "Detached tooltip has no owner" errors
-  local function safeClearTabletOwner()
-    pcall(function()
-      if T and T.registry and T.registry.GuildRoll_personal_logs and T.registry.GuildRoll_personal_logs.tooltip then
-        -- set owner to nil so Tablet won't try to access it after Hide/Attach races
-        T.registry.GuildRoll_personal_logs.tooltip.owner = nil
-      end
-    end)
-  end
-
-  -- If there's a visible detached frame
-  if detachedVisible then
-    if lastPersonalShown == name then
-      -- Clear owner first to avoid Tablet complaining when we hide the detached frame
-      safeClearTabletOwner()
-
-      pcall(function() detached:Hide() end)
-      pcall(function()
-        if T and T.IsAttached and T.Attach then
-          -- Wrap Attach in pcall to be extra-safe
-          pcall(function() T:Attach("GuildRoll_personal_logs") end)
-        end
-      end)
-      lastPersonalShown = nil
-      currentPersonalName = nil
-      return
-    else
-      currentPersonalName = name
-      lastPersonalShown = name
-      pcall(function() GuildRoll_logs:RefreshPersonal() end)
-      return
-    end
-  end
-
-  -- Not visible: set current name
+  -- Keep compatibility state
   currentPersonalName = name
   lastPersonalShown = name
 
+  -- Check if the tablet entry is currently attached (not detached)
   local isAttached = false
   if T and T.IsAttached then
     local ok, result = pcall(function() return T:IsAttached("GuildRoll_personal_logs") end)
@@ -373,6 +336,7 @@ function GuildRoll:ShowPersonalLog()
   end
 
   if isAttached then
+    -- If attached: open, refresh and show as detached (either existing detached frame or detach anew)
     pcall(function() T:Open("GuildRoll_personal_logs") end)
     pcall(function() GuildRoll_logs:RefreshPersonal() end)
 
@@ -380,27 +344,23 @@ function GuildRoll:ShowPersonalLog()
     if alreadyDetached then
       pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
     else
-      -- Before detaching, ensure any stale owner is cleared
-      safeClearTabletOwner()
       pcall(function() T:Detach("GuildRoll_personal_logs") end)
     end
 
     pcall(function() GuildRoll_logs:setHideScriptPersonal() end)
     return
-  end
-
-  pcall(function() T:Open("GuildRoll_personal_logs") end)
-  pcall(function() GuildRoll_logs:RefreshPersonal() end)
-
-  local alreadyDetached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
-  if not alreadyDetached then
-    safeClearTabletOwner()
-    pcall(function() T:Detach("GuildRoll_personal_logs") end)
   else
-    pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
+    -- If already detached: show existing detached frame & refresh, otherwise ask Tablet to attach (hide)
+    local detached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
+    if detached then
+      pcall(function() if detached.Show then detached:Show() end end)
+      pcall(function() GuildRoll_logs:RefreshPersonal() end)
+      pcall(function() GuildRoll_logs:setHideScriptPersonal() end)
+    else
+      pcall(function() T:Attach("GuildRoll_personal_logs") end)
+    end
+    return
   end
-
-  pcall(function() GuildRoll_logs:setHideScriptPersonal() end)
 end
 
 -- Helper function to save personal log to chat for copy-paste (internal fallback only)
@@ -441,5 +401,5 @@ function GuildRoll:SavePersonalLog(name)
   end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_disc[...[...]
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_disc[...]
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs,GuildRoll_personalLogSaved,GuildRoll_personalLogs
