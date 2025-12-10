@@ -229,16 +229,16 @@ function GuildRoll_standings:OnEnable()
     )
   end
   if not T:IsAttached("GuildRoll_standings") then
-    T:Open("GuildRoll_standings")
+    pcall(function() T:Open("GuildRoll_standings") end)
   end
 end
 
 function GuildRoll_standings:OnDisable()
-  T:Close("GuildRoll_standings")
+  pcall(function() T:Close("GuildRoll_standings") end)
 end
 
 function GuildRoll_standings:Refresh()
-  T:Refresh("GuildRoll_standings")
+  pcall(function() T:Refresh("GuildRoll_standings") end)
 end
 
 function GuildRoll_standings:setHideScript()
@@ -270,16 +270,16 @@ end
 function GuildRoll_standings:Toggle(forceShow)
   self:Top()
   if T:IsAttached("GuildRoll_standings") then -- hidden
-    T:Detach("GuildRoll_standings") -- show
-    if (T:IsLocked("GuildRoll_standings")) then
-      T:ToggleLocked("GuildRoll_standings")
+    pcall(function() T:Detach("GuildRoll_standings") end) -- show
+    if (T.IsLocked and T:IsLocked("GuildRoll_standings")) then
+      pcall(function() T:ToggleLocked("GuildRoll_standings") end)
     end
     self:setHideScript()
   else
     if (forceShow) then
       GuildRoll_standings:Refresh()
     else
-      T:Attach("GuildRoll_standings") -- hide
+      pcall(function() T:Attach("GuildRoll_standings") end) -- hide
     end
   end  
 end
