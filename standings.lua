@@ -312,12 +312,6 @@ end
 -- name, class, armor_class, roles, EP, GP, PR
 -- and sorted by PR
 function GuildRoll_standings:BuildStandingsTable()
-  -- Trigger migration of public main tags to officer notes (non-blocking)
-  -- Only runs if user has CanEditOfficerNote() permission and cooldown has passed
-  if GuildRoll and GuildRoll.migratePublicMainTags then
-    pcall(function() GuildRoll:migratePublicMainTags() end)
-  end
-  
   local t = { }
   local r = { }
   if (GuildRoll_raidonly) and GetNumRaidMembers() > 0 then
