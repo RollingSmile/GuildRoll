@@ -490,7 +490,12 @@ function GuildRoll:buildMenu()
             else
               -- Unchecking: set threshold to next higher rank (lower rankIdx = higher rank)
               -- Unchecking rank R should set threshold to (R - 1)
-              applyThresholdChange(currentRankIdx - 1)
+              -- Safety guard: Guild Master (rank 0) is disabled, but if somehow unchecked, keep threshold at 0
+              if currentRankIdx == 0 then
+                applyThresholdChange(0)
+              else
+                applyThresholdChange(currentRankIdx - 1)
+              end
             end
           end,
           -- Disable rank 0 (Guild Master) so it cannot be unchecked
