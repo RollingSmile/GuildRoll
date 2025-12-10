@@ -1020,8 +1020,13 @@ local function handleSharedSettings(message, sender)
   
   -- Apply CSR threshold
   if settings.CSR then
-    local csr = tonumber(settings.CSR)
-    if csr and csr ~= GuildRoll_CSRThreshold then
+    local csr
+    if settings.CSR == "NONE" then
+      csr = nil
+    else
+      csr = tonumber(settings.CSR)
+    end
+    if csr ~= GuildRoll_CSRThreshold then
       GuildRoll_CSRThreshold = csr
       changed = true
     end
@@ -1120,7 +1125,9 @@ function GuildRoll:shareSettings(force)
     
     -- Build compact payload with admin settings
     -- Format: SHARE:CSR=3;RO=1;DC=0.5;MIN=100;ALT=1.0;SC=GUILD
-    local csr = tonumber(GuildRoll_CSRThreshold) or 3
+    -- CSR can be nil (disabled), use "NONE" to represent this in the payload
+    local csr = GuildRoll_CSRThreshold
+    local csrStr = csr and tostring(tonumber(csr)) or "NONE"
     local ro = GuildRoll_raidonly and 1 or 0
     local dc = GuildRoll_decay or self.VARS.decay
     local minep = GuildRoll_minPE or self.VARS.minPE
@@ -1131,8 +1138,8 @@ function GuildRoll:shareSettings(force)
     sc = string.gsub(sc, "=", "%%3D")
     sc = string.gsub(sc, ";", "%%3B")
     
-    local payload = string.format("SHARE:CSR=%d;RO=%d;DC=%s;MIN=%s;ALT=%s;SC=%s",
-      csr, ro, tostring(dc), tostring(minep), tostring(alt), sc)
+    local payload = string.format("SHARE:CSR=%s;RO=%d;DC=%s;MIN=%s;ALT=%s;SC=%s",
+      csrStr, ro, tostring(dc), tostring(minep), tostring(alt), sc)
     
     -- Send via existing addonMessage method for consistency
     self:addonMessage(payload, "GUILD")
