@@ -267,11 +267,8 @@ function GuildRoll_logs:setHideScriptPersonal()
     if frame.SetScript then
       frame:SetScript("OnHide", nil)
       frame:SetScript("OnHide", function(f)
+          -- Clean up the script when frame is hidden
           pcall(function()
-            -- When detached frame is hidden, reattach the tablet if needed (match other modules)
-            if T and T.IsAttached and not T:IsAttached("GuildRoll_personal_logs") then
-              pcall(function() T:Attach("GuildRoll_personal_logs") end)
-            end
             if f and f.SetScript then
               f:SetScript("OnHide", nil)
             end
