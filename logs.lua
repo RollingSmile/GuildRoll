@@ -120,11 +120,8 @@ function GuildRoll_logs:setHideScript()
     if frame.SetScript then
       frame:SetScript("OnHide", nil)
       frame:SetScript("OnHide", function(f)
-          -- Protect call with pcall to avoid Tablet errors
+          -- Clean up the script when frame is hidden
           pcall(function()
-            if T and T.IsAttached and not T:IsAttached("GuildRoll_logs") then
-              T:Attach("GuildRoll_logs")
-            end
             if f and f.SetScript then
               f:SetScript("OnHide", nil)
             end
@@ -247,10 +244,8 @@ function GuildRoll_logs:setHideScriptPersonal()
     if frame.SetScript then
       frame:SetScript("OnHide", nil)
       frame:SetScript("OnHide", function(f)
+          -- Clean up the script when frame is hidden
           pcall(function()
-            if T and T.IsAttached and not T:IsAttached("GuildRoll_personal_logs") then
-              T:Attach("GuildRoll_personal_logs")
-            end
             if f and f.SetScript then
               f:SetScript("OnHide", nil)
             end

@@ -1725,7 +1725,7 @@ function GuildRoll:OnClick(button)
     if is_admin then
       -- Admin: toggle global admin log
       if GuildRoll_logs and GuildRoll_logs.Toggle then
-        pcall(function() GuildRoll_logs:Toggle(true) end)
+        pcall(function() GuildRoll_logs:Toggle() end)
       end
     else
       -- Not admin: open Personal Log as fallback (no error message)
