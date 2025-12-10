@@ -27,16 +27,16 @@ function GuildRollAlts:OnEnable()
     )
   end
   if not T:IsAttached("GuildRollAlts") then
-    T:Open("GuildRollAlts")
+    pcall(function() T:Open("GuildRollAlts") end)
   end
 end
 
 function GuildRollAlts:OnDisable()
-  T:Close("GuildRollAlts")
+  pcall(function() T:Close("GuildRollAlts") end)
 end
 
 function GuildRollAlts:Refresh()
-  T:Refresh("GuildRollAlts")
+  pcall(function() T:Refresh("GuildRollAlts") end)
 end
 
 function GuildRollAlts:setHideScript()
@@ -68,16 +68,16 @@ end
 function GuildRollAlts:Toggle(forceShow)
   self:Top()
   if T:IsAttached("GuildRollAlts") then
-    T:Detach("GuildRollAlts") -- show
-    if (T:IsLocked("GuildRollAlts")) then
-      T:ToggleLocked("GuildRollAlts")
+    pcall(function() T:Detach("GuildRollAlts") end) -- show
+    if (T.IsLocked and T:IsLocked("GuildRollAlts")) then
+      pcall(function() T:ToggleLocked("GuildRollAlts") end)
     end
     self:setHideScript()
   else
     if (forceShow) then
       GuildRollAlts:Refresh()
     else
-      T:Attach("GuildRollAlts") -- hide
+      pcall(function() T:Attach("GuildRollAlts") end) -- hide
     end
   end
 end
