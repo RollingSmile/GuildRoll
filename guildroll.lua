@@ -57,6 +57,56 @@ local hexColorQuality = {}
 local RaidKey = {}
 local zone_multipliers = {}
 
+-- Constants for note length
+local MAX_NOTE_LEN = 31
+
+-- Helper: trim public note with tag to ensure it fits within max length
+-- existing: current public note
+-- tag: tag to append
+-- maxlen: maximum allowed length (default MAX_NOTE_LEN)
+-- Returns: trimmed note with tag appended
+local function _trim_public_with_tag(existing, tag, maxlen)
+  maxlen = maxlen or MAX_NOTE_LEN
+  existing = existing or ""
+  tag = tag or ""
+  
+  local tagLen = string.len(tag)
+  local availableLen = maxlen - tagLen
+  
+  if availableLen < 0 then
+    -- Tag itself is too long; return just the tag truncated
+    return string.sub(tag, 1, maxlen)
+  end
+  
+  if string.len(existing) <= availableLen then
+    -- Existing note fits; append tag
+    return existing .. tag
+  else
+    -- Trim existing to fit
+    return string.sub(existing, 1, availableLen) .. tag
+  end
+end
+
+-- Helper: insert tag before {EP:GP} pattern in officer note
+-- officernote: current officer note
+-- tag: tag to insert
+-- Returns: new officer note with tag inserted before {EP:GP} pattern
+local function _insertTagBeforeEP(officernote, tag)
+  officernote = officernote or ""
+  tag = tag or ""
+  
+  -- Find {EP:GP} pattern (e.g., {123:456})
+  local prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
+  
+  if epgp then
+    -- Found pattern; insert tag before it
+    return prefix .. tag .. epgp .. postfix
+  else
+    -- No pattern found; append tag to end
+    return officernote .. tag
+  end
+end
+
 local options
 do
   for i=1,40 do
@@ -322,8 +372,21 @@ function GuildRoll:buildMenu()
       order = 70,
       usage = "<MainChar>",
       get = function() return GuildRoll_main end,
-      set = function(v) GuildRoll_main = (GuildRoll:verifyGuildMember(v)) end,
+      set = function(v) 
+        -- ProcessSetMainInput handles verification internally
+        GuildRoll:ProcessSetMainInput(v)
+      end,
     }    
+    options.args["migrate_main_tags"] = {
+      type = "execute",
+      name = "Migrate Main Tags",
+      desc = "Move {MainCharacter} tags from public notes to officer notes (Admin only).",
+      order = 75,
+      hidden = function() return not CanEditOfficerNote() end,
+      func = function() 
+        GuildRoll:MovePublicMainTagsToOfficerNotes()
+      end,
+    }
     options.args["raid_only"] = {
       type = "toggle",
       name = L["Raid Only"],
@@ -1795,6 +1858,135 @@ function GuildRoll:parseAlt(name,officernote)
   return nil
 end
 
+-- ProcessSetMainInput: Process user input for setting main character
+-- inputMain: user-provided main character name
+-- This function verifies the name, sets GuildRoll_main, and optionally
+-- adds {MainName} tag to the public note of the current character if it's an alt.
+function GuildRoll:ProcessSetMainInput(inputMain)
+  if not inputMain or inputMain == "" then
+    self:defaultPrint("Please provide a character name.")
+    return
+  end
+  
+  -- Verify the main character exists in guild
+  local verified = self:verifyGuildMember(inputMain, true)
+  if not verified then
+    self:defaultPrint(string.format("'%s' not found in the guild or not at required level.", inputMain))
+    return
+  end
+  
+  -- Set GuildRoll_main
+  GuildRoll_main = verified
+  
+  -- Check if this is the logged-in character
+  if GuildRoll_main == self._playerName then
+    self:defaultPrint("This is your Main.")
+    return
+  end
+  
+  -- Create the main tag with the actual main character name
+  local mainTag = string.format("{%s}", verified)
+  
+  -- Find the logged-in player's guild roster index
+  local playerIndex, playerPublicNote, playerOfficerNote
+  for i = 1, GetNumGuildMembers(1) do
+    local name, _, _, _, _, _, publicNote, officerNote, _, _ = GetGuildRosterInfo(i)
+    if name == self._playerName then
+      playerIndex = i
+      playerPublicNote = publicNote or ""
+      playerOfficerNote = officerNote or ""
+      break
+    end
+  end
+  
+  if not playerIndex then
+    self:defaultPrint("Could not find your character in the guild roster.")
+    return
+  end
+  
+  -- Check if officer note already contains a main tag (any {name} pattern, min 2 chars)
+  if string.find(playerOfficerNote, "{%a%a%a*}") then
+    self:defaultPrint("This is an Alt already.")
+    return
+  end
+  
+  -- Check if public note already contains the main tag
+  if string.find(playerPublicNote, mainTag, 1, true) then
+    self:defaultPrint("Alt setup ready (public note already contained tag).")
+    return
+  end
+  
+  -- Append main tag to public note
+  local newPublic = _trim_public_with_tag(playerPublicNote, mainTag, MAX_NOTE_LEN)
+  
+  -- Write the new public note (wrapped in pcall for safety)
+  local success, err = pcall(function()
+    GuildRosterSetPublicNote(playerIndex, newPublic)
+  end)
+  
+  if not success then
+    self:defaultPrint("Failed to update public note. You may not have permission.")
+    return
+  end
+  
+  self:defaultPrint("Alt setup ready.")
+end
+
+-- PromptSetMainIfMissing: Show popup if GuildRoll_main is not set
+function GuildRoll:PromptSetMainIfMissing()
+  if (GuildRoll_main == nil) or (GuildRoll_main == "") then
+    if (IsInGuild()) then
+      StaticPopup_Show("GUILDROLL_SET_MAIN_PROMPT")
+    end
+  end
+end
+
+-- MovePublicMainTagsToOfficerNotes: Admin function to migrate main tags from public to officer notes
+-- Requires CanEditOfficerNote() permission
+-- Iterates through guild roster and moves {MainName} tags from public note to officer note
+function GuildRoll:MovePublicMainTagsToOfficerNotes()
+  if not CanEditOfficerNote() then
+    self:defaultPrint("You do not have permission to edit officer notes.")
+    return
+  end
+  
+  local movedCount = 0
+  local numMembers = GetNumGuildMembers(1)
+  
+  for i = 1, numMembers do
+    local name, _, _, _, _, _, publicNote, officerNote, _, _ = GetGuildRosterInfo(i)
+    publicNote = publicNote or ""
+    officerNote = officerNote or ""
+    
+    -- Check if public note contains a main tag pattern {name} (min 2 chars)
+    local mainTag = string.match(publicNote, "({%a%a%a*})")
+    if mainTag then
+      -- Escape pattern characters for safe replacement
+      local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+      -- Remove only first occurrence of the main tag from public note
+      local newPublic = string.gsub(publicNote, escapedTag, "", 1)
+      
+      -- Insert main tag before {EP:GP} in officer note
+      local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
+      
+      -- Write both notes (wrapped in pcall for safety)
+      local successPublic, errPublic = pcall(function()
+        GuildRosterSetPublicNote(i, newPublic)
+      end)
+      
+      local successOfficer, errOfficer = pcall(function()
+        GuildRosterSetOfficerNote(i, newOfficer, true)
+      end)
+      
+      if successPublic and successOfficer then
+        movedCount = movedCount + 1
+      end
+    end
+  end
+  
+  self:defaultPrint(string.format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
+end
+
 
 ------------
 -- Logging
@@ -1835,7 +2027,7 @@ function GuildRoll:strsplitT(delimiter, subject)
 end
 
  function GuildRoll:verifyGuildMember(name,silent)
-	GuildRoll:verifyGuildMember(name,silent,false)
+	return GuildRoll:verifyGuildMember(name,silent,false)
  end
 function GuildRoll:verifyGuildMember(name,silent,ignorelevel)
   for i=1,GetNumGuildMembers(1) do
@@ -1870,11 +2062,7 @@ function GuildRoll:lootMaster()
 end
 
 function GuildRoll:testMain()
-  if (GuildRoll_main == nil) or (GuildRoll_main == "") then
-    if (IsInGuild()) then
-      StaticPopup_Show("RET_EP_SET_MAIN")
-    end
-  end
+  self:PromptSetMainIfMissing()
 end
 
 function GuildRoll:make_escable(framename,operation)
@@ -2079,6 +2267,47 @@ StaticPopupDialogs["RET_EP_SET_MAIN"] = {
   whileDead = 1,
   hideOnEscape = 1  
 }
+
+StaticPopupDialogs["GUILDROLL_SET_MAIN_PROMPT"] = {
+  text = L["Set Main"],
+  button1 = TEXT(ACCEPT),
+  button2 = TEXT(CANCEL),
+  hasEditBox = 1,
+  maxLetters = 12,
+  OnAccept = function()
+    local editBox = getglobal(this:GetParent():GetName().."EditBox")
+    local text = editBox:GetText()
+    if text and text ~= "" then
+      GuildRoll:ProcessSetMainInput(text)
+    end
+  end,
+  OnShow = function()
+    getglobal(this:GetName().."EditBox"):SetText(GuildRoll_main or "")
+    getglobal(this:GetName().."EditBox"):SetFocus()
+  end,
+  OnHide = function()
+    if ( ChatFrameEditBox:IsVisible() ) then
+      ChatFrameEditBox:SetFocus()
+    end
+    getglobal(this:GetName().."EditBox"):SetText("")
+  end,
+  EditBoxOnEnterPressed = function()
+    local editBox = getglobal(this:GetParent():GetName().."EditBox")
+    local text = editBox:GetText()
+    if text and text ~= "" then
+      GuildRoll:ProcessSetMainInput(text)
+    end
+    this:GetParent():Hide()
+  end,
+  EditBoxOnEscapePressed = function()
+    this:GetParent():Hide()
+  end,
+  timeout = 0,
+  exclusive = 1,
+  whileDead = 1,
+  hideOnEscape = 1  
+}
+
 StaticPopupDialogs["RET_EP_CONFIRM_RESET"] = {
   text = L["|cffff0000Are you sure you want to Reset ALL Standing?|r"],
   button1 = TEXT(OKAY),
