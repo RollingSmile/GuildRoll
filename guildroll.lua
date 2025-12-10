@@ -56,6 +56,8 @@ local hexColorQuality = {}
 -- (la mappatura completa verrà assegnata più sotto; qui assicuriamo che non siano nil)
 local RaidKey = {}
 local zone_multipliers = {}
+-- Forward-declare handler for SHARE: admin settings so addonComms can call it early
+local handleSharedSettings
 
 -- Constants for note length
 local MAX_NOTE_LEN = 31
@@ -1088,7 +1090,7 @@ end
 -- Parses and applies received settings locally, triggers UI updates
 -- message: payload like "SHARE:CSR=3;RO=1;DC=0.5;MIN=100;ALT=1.0;SC=GUILD"
 -- sender: player name who sent the message
-local function handleSharedSettings(message, sender)
+handleSharedSettings = function(message, sender)
   if not message or not string.find(message, "^SHARE:") then
     return
   end
