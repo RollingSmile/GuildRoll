@@ -326,13 +326,27 @@ function GuildRoll:ShowPersonalLog()
   local detached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
   local detachedVisible = (detached and detached:IsShown())
 
+  -- Helper: clear Tablet owner safely to avoid "Detached tooltip has no owner" errors
+  local function safeClearTabletOwner()
+    pcall(function()
+      if T and T.registry and T.registry.GuildRoll_personal_logs and T.registry.GuildRoll_personal_logs.tooltip then
+        -- set owner to nil so Tablet won't try to access it after Hide/Attach races
+        T.registry.GuildRoll_personal_logs.tooltip.owner = nil
+      end
+    end)
+  end
+
   -- If there's a visible detached frame
   if detachedVisible then
     if lastPersonalShown == name then
+      -- Clear owner first to avoid Tablet complaining when we hide the detached frame
+      safeClearTabletOwner()
+
       pcall(function() detached:Hide() end)
       pcall(function()
         if T and T.IsAttached and T.Attach then
-          T:Attach("GuildRoll_personal_logs")
+          -- Wrap Attach in pcall to be extra-safe
+          pcall(function() T:Attach("GuildRoll_personal_logs") end)
         end
       end)
       lastPersonalShown = nil
@@ -366,6 +380,8 @@ function GuildRoll:ShowPersonalLog()
     if alreadyDetached then
       pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
     else
+      -- Before detaching, ensure any stale owner is cleared
+      safeClearTabletOwner()
       pcall(function() T:Detach("GuildRoll_personal_logs") end)
     end
 
@@ -378,6 +394,7 @@ function GuildRoll:ShowPersonalLog()
 
   local alreadyDetached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
   if not alreadyDetached then
+    safeClearTabletOwner()
     pcall(function() T:Detach("GuildRoll_personal_logs") end)
   else
     pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
