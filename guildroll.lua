@@ -555,7 +555,34 @@ function GuildRoll:buildMenu()
   end
   if (needInit) or (needRefresh) then
     local members = GuildRoll:buildRosterTable()
-    self:debugPrint(string.format(L["Scanning %d members for Standing data. (%s)"],table.getn(members),(GuildRoll_raidonly and "Raid" or "Full")))
+    
+    -- Conditional scan message logging: reduce noise by only logging on errors,
+    -- member count changes, mode changes, or when scanVerbose is enabled
+    -- Ensure SavedVariables table and default for scanVerbose
+    if GuildRoll_VARS == nil then GuildRoll_VARS = {} end
+    if GuildRoll_VARS.scanVerbose == nil then GuildRoll_VARS.scanVerbose = false end
+
+    local member_count = table.getn(members)
+    local scan_mode = (GuildRoll_raidonly and "Raid" or "Full")
+    local scan_msg = string.format(L["Scanning %d members for Standing data. (%s)"], member_count, scan_mode)
+
+    local is_first_scan = (self._last_scan_member_count == nil)
+    local count_changed = (not is_first_scan) and (self._last_scan_member_count ~= member_count)
+    local mode_changed = (not is_first_scan) and (self._last_scan_mode ~= scan_mode)
+
+    -- Always print on error (no members)
+    if member_count == 0 then
+      self:debugPrint(scan_msg)
+    else
+      if GuildRoll_VARS.scanVerbose or count_changed or mode_changed or (is_first_scan and GuildRoll_VARS.scanVerbose) then
+        self:debugPrint(scan_msg)
+      end
+    end
+
+    -- Store transient session state
+    self._last_scan_member_count = member_count
+    self._last_scan_mode = scan_mode
+    
     options.args["MainStanding"].args = GuildRoll:buildClassMemberTable(members,"MainStanding")
     if (needInit) then needInit = false end
     if (needRefresh) then needRefresh = false end
