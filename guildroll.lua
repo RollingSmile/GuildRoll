@@ -436,9 +436,9 @@ function GuildRoll:buildMenu()
       -- Helper: Apply threshold change and notify
       local function applyThresholdChange(newThreshold)
         -- Convert to number to ensure numeric storage
-        -- Ensure threshold is never negative (GM must always have access)
         local numericThreshold = tonumber(newThreshold)
-        if numericThreshold and numericThreshold < 0 then
+        -- Ensure threshold is never negative (GM must always have access)
+        if numericThreshold ~= nil and numericThreshold < 0 then
           numericThreshold = 0
         end
         GuildRoll_CSRThreshold = numericThreshold
