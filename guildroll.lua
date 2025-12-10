@@ -1904,8 +1904,8 @@ function GuildRoll:ProcessSetMainInput(inputMain)
     return
   end
   
-  -- Check if officer note already contains a main tag (any {name} pattern, min 3 chars)
-  if string.find(playerOfficerNote, "{%a%a%a+}") then
+  -- Check if officer note already contains a main tag (any {name} pattern, min 2 chars)
+  if string.find(playerOfficerNote, "{%a%a%a*}") then
     self:defaultPrint("This is an Alt already.")
     return
   end
@@ -1958,8 +1958,8 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
     publicNote = publicNote or ""
     officerNote = officerNote or ""
     
-    -- Check if public note contains a main tag pattern {name} (min 3 chars)
-    local mainTag = string.match(publicNote, "({%a%a%a+})")
+    -- Check if public note contains a main tag pattern {name} (min 2 chars)
+    local mainTag = string.match(publicNote, "({%a%a%a*})")
     if mainTag then
       -- Escape pattern characters for safe replacement
       local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
