@@ -10,40 +10,36 @@ local function PlayerHasCSRPermission()
     if not IsInGuild() then
         return false
     end
-    
-    local threshold = tonumber(GuildRoll_CSRThreshold) or 3
+
+    local threshold = tonumber(GuildRoll_CSRThreshold)
+    if not threshold then
+      -- No threshold set => CSR hidden
+      return false
+    end
+
     local playerName = UnitName("player")
-    -- Strip realm suffix from player name
     if playerName then
         playerName = string.gsub(playerName, "%-[^%-]+$", "")
     end
-    
-    -- Ensure guild roster is available, wrapped in pcall for safety
+
     local numMembers = GetNumGuildMembers()
-    if numMembers == 0 then
+    if not numMembers or numMembers == 0 then
         pcall(GuildRoster)
-        return false -- Roster not yet available, will rebuild on GUILD_ROSTER_UPDATE
+        return false
     end
-    
-    -- Find player in guild roster
+
     for i = 1, numMembers do
-        -- GetGuildRosterInfo may return different number of values in different WoW versions
-        -- We only need name, rank, and rankIndex (first 3 return values)
         local name, rank, rankIndex = GetGuildRosterInfo(i)
-        
-        -- Strip realm suffix if present
         if name then
             name = string.gsub(name, "%-[^%-]+$", "")
         end
-        
-        -- Compare names and check rank index
+
         if name == playerName and rankIndex then
-            -- Safely compare numeric rankIndex
             local numericRank = tonumber(rankIndex)
             return numericRank and numericRank <= threshold
         end
     end
-    
+
     return false
 end
 
