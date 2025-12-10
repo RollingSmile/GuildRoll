@@ -41,8 +41,8 @@ The following keys are defined in the enUS localization block:
 - `Ctrl-C to copy. Esc to close.`
 - `Ctrl-V to paste data. Esc to close.`
 - `Imported %d members.`
-- `Imported %d members.n`
-- `%snFailed to import:`
+- `Imported %d members.\n`
+- `%s\nFailed to import:`
 - `guildroll standings`
 - `Group by class`
 - `Group members by class.`
@@ -70,7 +70,7 @@ The following keys are defined in the enUS localization block:
 - `HEALER`
 - `CASTER`
 - `PHYS DPS`
-- `{guildroll}Type "+" if on main, or "+<YourMainName>" (without quotes) if on alt within %dsec.`
+- `{guildroll}Type \"+\" if on main, or \"+<YourMainName>\" (without quotes) if on alt within %dsec.`
 - `|cffFF3333|Hguildepbid:1:$ML|h[Mainspec/NEED]|h|r`
 - `|cff009900|Hguildepbid:2:$ML|h[Offspec/GREED]|h|r`
 - `Bids`
@@ -87,8 +87,8 @@ The following keys are defined in the enUS localization block:
 - `Show Standings Table.`
 - `v%s Loaded.`
 - `Alt Click/RClick/MClick`
-- `Manually modified %s's note. Standing was %s`
-- `|cffff0000Manually modified %s's note. Standing was %s|r`
+- `Manually modified %s\'s note. Standing was %s`
+- `|cffff0000Manually modified %s\'s note. Standing was %s|r`
 - `or $OS `
 - `$MS or `
 - `You have received a %d MainStanding penalty.`
@@ -111,7 +111,7 @@ The following keys are defined in the enUS localization block:
 - `Giving %d AuxStanding to %s%s. (Previous: %d, New: %d)`
 - `%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)`
 - `%s AuxStanding Penalty to %s%s. (Previous: %d, New: %d)`
-- `%s's officernote is broken:%q`
+- `%s\'s officernote is broken:%q`
 - `All Standing decayed by %d%%`
 - `All Standing decayed by %s%%`
 - `All AuxStanding has been reset to %d.`
@@ -119,10 +119,10 @@ The following keys are defined in the enUS localization block:
 - `You now have: %d MainStanding %d AuxStanding + (%d)`
 - `Close to Standing Cap. Next Decay will change your |cffff7f00PR|r by |cffff0000%.4g|r.`
 - `Hint:`
-- `|cffffff00Click|r to toggle Standings.%s n|cffffff00Right-Click|r for Options.`
-- ` n|cffffff00Alt+Click|r to toggle Bids. n|cffffff00Shift+Click|r to toggle Loot. n|cffffff00Ctrl+Alt+Click|r to toggle Alts. n|cffffff00Ctrl+Shift+Click|r to toggle Logs.`
-- ` n|cffffff00Alt+Click|r to toggle Alts. n|cffffff00Shift+Click|r to toggle Roll UI.`
-- ` n|cffffff00Alt+Click|r to toggle Alts. n|cffffff00Ctrl+Click|r to toggle Logs. n|cffffff00Shift+Click|r to toggle Roll UI.`
+- `|cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options.`
+- ` \n|cffffff00Alt+Click|r to toggle Bids. \n|cffffff00Shift+Click|r to toggle Loot. \n|cffffff00Ctrl+Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Shift+Click|r to toggle Logs.`
+- ` \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Shift+Click|r to toggle Roll UI.`
+- ` \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Logs. \n|cffffff00Shift+Click|r to toggle Roll UI.`
 - `Account MainStanding to %s.`
 - `Account AuxStanding to %s.`
 - `guildroll options`
@@ -133,9 +133,9 @@ The following keys are defined in the enUS localization block:
 - `Set Main`
 - `Set your Main Character.`
 - `Raid Progress`
-- `Highest Tier the Guild is raiding.nUsed to adjust suggested Standing rewards.`
+- `Highest Tier the Guild is raiding.\nUsed to adjust suggested Standing rewards.`
 - `4.Naxxramas`
-- `3.Temple of Ahn'Qiraj`
+- `3.Temple of Ahn\'Qiraj`
 - `2.Blackwing Lair`
 - `1.Molten Core`
 - `Reporting channel`
@@ -148,16 +148,16 @@ The following keys are defined in the enUS localization block:
 - `Set Offspec Items EP Percent.`
 - `Reset Standing`
 - `Reset AuxStanding`
-- `Resets everyone's Standing to 0/%d (Admin only).`
-- `Resets everyone's AuxStanding to 0/%d (Admin only).`
+- `Resets everyone\'s Standing to 0/%d (Admin only).`
+- `Resets everyone\'s AuxStanding to 0/%d (Admin only).`
 - `Scanning %d members for Standing data. (%s)`
 - `^{guildroll}Type`
 - `Clearing old Bids`
 - `%s not found in the guild or not max level!`
 - `Molten Core`
-- `Onyxia's Lair`
+- `Onyxia\'s Lair`
 - `Blackwing Lair`
-- `Ahn'Qiraj`
+- `Ahn\'Qiraj`
 - `Naxxramas`
 - `There are %d loot drops stored. It is recommended to clear loot info before a new raid. Do you want to clear it now?`
 - `Show me`
@@ -172,16 +172,16 @@ The following keys are defined in the enUS localization block:
 - `Enable Alts`
 - `Main`
 - `Alt`
-- `Allow Alts to use Main's Standing.`
+- `Allow Alts to use Main\'s Standing.`
 - `Alts MainStanding %`
 - `Set the % MainStanding Alts can earn.`
 - `, alts`
 - `New Alts`
 - `, alts MainStanding %`
 - `New Alts MainStanding %`
-- `Manually modified %s's note. Previous main was %s`
-- `|cffff0000Manually modified %s's note. Previous main was %s|r`
-- `, %s's Main.`
+- `Manually modified %s\'s note. Previous main was %s`
+- `|cffff0000Manually modified %s\'s note. Previous main was %s|r`
+- `, %s\'s Main.`
 - `Your main has been set to %s`
 - `Alts`
 - `New Minimum MainStanding`
@@ -194,38 +194,38 @@ The following keys are defined in the enUS localization block:
 
 ### `Refresh`
 
-- **alts.lua:41**: `L["Refresh"]`
-- **logs.lua:71**: `L["Refresh"]`
-- **standings.lua:228**: `L["Refresh"]`
+- **standings.lua:228**: `L["Refresh"]
+- **alts.lua:41**: `L["Refresh"]
+- **logs.lua:71**: `L["Refresh"]
 
 ### `Refresh window`
 
-- **alts.lua:42**: `L["Refresh window"]`
-- **logs.lua:72**: `L["Refresh window"]`
-- **standings.lua:229**: `L["Refresh window"]`
+- **standings.lua:229**: `L["Refresh window"]
+- **alts.lua:42**: `L["Refresh window"]
+- **logs.lua:72**: `L["Refresh window"]
 
 ### `Clear`
 
-- **logs.lua:76**: `L["Clear"]`
+- **logs.lua:76**: `L["Clear"]
 
 ### `Name`
 
-- **standings.lua:395**: `L["Name"]`
+- **standings.lua:395**: `L["Name"]
 
 ### `Raid Only`
 
-- **guildroll.lua:394**: `L["Raid Only"]`
-- **standings.lua:210**: `L["Raid Only"]`
+- **guildroll.lua:394**: `L["Raid Only"]
+- **standings.lua:210**: `L["Raid Only"]
 
 ### `Only show members in raid.`
 
-- **guildroll.lua:395**: `L["Only show members in raid."]`
-- **standings.lua:211**: `L["Only show members in raid."]`
+- **guildroll.lua:395**: `L["Only show members in raid."]
+- **standings.lua:211**: `L["Only show members in raid."]
 
 ### `Restarted`
 
-- **guildroll.lua:150**: `L["Restarted"]`
-- **guildroll.lua:240**: `L["Restarted"]`
+- **guildroll.lua:150**: `L["Restarted"]
+- **guildroll.lua:240**: `L["Restarted"]
 
 ### `Progress`
 
@@ -245,42 +245,42 @@ The following keys are defined in the enUS localization block:
 
 ### `Progress Setting: %s`
 
-- **guildroll.lua:1083**: `L["Progress Setting: %s"]`
+- **guildroll.lua:1083**: `L["Progress Setting: %s"]
 
 ### `Offspec Price: %s%%`
 
-- **guildroll.lua:1084**: `L["Offspec Price: %s%%"]`
+- **guildroll.lua:1084**: `L["Offspec Price: %s%%"]
 
 ### `Minimum MainStanding: %s`
 
-- **guildroll.lua:456**: `L["Minimum MainStanding: %s"]`
-- **guildroll.lua:1085**: `L["Minimum MainStanding: %s"]`
+- **guildroll.lua:456**: `L["Minimum MainStanding: %s"]
+- **guildroll.lua:1085**: `L["Minimum MainStanding: %s"]
 
 ### `Minimum MainStanding`
 
-- **guildroll.lua:464**: `L["Minimum MainStanding"]`
+- **guildroll.lua:464**: `L["Minimum MainStanding"]
 
 ### `Set Minimum MainStanding`
 
-- **guildroll.lua:465**: `L["Set Minimum MainStanding"]`
+- **guildroll.lua:465**: `L["Set Minimum MainStanding"]
 
 ### `guildroll logs`
 
-- **logs.lua:63**: `L["guildroll logs"]`
+- **logs.lua:63**: `L["guildroll logs"]
 
 ### `Clear Logs.`
 
-- **logs.lua:77**: `L["Clear Logs."]`
+- **logs.lua:77**: `L["Clear Logs."]
 
 ### `Time`
 
-- **logs.lua:197**: `L["Time"]`
-- **logs.lua:284**: `L["Time"]`
+- **logs.lua:197**: `L["Time"]
+- **logs.lua:284**: `L["Time"]
 
 ### `Action`
 
-- **logs.lua:198**: `L["Action"]`
-- **logs.lua:285**: `L["Action"]`
+- **logs.lua:198**: `L["Action"]
+- **logs.lua:285**: `L["Action"]
 
 ### `guildroll loot info`
 
@@ -308,7 +308,7 @@ The following keys are defined in the enUS localization block:
 
 ### `Updated %d members to v3 storage.`
 
-- **migrations.lua:18**: `L["Updated %d members to v3 storage."]`
+- **migrations.lua:18**: `L["Updated %d members to v3 storage."]
 
 ### `Countdown`
 
@@ -324,7 +324,7 @@ The following keys are defined in the enUS localization block:
 
 ### `Ctrl-C to copy. Esc to close.`
 
-- **standings.lua:115**: `L["Ctrl-C to copy. Esc to close."]`
+- **standings.lua:115**: `L["Ctrl-C to copy. Esc to close."]
 
 ### `Ctrl-V to paste data. Esc to close.`
 
@@ -332,15 +332,15 @@ The following keys are defined in the enUS localization block:
 
 ### `Imported %d members.`
 
-- **standings.lua:170**: `L["Imported %d members."]`
+- **standings.lua:170**: `L["Imported %d members."]
 
-### `Imported %d members.n`
+### `Imported %d members.\n`
 
-- *No references found in the codebase*
+- **standings.lua:171**: `L["Imported %d members.\n"]
 
-### `%snFailed to import:`
+### `%s\nFailed to import:`
 
-- *No references found in the codebase*
+- **standings.lua:172**: `L["%s\nFailed to import:"]
 
 ### `guildroll standings`
 
@@ -348,32 +348,32 @@ The following keys are defined in the enUS localization block:
 
 ### `Group by class`
 
-- **standings.lua:216**: `L["Group by class"]`
+- **standings.lua:216**: `L["Group by class"]
 
 ### `Group members by class.`
 
-- **standings.lua:217**: `L["Group members by class."]`
+- **standings.lua:217**: `L["Group members by class."]
 
 ### `Export`
 
-- **standings.lua:235**: `L["Export"]`
+- **standings.lua:235**: `L["Export"]
 
 ### `Export standings to csv.`
 
-- **standings.lua:236**: `L["Export standings to csv."]`
+- **standings.lua:236**: `L["Export standings to csv."]
 
 ### `Import`
 
-- **standings.lua:242**: `L["Import"]`
+- **standings.lua:242**: `L["Import"]
 
 ### `Import standings from csv.`
 
-- **standings.lua:243**: `L["Import standings from csv."]`
+- **standings.lua:243**: `L["Import standings from csv."]
 
 ### `MainStanding`
 
-- **guildroll.lua:2546**: `L["MainStanding"]`
-- **guildroll.lua:2549**: `L["MainStanding"]`
+- **guildroll.lua:2546**: `L["MainStanding"]
+- **guildroll.lua:2549**: `L["MainStanding"]
 
 ### `AuxStanding`
 
@@ -389,7 +389,7 @@ The following keys are defined in the enUS localization block:
 
 ### `Main Standing`
 
-- **standings.lua:396**: `L["Main Standing"]`
+- **standings.lua:396**: `L["Main Standing"]
 
 ### `Auxiliary`
 
@@ -407,11 +407,11 @@ The following keys are defined in the enUS localization block:
 
 ### `Group by armor`
 
-- **standings.lua:222**: `L["Group by armor"]`
+- **standings.lua:222**: `L["Group by armor"]
 
 ### `Group members by armor.`
 
-- **standings.lua:223**: `L["Group members by armor."]`
+- **standings.lua:223**: `L["Group members by armor."]
 
 ### `Group by roles`
 
@@ -423,19 +423,19 @@ The following keys are defined in the enUS localization block:
 
 ### `CLOTH`
 
-- **standings.lua:47**: `L["CLOTH"]`
+- **standings.lua:47**: `L["CLOTH"]
 
 ### `LEATHER`
 
-- **standings.lua:48**: `L["LEATHER"]`
+- **standings.lua:48**: `L["LEATHER"]
 
 ### `MAIL`
 
-- **standings.lua:49**: `L["MAIL"]`
+- **standings.lua:49**: `L["MAIL"]
 
 ### `PLATE`
 
-- **standings.lua:50**: `L["PLATE"]`
+- **standings.lua:50**: `L["PLATE"]
 
 ### `TANK`
 
@@ -453,7 +453,7 @@ The following keys are defined in the enUS localization block:
 
 - *No references found in the codebase*
 
-### `{guildroll}Type "+" if on main, or "+<YourMainName>" (without quotes) if on alt within %dsec.`
+### `{guildroll}Type \"+\" if on main, or \"+<YourMainName>\" (without quotes) if on alt within %dsec.`
 
 - *No references found in the codebase*
 
@@ -491,51 +491,51 @@ The following keys are defined in the enUS localization block:
 
 ### `Standings`
 
-- **guildroll.lua:128**: `L["Standings"]`
-- **guildroll.lua:218**: `L["Standings"]`
-- **standings.lua:202**: `L["Standings"]`
+- **guildroll.lua:128**: `L["Standings"]
+- **guildroll.lua:218**: `L["Standings"]
+- **standings.lua:202**: `L["Standings"]
 
 ### `Show Standings Table.`
 
-- **guildroll.lua:129**: `L["Show Standings Table."]`
-- **guildroll.lua:219**: `L["Show Standings Table."]`
+- **guildroll.lua:129**: `L["Show Standings Table."]
+- **guildroll.lua:219**: `L["Show Standings Table."]
 
 ### `Restart`
 
-- **guildroll.lua:146**: `L["Restart"]`
-- **guildroll.lua:236**: `L["Restart"]`
+- **guildroll.lua:146**: `L["Restart"]
+- **guildroll.lua:236**: `L["Restart"]
 
 ### `Restart guildroll if having startup problems.`
 
-- **guildroll.lua:147**: `L["Restart guildroll if having startup problems."]`
-- **guildroll.lua:237**: `L["Restart guildroll if having startup problems."]`
+- **guildroll.lua:147**: `L["Restart guildroll if having startup problems."]
+- **guildroll.lua:237**: `L["Restart guildroll if having startup problems."]
 
 ### `Standings`
 
-- **guildroll.lua:128**: `L["Standings"]`
-- **guildroll.lua:218**: `L["Standings"]`
-- **standings.lua:202**: `L["Standings"]`
+- **guildroll.lua:128**: `L["Standings"]
+- **guildroll.lua:218**: `L["Standings"]
+- **standings.lua:202**: `L["Standings"]
 
 ### `Show Standings Table.`
 
-- **guildroll.lua:129**: `L["Show Standings Table."]`
-- **guildroll.lua:219**: `L["Show Standings Table."]`
+- **guildroll.lua:129**: `L["Show Standings Table."]
+- **guildroll.lua:219**: `L["Show Standings Table."]
 
 ### `v%s Loaded.`
 
-- **guildroll.lua:871**: `L["v%s Loaded."]`
+- **guildroll.lua:871**: `L["v%s Loaded."]
 
 ### `Alt Click/RClick/MClick`
 
 - *No references found in the codebase*
 
-### `Manually modified %s's note. Standing was %s`
+### `Manually modified %s\'s note. Standing was %s`
 
-- *No references found in the codebase*
+- **guildroll.lua:908**: `L["Manually modified %s\'s note. Standing was %s"]
 
-### `|cffff0000Manually modified %s's note. Standing was %s|r`
+### `|cffff0000Manually modified %s\'s note. Standing was %s|r`
 
-- *No references found in the codebase*
+- **guildroll.lua:909**: `L["|cffff0000Manually modified %s\'s note. Standing was %s|r"]
 
 ### `or $OS `
 
@@ -547,89 +547,89 @@ The following keys are defined in the enUS localization block:
 
 ### `You have received a %d MainStanding penalty.`
 
-- **guildroll.lua:1001**: `L["You have received a %d MainStanding penalty."]`
+- **guildroll.lua:1001**: `L["You have received a %d MainStanding penalty."]
 
 ### `You have been awarded %d MainStanding.`
 
-- **guildroll.lua:1003**: `L["You have been awarded %d MainStanding."]`
+- **guildroll.lua:1003**: `L["You have been awarded %d MainStanding."]
 
 ### `You have gained %d AuxStanding.`
 
-- **guildroll.lua:1006**: `L["You have gained %d AuxStanding."]`
+- **guildroll.lua:1006**: `L["You have gained %d AuxStanding."]
 
 ### `%s%% decay to Standing.`
 
-- **guildroll.lua:1009**: `L["%s%% decay to Standing."]`
+- **guildroll.lua:1009**: `L["%s%% decay to Standing."]
 
 ### `%d MainStanding awarded to Raid.`
 
-- **guildroll.lua:1011**: `L["%d MainStanding awarded to Raid."]`
-- **guildroll.lua:1013**: `L["%d MainStanding awarded to Raid."]`
+- **guildroll.lua:1011**: `L["%d MainStanding awarded to Raid."]
+- **guildroll.lua:1013**: `L["%d MainStanding awarded to Raid."]
 
 ### `New %s version available: |cff00ff00%s|r`
 
-- **guildroll.lua:1018**: `L["New %s version available: |cff00ff00%s|r"]`
+- **guildroll.lua:1018**: `L["New %s version available: |cff00ff00%s|r"]
 
 ### `Visit %s to update.`
 
-- **guildroll.lua:1019**: `L["Visit %s to update."]`
+- **guildroll.lua:1019**: `L["Visit %s to update."]
 
 ### `New raid progress`
 
-- **guildroll.lua:1034**: `L["New raid progress"]`
+- **guildroll.lua:1034**: `L["New raid progress"]
 
 ### `, offspec price %`
 
-- **guildroll.lua:1039**: `L[", offspec price %"]`
+- **guildroll.lua:1039**: `L[", offspec price %"]
 
 ### `New offspec price %`
 
-- **guildroll.lua:1041**: `L["New offspec price %"]`
+- **guildroll.lua:1041**: `L["New offspec price %"]
 
 ### `, decay %`
 
-- **guildroll.lua:1053**: `L[", decay %"]`
+- **guildroll.lua:1053**: `L[", decay %"]
 
 ### `New decay %`
 
-- **guildroll.lua:1055**: `L["New decay %"]`
+- **guildroll.lua:1055**: `L["New decay %"]
 
 ### ` settings accepted from %s`
 
-- **guildroll.lua:1081**: `L[" settings accepted from %s"]`
+- **guildroll.lua:1081**: `L[" settings accepted from %s"]
 
 ### `Giving %d MainStanding to all raidmembers`
 
-- **guildroll.lua:1405**: `L["Giving %d MainStanding to all raidmembers"]`
-- **guildroll.lua:1406**: `L["Giving %d MainStanding to all raidmembers"]`
+- **guildroll.lua:1405**: `L["Giving %d MainStanding to all raidmembers"]
+- **guildroll.lua:1406**: `L["Giving %d MainStanding to all raidmembers"]
 
 ### `Giving %d AuxStanding to all raidmembers`
 
-- **guildroll.lua:1433**: `L["Giving %d AuxStanding to all raidmembers"]`
-- **guildroll.lua:1434**: `L["Giving %d AuxStanding to all raidmembers"]`
+- **guildroll.lua:1433**: `L["Giving %d AuxStanding to all raidmembers"]
+- **guildroll.lua:1434**: `L["Giving %d AuxStanding to all raidmembers"]
 
 ### `You aren't in a raid dummy`
 
-- **guildroll.lua:1410**: `L["You aren't in a raid dummy"]`
-- **guildroll.lua:1438**: `L["You aren't in a raid dummy"]`
+- **guildroll.lua:1410**: `L["You aren't in a raid dummy"]
+- **guildroll.lua:1438**: `L["You aren't in a raid dummy"]
 
 ### `Giving %d MainStanding to %s%s. (Previous: %d, New: %d)`
 
-- **guildroll.lua:1487**: `L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"]`
+- **guildroll.lua:1487**: `L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"]
 
 ### `Giving %d AuxStanding to %s%s. (Previous: %d, New: %d)`
 
-- **guildroll.lua:1548**: `L["Giving %d AuxStanding to %s%s. (Previous: %d, New: %d)"]`
+- **guildroll.lua:1548**: `L["Giving %d AuxStanding to %s%s. (Previous: %d, New: %d)"]
 
 ### `%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)`
 
-- **guildroll.lua:1489**: `L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"]`
+- **guildroll.lua:1489**: `L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"]
 
 ### `%s AuxStanding Penalty to %s%s. (Previous: %d, New: %d)`
 
-- **guildroll.lua:1550**: `L["%s AuxStanding Penalty to %s%s. (Previous: %d, New: %d)"]`
+- **guildroll.lua:1550**: `L["%s AuxStanding Penalty to %s%s. (Previous: %d, New: %d)"]
 
-### `%s's officernote is broken:%q`
+### `%s\'s officernote is broken:%q`
 
 - *No references found in the codebase*
 
@@ -639,19 +639,19 @@ The following keys are defined in the enUS localization block:
 
 ### `All Standing decayed by %s%%`
 
-- **guildroll.lua:1571**: `L["All Standing decayed by %s%%"]`
+- **guildroll.lua:1571**: `L["All Standing decayed by %s%%"]
 
 ### `All AuxStanding has been reset to %d.`
 
-- **guildroll.lua:1606**: `L["All AuxStanding has been reset to %d."]`
+- **guildroll.lua:1606**: `L["All AuxStanding has been reset to %d."]
 
 ### `All Standing has been reset to 0/%d.`
 
-- **guildroll.lua:1590**: `L["All Standing has been reset to 0/%d."]`
+- **guildroll.lua:1590**: `L["All Standing has been reset to 0/%d."]
 
 ### `You now have: %d MainStanding %d AuxStanding + (%d)`
 
-- **guildroll.lua:1623**: `L["You now have: %d MainStanding %d AuxStanding + (%d)"]`
+- **guildroll.lua:1623**: `L["You now have: %d MainStanding %d AuxStanding + (%d)"]
 
 ### `Close to Standing Cap. Next Decay will change your |cffff7f00PR|r by |cffff0000%.4g|r.`
 
@@ -659,67 +659,67 @@ The following keys are defined in the enUS localization block:
 
 ### `Hint:`
 
-- **guildroll.lua:1688**: `L["Hint:"]`
+- **guildroll.lua:1688**: `L["Hint:"]
 
-### `|cffffff00Click|r to toggle Standings.%s n|cffffff00Right-Click|r for Options.`
-
-- *No references found in the codebase*
-
-### ` n|cffffff00Alt+Click|r to toggle Bids. n|cffffff00Shift+Click|r to toggle Loot. n|cffffff00Ctrl+Alt+Click|r to toggle Alts. n|cffffff00Ctrl+Shift+Click|r to toggle Logs.`
+### `|cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options.`
 
 - *No references found in the codebase*
 
-### ` n|cffffff00Alt+Click|r to toggle Alts. n|cffffff00Shift+Click|r to toggle Roll UI.`
+### ` \n|cffffff00Alt+Click|r to toggle Bids. \n|cffffff00Shift+Click|r to toggle Loot. \n|cffffff00Ctrl+Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Shift+Click|r to toggle Logs.`
 
 - *No references found in the codebase*
 
-### ` n|cffffff00Alt+Click|r to toggle Alts. n|cffffff00Ctrl+Click|r to toggle Logs. n|cffffff00Shift+Click|r to toggle Roll UI.`
+### ` \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Shift+Click|r to toggle Roll UI.`
+
+- *No references found in the codebase*
+
+### ` \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Logs. \n|cffffff00Shift+Click|r to toggle Roll UI.`
 
 - *No references found in the codebase*
 
 ### `Account MainStanding to %s.`
 
-- **guildroll.lua:1822**: `L["Account MainStanding to %s."]`
+- **guildroll.lua:1822**: `L["Account MainStanding to %s."]
 
 ### `Account AuxStanding to %s.`
 
-- **guildroll.lua:1825**: `L["Account AuxStanding to %s."]`
+- **guildroll.lua:1825**: `L["Account AuxStanding to %s."]
 
 ### `guildroll options`
 
-- **guildroll.lua:317**: `L["guildroll options"]`
+- **guildroll.lua:317**: `L["guildroll options"]
 
 ### `+MainStanding to Member`
 
-- **guildroll.lua:323**: `L["+MainStanding to Member"]`
+- **guildroll.lua:323**: `L["+MainStanding to Member"]
 
 ### `Account MainStanding for member.`
 
-- **guildroll.lua:324**: `L["Account MainStanding for member."]`
+- **guildroll.lua:324**: `L["Account MainStanding for member."]
 
 ### `+MainStanding to Raid`
 
-- **guildroll.lua:330**: `L["+MainStanding to Raid"]`
+- **guildroll.lua:330**: `L["+MainStanding to Raid"]
 
 ### `Award MainStanding to all raid members.`
 
-- **guildroll.lua:331**: `L["Award MainStanding to all raid members."]`
+- **guildroll.lua:331**: `L["Award MainStanding to all raid members."]
 
 ### `Set Main`
 
-- **guildroll.lua:372**: `L["Set Main"]`
-- **guildroll.lua:2267**: `L["Set Main"]`
-- **guildroll.lua:2302**: `L["Set Main"]`
+- **guildroll.lua:372**: `L["Set Main"]
+- **guildroll.lua:2267**: `L["Set Main"]
+- **guildroll.lua:2302**: `L["Set Main"]
 
 ### `Set your Main Character.`
 
-- **guildroll.lua:373**: `L["Set your Main Character."]`
+- **guildroll.lua:373**: `L["Set your Main Character."]
 
 ### `Raid Progress`
 
 - *No references found in the codebase*
 
-### `Highest Tier the Guild is raiding.nUsed to adjust suggested Standing rewards.`
+### `Highest Tier the Guild is raiding.\nUsed to adjust suggested Standing rewards.`
 
 - *No references found in the codebase*
 
@@ -727,7 +727,7 @@ The following keys are defined in the enUS localization block:
 
 - *No references found in the codebase*
 
-### `3.Temple of Ahn'Qiraj`
+### `3.Temple of Ahn\'Qiraj`
 
 - *No references found in the codebase*
 
@@ -741,28 +741,28 @@ The following keys are defined in the enUS localization block:
 
 ### `Reporting channel`
 
-- **guildroll.lua:410**: `L["Reporting channel"]`
+- **guildroll.lua:410**: `L["Reporting channel"]
 
 ### `Channel used by reporting functions.`
 
-- **guildroll.lua:411**: `L["Channel used by reporting functions."]`
+- **guildroll.lua:411**: `L["Channel used by reporting functions."]
 
 ### `Decay Standing`
 
-- **guildroll.lua:426**: `L["Decay Standing"]`
+- **guildroll.lua:426**: `L["Decay Standing"]
 
 ### `Decays all Standing by %s%%`
 
-- **guildroll.lua:427**: `L["Decays all Standing by %s%%"]`
-- **guildroll.lua:441**: `L["Decays all Standing by %s%%"]`
+- **guildroll.lua:427**: `L["Decays all Standing by %s%%"]
+- **guildroll.lua:441**: `L["Decays all Standing by %s%%"]
 
 ### `Set Decay %`
 
-- **guildroll.lua:434**: `L["Set Decay %"]`
+- **guildroll.lua:434**: `L["Set Decay %"]
 
 ### `Set Decay percentage (Admin only).`
 
-- **guildroll.lua:435**: `L["Set Decay percentage (Admin only)."]`
+- **guildroll.lua:435**: `L["Set Decay percentage (Admin only)."]
 
 ### `Offspec Price %`
 
@@ -774,23 +774,23 @@ The following keys are defined in the enUS localization block:
 
 ### `Reset Standing`
 
-- **guildroll.lua:605**: `L["Reset Standing"]`
+- **guildroll.lua:605**: `L["Reset Standing"]
 
 ### `Reset AuxStanding`
 
-- **guildroll.lua:613**: `L["Reset AuxStanding"]`
+- **guildroll.lua:613**: `L["Reset AuxStanding"]
 
-### `Resets everyone's Standing to 0/%d (Admin only).`
+### `Resets everyone\'s Standing to 0/%d (Admin only).`
 
-- *No references found in the codebase*
+- **guildroll.lua:606**: `L["Resets everyone\'s Standing to 0/%d (Admin only)."]
 
-### `Resets everyone's AuxStanding to 0/%d (Admin only).`
+### `Resets everyone\'s AuxStanding to 0/%d (Admin only).`
 
-- *No references found in the codebase*
+- **guildroll.lua:614**: `L["Resets everyone\'s AuxStanding to 0/%d (Admin only)."]
 
 ### `Scanning %d members for Standing data. (%s)`
 
-- **guildroll.lua:639**: `L["Scanning %d members for Standing data. (%s)"]`
+- **guildroll.lua:639**: `L["Scanning %d members for Standing data. (%s)"]
 
 ### `^{guildroll}Type`
 
@@ -802,30 +802,32 @@ The following keys are defined in the enUS localization block:
 
 ### `%s not found in the guild or not max level!`
 
-- **guildroll.lua:2071**: `L["%s not found in the guild or not max level!"]`
+- **guildroll.lua:2071**: `L["%s not found in the guild or not max level!"]
 
 ### `Molten Core`
 
-- **guildroll.lua:2112**: `L["Molten Core"]`
-- **guildroll.lua:2566**: `L["Molten Core"]`
+- **guildroll.lua:2112**: `L["Molten Core"]
+- **guildroll.lua:2566**: `L["Molten Core"]
 
-### `Onyxia's Lair`
+### `Onyxia\'s Lair`
 
-- *No references found in the codebase*
+- **guildroll.lua:2112**: `L["Onyxia\'s Lair"]
+- **guildroll.lua:2566**: `L["Onyxia\'s Lair"]
 
 ### `Blackwing Lair`
 
-- **guildroll.lua:2112**: `L["Blackwing Lair"]`
-- **guildroll.lua:2566**: `L["Blackwing Lair"]`
+- **guildroll.lua:2112**: `L["Blackwing Lair"]
+- **guildroll.lua:2566**: `L["Blackwing Lair"]
 
-### `Ahn'Qiraj`
+### `Ahn\'Qiraj`
 
-- *No references found in the codebase*
+- **guildroll.lua:2112**: `L["Ahn\'Qiraj"]
+- **guildroll.lua:2566**: `L["Ahn\'Qiraj"]
 
 ### `Naxxramas`
 
-- **guildroll.lua:2112**: `L["Naxxramas"]`
-- **guildroll.lua:2566**: `L["Naxxramas"]`
+- **guildroll.lua:2112**: `L["Naxxramas"]
+- **guildroll.lua:2566**: `L["Naxxramas"]
 
 ### `There are %d loot drops stored. It is recommended to clear loot info before a new raid. Do you want to clear it now?`
 
@@ -849,7 +851,7 @@ The following keys are defined in the enUS localization block:
 
 ### `|cffff0000Are you sure you want to Reset ALL Standing?|r`
 
-- **guildroll.lua:2344**: `L["|cffff0000Are you sure you want to Reset ALL Standing?|r"]`
+- **guildroll.lua:2344**: `L["|cffff0000Are you sure you want to Reset ALL Standing?|r"]
 
 ### `|cffff0000Are you sure you want to Reset ALL AuxStanding?|r`
 
@@ -865,76 +867,77 @@ The following keys are defined in the enUS localization block:
 
 ### `guildroll alts`
 
-- **alts.lua:33**: `L["guildroll alts"]`
+- **alts.lua:33**: `L["guildroll alts"]
 
 ### `Enable Alts`
 
-- **guildroll.lua:339**: `L["Enable Alts"]`
+- **guildroll.lua:339**: `L["Enable Alts"]
 
 ### `Main`
 
-- **alts.lua:115**: `L["Main"]`
+- **alts.lua:115**: `L["Main"]
 
 ### `Alt`
 
 - *No references found in the codebase*
 
-### `Allow Alts to use Main's Standing.`
+### `Allow Alts to use Main\'s Standing.`
 
-- *No references found in the codebase*
+- **guildroll.lua:340**: `L["Allow Alts to use Main\'s Standing."]
 
 ### `Alts MainStanding %`
 
-- **guildroll.lua:354**: `L["Alts MainStanding %"]`
+- **guildroll.lua:354**: `L["Alts MainStanding %"]
 
 ### `Set the % MainStanding Alts can earn.`
 
-- **guildroll.lua:355**: `L["Set the % MainStanding Alts can earn."]`
+- **guildroll.lua:355**: `L["Set the % MainStanding Alts can earn."]
 
 ### `, alts`
 
-- **guildroll.lua:1063**: `L[", alts"]`
+- **guildroll.lua:1063**: `L[", alts"]
 
 ### `New Alts`
 
-- **guildroll.lua:1065**: `L["New Alts"]`
+- **guildroll.lua:1065**: `L["New Alts"]
 
 ### `, alts MainStanding %`
 
-- **guildroll.lua:1073**: `L[", alts MainStanding %"]`
+- **guildroll.lua:1073**: `L[", alts MainStanding %"]
 
 ### `New Alts MainStanding %`
 
-- **guildroll.lua:1075**: `L["New Alts MainStanding %"]`
+- **guildroll.lua:1075**: `L["New Alts MainStanding %"]
 
-### `Manually modified %s's note. Previous main was %s`
+### `Manually modified %s\'s note. Previous main was %s`
 
-- *No references found in the codebase*
+- **guildroll.lua:897**: `L["Manually modified %s\'s note. Previous main was %s"]
 
-### `|cffff0000Manually modified %s's note. Previous main was %s|r`
+### `|cffff0000Manually modified %s\'s note. Previous main was %s|r`
 
-- *No references found in the codebase*
+- **guildroll.lua:898**: `L["|cffff0000Manually modified %s\'s note. Previous main was %s|r"]
 
-### `, %s's Main.`
+### `, %s\'s Main.`
 
-- *No references found in the codebase*
+- **guildroll.lua:1476**: `L[", %s\'s Main."]
+- **guildroll.lua:1536**: `L[", %s\'s Main."]
 
 ### `Your main has been set to %s`
 
-- **guildroll.lua:1798**: `L["Your main has been set to %s"]`
-- **standings.lua:356**: `L["Your main has been set to %s"]`
+- **guildroll.lua:1798**: `L["Your main has been set to %s"]
+- **standings.lua:356**: `L["Your main has been set to %s"]
 
 ### `Alts`
 
-- **alts.lua:116**: `L["Alts"]`
+- **alts.lua:116**: `L["Alts"]
 
 ### `New Minimum MainStanding`
 
-- **guildroll.lua:1046**: `L["New Minimum MainStanding"]`
+- **guildroll.lua:1046**: `L["New Minimum MainStanding"]
 
 ### `CSR Threshold`
 
-- **guildroll.lua:582**: `L["CSR Threshold"]`
+- **guildroll.lua:582**: `L["CSR Threshold"]
 
 ### `Maximum rank index allowed to view CSR`
 
