@@ -209,6 +209,23 @@ rollButton:SetPoint("CENTER", rollFrame, "CENTER")
 rollButton:EnableMouse(true)
 rollButton:SetFrameLevel((rollFrame:GetFrameLevel() or 0) + 5)
 
+-- Make the button participate in dragging so you can drag by holding the button itself
+-- Drag will start when the mouse moves past the system drag threshold (standard behavior)
+rollButton:RegisterForDrag("LeftButton")
+rollButton:SetScript("OnDragStart", function()
+    if rollFrame and rollFrame.StartMoving then
+        rollFrame:StartMoving()
+    end
+end)
+rollButton:SetScript("OnDragStop", function()
+    if rollFrame and rollFrame.StopMovingOrSizing then
+        rollFrame:StopMovingOrSizing()
+        -- save position
+        GuildRoll_RollPos.x = rollFrame:GetLeft()
+        GuildRoll_RollPos.y = rollFrame:GetTop()
+    end
+end)
+
 -- Container for roll buttons, initially hidden
 local rollOptionsFrame = CreateFrame("Frame", "RollOptionsFrame", rollFrame)
 rollOptionsFrame:SetPoint("TOP", rollButton, "BOTTOM", 0, -2)
