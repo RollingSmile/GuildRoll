@@ -75,7 +75,7 @@ function GuildRoll_logs:OnEnable()
         D:AddLine(
           "text", L["Clear"],
           "tooltipText", L["Clear Logs."],
-          "func", function() GuildRoll_log = {} GuildRoll_logs:Refresh() end
+          "func", function() GuildRoll_logs:ConfirmClear() end
         )
       end      
     )
@@ -88,6 +88,25 @@ end
 
 function GuildRoll_logs:OnDisable()
   pcall(function() T:Close("GuildRoll_logs") end)
+end
+
+function GuildRoll_logs:ConfirmClear()
+  -- Define StaticPopupDialog if not already defined
+  if not StaticPopupDialogs["GUILDROLL_CLEAR_LOGS_CONFIRM"] then
+    StaticPopupDialogs["GUILDROLL_CLEAR_LOGS_CONFIRM"] = {
+      text = "This will permanently delete all Admin Log entries. Continue?",
+      button1 = TEXT(ACCEPT),
+      button2 = TEXT(CANCEL),
+      OnAccept = function()
+        GuildRoll_log = {}
+        GuildRoll_logs:Refresh()
+      end,
+      timeout = 0,
+      whileDead = 1,
+      hideOnEscape = 1
+    }
+  end
+  StaticPopup_Show("GUILDROLL_CLEAR_LOGS_CONFIRM")
 end
 
 function GuildRoll_logs:Refresh()

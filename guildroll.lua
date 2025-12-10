@@ -616,6 +616,13 @@ function GuildRoll:buildMenu()
     -- hidden = function() return not (IsGuildLeader()) end,
     -- func = function() StaticPopup_Show("RET_EP_CONFIRM_RESET") end
     -- }
+    options.args["reset_frames"] = {
+     type = "execute",
+     name = "Reset Frames",
+     desc = "Reset detached frames to visible positions.",
+     order = 125,
+     func = function() GuildRoll:ResetFrames() end
+    }
 
   end
   if (needInit) or (needRefresh) then
@@ -1648,6 +1655,34 @@ function GuildRoll:FindDetachedFrame(ownerName)
   return nil
 end
 
+function GuildRoll:ResetFrames()
+  -- Default visible positions for detached frames
+  local defaultPositions = {
+    ["GuildRoll_standings"] = {x = 400, y = 350},
+    ["GuildRollAlts"] = {x = 650, y = 300},
+    ["GuildRoll_logs"] = {x = 800, y = 300},
+    ["GuildRoll_personal_logs"] = {x = 500, y = 200}
+  }
+  
+  local resetCount = 0
+  for ownerName, pos in pairs(defaultPositions) do
+    local frame = self:FindDetachedFrame(ownerName)
+    if frame then
+      pcall(function()
+        frame:ClearAllPoints()
+        frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+        resetCount = resetCount + 1
+      end)
+    end
+  end
+  
+  if resetCount > 0 then
+    self:defaultPrint(string.format("Reset %d detached frame(s) to visible positions.", resetCount))
+  else
+    self:defaultPrint("No detached frames found to reset.")
+  end
+end
+
 function GuildRoll:OnTooltipUpdate()
   -- Build hint header
   local hint = L["Hint:"]
@@ -1684,34 +1719,31 @@ function GuildRoll:OnClick(button)
   local shift = IsShiftKeyDown()
   local is_admin = admin()
   
-  -- Ctrl+Shift+Click: Open global admin log (if admin), otherwise fallback to personal log
+  -- Ctrl+Shift+Click: Toggle Admin Log if admin, otherwise open Personal Log
+  -- No permission denied messages for non-admin
   if ctrl and shift and not alt then
     if is_admin then
-      -- Admin: show global admin log
+      -- Admin: toggle global admin log
       if GuildRoll_logs and GuildRoll_logs.Toggle then
         pcall(function() GuildRoll_logs:Toggle(true) end)
       end
     else
-      -- Not admin: fallback to personal log, but avoid duplicates
-      if not (self:FindDetachedFrame("GuildRoll_logs") or self:FindDetachedFrame("GuildRoll_personal_logs")) then
-        if GuildRoll and GuildRoll.ShowPersonalLog then
-          pcall(function() GuildRoll:ShowPersonalLog() end)
-        elseif GuildRoll and GuildRoll.SavePersonalLog then
-          pcall(function() GuildRoll:SavePersonalLog() end)
-        end
-      end
-    end
-    return
-  end
-  
-  -- Ctrl+Click: Open personal log (avoid duplicates)
-  if ctrl and not shift and not alt then
-    if not (self:FindDetachedFrame("GuildRoll_logs") or self:FindDetachedFrame("GuildRoll_personal_logs")) then
+      -- Not admin: open Personal Log as fallback (no error message)
       if GuildRoll and GuildRoll.ShowPersonalLog then
         pcall(function() GuildRoll:ShowPersonalLog() end)
       elseif GuildRoll and GuildRoll.SavePersonalLog then
         pcall(function() GuildRoll:SavePersonalLog() end)
       end
+    end
+    return
+  end
+  
+  -- Ctrl+Click: Always toggle Personal Log (no duplicate checks)
+  if ctrl and not shift and not alt then
+    if GuildRoll and GuildRoll.ShowPersonalLog then
+      pcall(function() GuildRoll:ShowPersonalLog() end)
+    elseif GuildRoll and GuildRoll.SavePersonalLog then
+      pcall(function() GuildRoll:SavePersonalLog() end)
     end
     return
   end
