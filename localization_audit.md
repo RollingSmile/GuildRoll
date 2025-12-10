@@ -59,7 +59,7 @@ The following keys are defined in the enUS localization block:
 - `Main Standing`
 - `Auxiliary`
 - `Roll Value`
-- `IMPORT_WARNING` (special key, accessed as L.IMPORT_WARNING)
+- `IMPORT_WARNING` (special key, accessed as `L.IMPORT_WARNING`)
 - `Group by armor`
 - `Group members by armor.`
 - `Group by roles`
@@ -191,6 +191,14 @@ The following keys are defined in the enUS localization block:
 ---
 
 ## Detailed Usage by Key
+
+### Key Access Patterns
+
+Most keys use **bracket notation**: `L["KeyName"]` because they are defined with quotes in the localization table.
+
+Some keys use **dot notation**: `L.KEYNAME` because they are defined as bare identifiers (without quotes) in the localization table, making them direct table properties accessible via dot notation.
+
+---
 
 ### `Refresh`
 
@@ -401,7 +409,7 @@ The following keys are defined in the enUS localization block:
 
 ### `IMPORT_WARNING` (special key)
 
-*This key uses dot notation: `L.IMPORT_WARNING` instead of bracket notation: `L["IMPORT_WARNING"]`*
+*Defined as a bare identifier (without quotes) in localization.lua, so it's accessed using dot notation: `L.IMPORT_WARNING` instead of bracket notation.*
 
 - **standings.lua:140**: `L.IMPORT_WARNING`
 
