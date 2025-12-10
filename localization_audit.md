@@ -2,11 +2,13 @@
 
 This file contains a complete audit of all localization keys defined in the enUS block of localization.lua.
 
+**Note:** The source file contains 2 duplicate key(s). This audit shows each unique key only once.
+
 ## Complete List of Localization Keys
 
 The following keys are defined in the enUS localization block:
 
-**Total Keys Defined:** 179
+**Total Unique Keys Defined:** 177
 
 - `Refresh`
 - `Refresh window`
@@ -83,8 +85,6 @@ The following keys are defined in the enUS localization block:
 - `Show Standings Table.`
 - `Restart`
 - `Restart guildroll if having startup problems.`
-- `Standings`
-- `Show Standings Table.`
 - `v%s Loaded.`
 - `Alt Click/RClick/MClick`
 - `Manually modified %s\'s note. Standing was %s`
@@ -401,7 +401,7 @@ The following keys are defined in the enUS localization block:
 
 ### `IMPORT_WARNING` (special key)
 
-*This key is accessed using `L.IMPORT_WARNING` syntax instead of `L["IMPORT_WARNING"]`*
+*This key uses dot notation: `L.IMPORT_WARNING` instead of bracket notation: `L["IMPORT_WARNING"]`*
 
 - **standings.lua:140**: `L.IMPORT_WARNING`
 
@@ -509,17 +509,6 @@ The following keys are defined in the enUS localization block:
 
 - **guildroll.lua:147**: `L["Restart guildroll if having startup problems."]
 - **guildroll.lua:237**: `L["Restart guildroll if having startup problems."]
-
-### `Standings`
-
-- **guildroll.lua:128**: `L["Standings"]
-- **guildroll.lua:218**: `L["Standings"]
-- **standings.lua:202**: `L["Standings"]
-
-### `Show Standings Table.`
-
-- **guildroll.lua:129**: `L["Show Standings Table."]
-- **guildroll.lua:219**: `L["Show Standings Table."]
 
 ### `v%s Loaded.`
 
