@@ -884,11 +884,7 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
       local oldmain = self:parseAlt(name,prevnote)
       local main = self:parseAlt(name,note)
       if oldmain ~= nil then
-        if main == nil or main ~= oldmain then 
-		 local isbnk, pugname = GuildRoll:isBank(name)
-			if isbnk then
-				GuildRoll:ReportPugManualEdit(pugname , epgp )
-			end
+        if main == nil or main ~= oldmain then
           self:adminSay(string.format(L["Manually modified %s\'s note. Previous main was %s"],name,oldmain))
           self:defaultPrint(string.format(L["|cffff0000Manually modified %s\'s note. Previous main was %s|r"],name,oldmain))
         end
