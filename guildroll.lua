@@ -481,7 +481,7 @@ function GuildRoll:buildMenu()
         if currentRankIdx == 0 then
           descText = "Guild Master (always has CSR access, cannot be disabled)"
         else
-          descText = "Set threshold to '" .. rankName .. "' (rankIndex " .. tostring(currentRankIdx) .. "). This rank and all higher ranks will see CSR."
+          descText = string.format("Set threshold to %s.", rankName)
         end
         
         container.args[key] = {
