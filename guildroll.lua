@@ -849,7 +849,7 @@ function GuildRoll:delayedInit()
   self:RegisterChatCommand({"/csr"}, function(input)
     local bonus = GuildRoll:calculateBonus(input)
     if bonus == nil then
-      self:defaultPrint("Invalid CSR input. Please enter a number between 0 and 15.")
+      self:defaultPrint(L["Invalid CSR input. Please enter a number between 0 and 15."])
       return
     end
     self:RollCommand(true, bonus)
@@ -1440,7 +1440,7 @@ end
 
 function GuildRoll:PromptAwardRaidEP()
   if not (IsGuildLeader() or CanEditOfficerNote()) then
-    self:defaultPrint("You don't have permission to award EP.")
+    self:defaultPrint(L["You don't have permission to award EP."])
     return
   end
   StaticPopup_Show("GUILDROLL_AWARD_EP_RAID_HELP")
@@ -1455,11 +1455,11 @@ function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single charac
 
   -- Validate EP value
   if type(ep) ~= "number" then
-    self:defaultPrint("Invalid EP value entered.")
+    self:defaultPrint(L["Invalid EP value entered."])
     return false, getname
   end
   if ep < GuildRoll.VARS.minAward or ep > GuildRoll.VARS.maxAward then
-    self:defaultPrint("EP value out of range (" .. GuildRoll.VARS.minAward .. " to " .. GuildRoll.VARS.maxAward .. ")")
+    self:defaultPrint(string.format(L["EP value out of range (%s to %s)"], GuildRoll.VARS.minAward, GuildRoll.VARS.maxAward))
     return false, getname
   end
 
@@ -1515,11 +1515,11 @@ function GuildRoll:givename_gp(getname,gp,block) -- awards gp to a single charac
 
   -- Validate GP value
   if type(gp) ~= "number" then
-    self:defaultPrint("Invalid GP value entered.")
+    self:defaultPrint(L["Invalid GP value entered."])
     return false, getname
   end
   if gp < GuildRoll.VARS.minAward or gp > GuildRoll.VARS.maxAward then
-    self:defaultPrint("GP value out of range (" .. GuildRoll.VARS.minAward .. " to " .. GuildRoll.VARS.maxAward .. ")")
+    self:defaultPrint(string.format(L["GP value out of range (%s to %s)"], GuildRoll.VARS.minAward, GuildRoll.VARS.maxAward))
     return false, getname
   end
 
@@ -1795,7 +1795,7 @@ function GuildRoll:buildRosterTable()
         if ((self._playerName) and (name == self._playerName)) then
           if (not GuildRoll_main) or (GuildRoll_main and GuildRoll_main ~= main) then
             GuildRoll_main = main
-            self:defaultPrint(L["Your main has been set to %s"],GuildRoll_main)
+            self:defaultPrint(string.format(L["Your main has been set to %s"],GuildRoll_main))
           end
         end
         main = C:Colorize(BC:GetHexColor(main_class), main)
@@ -2369,7 +2369,7 @@ StaticPopupDialogs["RET_EP_CONFIRM_RESET_FINAL"] = {
 }
 
 StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
-  text = "Enter EP to award to raid members:",
+  text = L["Enter EP to award to raid members:"],
   button1 = TEXT(ACCEPT),
   button2 = TEXT(CANCEL),
   hasEditBox = 1,
@@ -2389,7 +2389,7 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
       suggested = result
     end
     
-    local helpText = "Enter EP to award to raid members:"
+    local helpText = L["Enter EP to award to raid members:"]
     local prefillValue = suggested
     
     local inInstance, instanceType = IsInInstance()
@@ -2415,15 +2415,15 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
     local editBox = getglobal(this:GetParent():GetName().."EditBox")
     local epValue = tonumber(editBox:GetText())
     if not epValue then
-      UIErrorsFrame:AddMessage("Invalid EP value entered.", 1.0, 0.0, 0.0, 1.0)
+      UIErrorsFrame:AddMessage(L["Invalid EP value entered."], 1.0, 0.0, 0.0, 1.0)
       return
     end
     if epValue < GuildRoll.VARS.minAward or epValue > GuildRoll.VARS.maxAward then
-      UIErrorsFrame:AddMessage("EP value must be between " .. GuildRoll.VARS.minAward .. " and " .. GuildRoll.VARS.maxAward, 1.0, 0.0, 0.0, 1.0)
+      UIErrorsFrame:AddMessage(string.format(L["EP value out of range (%s to %s)"], GuildRoll.VARS.minAward, GuildRoll.VARS.maxAward), 1.0, 0.0, 0.0, 1.0)
       return
     end
     if not (IsGuildLeader() or CanEditOfficerNote()) then
-      GuildRoll:defaultPrint("You don't have permission to award EP.")
+      GuildRoll:defaultPrint(L["You don't have permission to award EP."])
       return
     end
     GuildRoll:award_raid_ep(epValue)
@@ -2433,15 +2433,15 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
     local editBox = getglobal(parent:GetName().."EditBox")
     local epValue = tonumber(editBox:GetText())
     if not epValue then
-      UIErrorsFrame:AddMessage("Invalid EP value entered.", 1.0, 0.0, 0.0, 1.0)
+      UIErrorsFrame:AddMessage(L["Invalid EP value entered."], 1.0, 0.0, 0.0, 1.0)
       return
     end
     if epValue < GuildRoll.VARS.minAward or epValue > GuildRoll.VARS.maxAward then
-      UIErrorsFrame:AddMessage("EP value must be between " .. GuildRoll.VARS.minAward .. " and " .. GuildRoll.VARS.maxAward, 1.0, 0.0, 0.0, 1.0)
+      UIErrorsFrame:AddMessage(string.format(L["EP value out of range (%s to %s)"], GuildRoll.VARS.minAward, GuildRoll.VARS.maxAward), 1.0, 0.0, 0.0, 1.0)
       return
     end
     if not (IsGuildLeader() or CanEditOfficerNote()) then
-      UIErrorsFrame:AddMessage("You don't have permission to award EP.", 1.0, 0.0, 0.0, 1.0)
+      UIErrorsFrame:AddMessage(L["You don't have permission to award EP."], 1.0, 0.0, 0.0, 1.0)
       return
     end
     GuildRoll:award_raid_ep(epValue)

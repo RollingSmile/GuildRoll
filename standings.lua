@@ -109,7 +109,7 @@ guildep_export.scroll:SetScrollChild(guildep_export.edit)
 GuildRoll:make_escable("guildep_exportframe","add")
 
 function GuildRoll_standings:Export()
-  -- Evita dipendere dalla funzione globale admin(); usa direttamente l'API
+  -- Export EP-only CSV format: Name;EP (compatible with Import function)
   if not (CanEditOfficerNote and CanEditOfficerNote()) then return end
   guildep_export.action:Hide()
   guildep_export.title:SetText(C:Gold(L["Ctrl-C to copy. Esc to close."]))
@@ -142,16 +142,22 @@ function GuildRoll_standings:Import()
 end
 
 function GuildRoll_standings.import()
+  -- Import EP-only CSV format: Name;EP (GP is optional, if not provided existing GP is preserved)
   if not IsGuildLeader() then return end
   local text = guildep_export.edit:GetText()
   local t = {}
   local found
   for line in string.gfind(text,"[^\r\n]+") do
-    local name,ep,gp,pr = GuildRoll:strsplit(";",line)
-    ep,gp = tonumber(ep),tonumber(gp)--,tonumber(pr)
-    if (name) and (ep) and (gp) and (pr) then
-      t[name]={ep,gp}
-      found = true
+    -- Skip header line if present
+    if not string.match(line, "^Name;EP") then
+      local name, ep, gp = GuildRoll:strsplit(";",line)
+      ep = tonumber(ep)
+      gp = tonumber(gp) -- May be nil if not provided
+      -- Only require name and valid EP
+      if (name) and (ep) then
+        t[name]={ep,gp}
+        found = true
+      end
     end
   end
   if (found) then
@@ -162,7 +168,7 @@ function GuildRoll_standings.import()
       local name_epgp = t[name]
       if (name_epgp) then
         count = count + 1
-        --GuildRoll:debugPrint(string.format("%s {%s:%s}",name,name_epgp[1],name_epgp[2])) -- Debug
+        -- Pass gp as nil if not provided to preserve existing GP
         GuildRoll:update_epgp_v3(name_epgp[1],name_epgp[2],i,name,officernote)
         t[name]=nil
       end
@@ -171,7 +177,8 @@ function GuildRoll_standings.import()
     local report = string.format(L["Imported %d members.\n"],count)
     report = string.format(L["%s\nFailed to import:"],report)
     for name,epgp in pairs(t) do
-      report = string.format("%s%s {%s:%s}\n",report,name,t[1],t[2])
+      -- Fixed bug: use epgp[1], epgp[2] instead of t[1], t[2]
+      report = string.format("%s%s {%s:%s}\n",report,name,epgp[1],epgp[2] or "nil")
     end
     guildep_export.AddSelectText(report)
   end
@@ -353,7 +360,7 @@ function GuildRoll_standings:BuildStandingsTable()
       if ((GuildRoll._playerName) and (name == GuildRoll._playerName)) then
         if (not GuildRoll_main) or (GuildRoll_main and GuildRoll_main ~= main) then
           GuildRoll_main = main
-          GuildRoll:defaultPrint(L["Your main has been set to %s"],GuildRoll_main)
+          GuildRoll:defaultPrint(string.format(L["Your main has been set to %s"],GuildRoll_main))
         end
       end
       main = C:Colorize(BC:GetHexColor(main_class), main)

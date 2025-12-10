@@ -94,7 +94,7 @@ function GuildRoll_logs:ConfirmClear()
   -- Define StaticPopupDialog if not already defined
   if not StaticPopupDialogs["GUILDROLL_CLEAR_LOGS_CONFIRM"] then
     StaticPopupDialogs["GUILDROLL_CLEAR_LOGS_CONFIRM"] = {
-      text = "This will permanently delete all Admin Log entries. Continue?",
+      text = L["This will permanently delete all Admin Log entries. Continue?"],
       button1 = TEXT(ACCEPT),
       button2 = TEXT(CANCEL),
       OnAccept = function()

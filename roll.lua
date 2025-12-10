@@ -90,7 +90,7 @@ local function ExecuteCommand(command)
     elseif command == "roll csr" then
         -- Use static popup dialog to input CSR weeks (0..15) and validate
         StaticPopupDialogs["CSR_INPUT"] = {
-            text = "Enter number of weeks you SR this item (0..15):",
+            text = L["Enter number of weeks you SR this item (0..15):"],
             button1 = TEXT(ACCEPT),
             button2 = TEXT(CANCEL),
             hasEditBox = 1,
