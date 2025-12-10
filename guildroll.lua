@@ -425,7 +425,7 @@ function GuildRoll:buildMenu()
 
       container.args["info"] = {
         type = "header",
-        name = "Select a rank: players with rankIndex <= selected will see the CSR button. Checkmarks show all included ranks.",
+        name = "Select the minimum rank to can use CSR:",
       }
 
       -- Helper: Check if current player has permission to edit CSR settings
@@ -463,7 +463,7 @@ function GuildRoll:buildMenu()
         ranks = { [0] = "GuildMaster", [1] = "Officer", [2] = "Veteran", [3] = "Member", [4] = "Initiate" }
       end
 
-      -- First item: "Select Rank:" (visual index 0)
+      -- First item: "Select Rank:" (visual index 1)
       container.args["select_rank"] = {
         type = "toggle",
         name = "Select Rank:",
@@ -476,14 +476,14 @@ function GuildRoll:buildMenu()
           end
           -- When v is false (unchecked), user is clicking a different rank checkbox, nothing to do here
         end,
-        order = 0,
+        order = 1,
       }
 
-      -- Rank items: visual indices 1 to (maxIndex + 1)
-      -- Visual index i corresponds to rankIndex (i-1)
+      -- Rank items: visual indices 2 to (maxIndex + 2)
+      -- Visual index i corresponds to rankIndex (i-2)
       for rankIdx = 0, maxIndex do
         local rankName = ranks[rankIdx] or ("Rank " .. tostring(rankIdx))
-        local visualIdx = rankIdx + 1
+        local visualIdx = rankIdx + 2
         local key = "rank_" .. tostring(rankIdx)
         container.args[key] = {
           type = "toggle",
@@ -517,7 +517,7 @@ function GuildRoll:buildMenu()
     options.args["csr_rank_selector"] = {
       type = "group",
       name = L["CSR Threshold"],
-      desc = L["Maximum rank index allowed to view CSR"],
+      desc = "Select the minimum rank to can use CSR:",
       args = {},
       hidden = function() return not admin() end,
       order = 119,
