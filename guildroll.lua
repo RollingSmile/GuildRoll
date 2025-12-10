@@ -402,13 +402,18 @@ function GuildRoll:buildMenu()
       end,
       hidden = function() return not admin() end,
     }
-    -- Radio-like rank selector for CSR threshold
+    -- Cumulative rank threshold selector for CSR
+    -- Visual index 0 = "Select Rank:" (threshold nil)
+    -- Visual index 1 = rankIndex 0 (Guild Master) → threshold 0
+    -- Visual index 2 = rankIndex 1 (Officer) → threshold 1
+    -- etc.
+    -- Clicking visual index i sets threshold to i-1 and shows checkmarks on all visual indices 1..i
     local function BuildCSRRankRadioGroup(container)
       container.args = container.args or {}
 
       container.args["info"] = {
         type = "header",
-        name = "Select a rank: players with rankIndex <= selected will see the CSR button.",
+        name = "Select a rank: players with rankIndex <= selected will see the CSR button. Checkmarks show all included ranks.",
       }
 
       -- Collect rank names from guild roster if available
@@ -431,42 +436,68 @@ function GuildRoll:buildMenu()
         ranks = { [0] = "GuildMaster", [1] = "Officer", [2] = "Veteran", [3] = "Member", [4] = "Initiate" }
       end
 
-      for idx = 0, maxIndex do
-        local rankName = ranks[idx] or ("Rank " .. tostring(idx))
-        local key = "rank_" .. tostring(idx)
+      -- First item: "Select Rank:" (visual index 0)
+      container.args["select_rank"] = {
+        type = "toggle",
+        name = "Select Rank:",
+        desc = "Clear threshold (disables CSR for all players).",
+        -- Checked only when threshold is nil
+        get = function() return GuildRoll_CSRThreshold == nil end,
+        set = function(v)
+          if v then
+            GuildRoll_CSRThreshold = nil
+            if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
+            -- Share settings to guild if admin
+            if (IsGuildLeader()) then
+              GuildRoll:shareSettings(true)
+            end
+          end
+        end,
+        order = 0,
+      }
+
+      -- Rank items: visual indices 1 to (maxIndex + 1)
+      -- Visual index i corresponds to rankIndex (i-1)
+      for rankIdx = 0, maxIndex do
+        local rankName = ranks[rankIdx] or ("Rank " .. tostring(rankIdx))
+        local visualIdx = rankIdx + 1
+        local key = "rank_" .. tostring(rankIdx)
         container.args[key] = {
           type = "toggle",
           name = rankName,
-          desc = "Set '" .. rankName .. "' (index " .. tostring(idx) .. ") as CSR threshold.",
-          -- Radio behavior: true only if the threshold is exactly this index
-          get = function() return tonumber(GuildRoll_CSRThreshold) == idx end,
+          desc = "Set threshold to '" .. rankName .. "' (rankIndex " .. tostring(rankIdx) .. "). This rank and all higher ranks will see CSR.",
+          -- Cumulative checkbox: checked if current threshold >= this rankIndex
+          get = function()
+            local threshold = tonumber(GuildRoll_CSRThreshold)
+            return threshold ~= nil and threshold >= rankIdx
+          end,
           set = function(v)
             if v then
-              GuildRoll_CSRThreshold = idx
+              -- Set threshold to this rankIndex
+              GuildRoll_CSRThreshold = rankIdx
+              if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
+              -- Share settings to guild if admin
+              if (IsGuildLeader()) then
+                GuildRoll:shareSettings(true)
+              end
+            else
+              -- Unchecking: set threshold to the rank above this one (rankIdx - 1)
+              -- If this is rank 0, clear threshold entirely
+              if rankIdx == 0 then
+                GuildRoll_CSRThreshold = nil
+              else
+                GuildRoll_CSRThreshold = rankIdx - 1
+              end
               if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
               -- Share settings to guild if admin
               if (IsGuildLeader()) then
                 GuildRoll:shareSettings(true)
               end
             end
-            -- Don't allow deselection; user must select a different rank or use Clear button
           end,
+          order = visualIdx,
         }
       end
-
-      container.args["clear"] = {
-        type = "execute",
-        name = "Clear selection",
-        desc = "Remove the threshold (disables CSR for all players).",
-        func = function()
-          GuildRoll_CSRThreshold = nil
-          if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
-          -- Share settings to guild if admin
-          if (IsGuildLeader()) then
-            GuildRoll:shareSettings(true)
-          end
-        end
-      }
     end
 
     -- Add the group to options (replaces the old csr_threshold in options.args)
