@@ -420,8 +420,8 @@ function GuildRoll:buildMenu()
       local function applyThresholdChange(newThreshold)
         GuildRoll_CSRThreshold = newThreshold
         if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
-        -- Share settings to guild if admin
-        if (IsGuildLeader()) then
+        -- Share settings to guild if admin (guild leader or officer with edit permissions)
+        if IsGuildLeader() or admin() then
           GuildRoll:shareSettings(true)
         end
       end
@@ -457,7 +457,7 @@ function GuildRoll:buildMenu()
           if v then
             applyThresholdChange(nil)
           end
-          -- When v is false, user is selecting another rank, nothing to do here
+          -- When v is false (unchecked), user is clicking a different rank checkbox, nothing to do here
         end,
         order = 0,
       }
@@ -482,8 +482,8 @@ function GuildRoll:buildMenu()
               -- Set threshold to this rankIndex
               applyThresholdChange(rankIdx)
             else
-              -- Unchecking: set threshold to the rank above this one (rankIdx - 1)
-              -- If this is rank 0, clear threshold entirely
+              -- Unchecking: set threshold to next higher rank (lower rankIdx = higher rank)
+              -- If this is rank 0 (Guild Master), clear threshold entirely
               if rankIdx == 0 then
                 applyThresholdChange(nil)
               else
