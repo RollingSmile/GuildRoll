@@ -294,30 +294,27 @@ function GuildRoll_logs:OnTooltipUpdatePersonal()
 end
 
 -- Helper function to show personal log with robust toggle behavior
-function GuildRoll:ShowPersonalLog(name)
-  -- If name not provided, use current player (this is the control+click behavior on the icon)
-  name = name or UnitName("player")
+function GuildRoll:ShowPersonalLog()
+  local name = UnitName("player")
 
-  -- Ensure personal tablet registered
+  -- Fallback if logs/tablet not available
   if not GuildRoll_logs or not GuildRoll_logs.registerPersonalTablet then
-    -- Fallback if logs module not loaded
     if GuildRoll and GuildRoll.SavePersonalLog then
       GuildRoll:SavePersonalLog(name)
     end
     return
   end
-  
+
+  -- Ensure the personal tablet is registered
   GuildRoll_logs:registerPersonalTablet()
 
-  -- Find any existing detached frame for this personal tablet
+  -- Find any existing detached frame for the personal tablet
   local detached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
   local detachedVisible = (detached and detached:IsShown())
 
   -- If there's a visible detached frame
   if detachedVisible then
-    -- If the visible frame is already showing same name => toggle close (attach)
     if lastPersonalShown == name then
-      -- hide the detached frame and ensure tablet state is attached (docked)
       pcall(function() detached:Hide() end)
       pcall(function()
         if T and T.IsAttached and T.Attach then
@@ -328,66 +325,51 @@ function GuildRoll:ShowPersonalLog(name)
       currentPersonalName = nil
       return
     else
-      -- visible but different name -> update contents without creating new frame
       currentPersonalName = name
       lastPersonalShown = name
-      if GuildRoll_logs and GuildRoll_logs.RefreshPersonal then
-        GuildRoll_logs:RefreshPersonal()
-      end
+      pcall(function() GuildRoll_logs:RefreshPersonal() end)
       return
     end
   end
 
-  -- Not visible (either attached or no detached frame exists)
+  -- Not visible: set current name
   currentPersonalName = name
   lastPersonalShown = name
 
-  -- If it's currently attached (docked), detach (show)
-  if T and T.IsAttached and T:IsAttached("GuildRoll_personal_logs") then
-    pcall(function()
-      if T.Open then T:Open("GuildRoll_personal_logs") end
-    end)
-    if GuildRoll_logs and GuildRoll_logs.RefreshPersonal then
-      GuildRoll_logs:RefreshPersonal()
+  local isAttached = false
+  if T and T.IsAttached then
+    local ok, result = pcall(function() return T:IsAttached("GuildRoll_personal_logs") end)
+    if ok then
+      isAttached = result
     end
-    pcall(function()
-      if T.Detach then T:Detach("GuildRoll_personal_logs") end
-    end)
-    if GuildRoll_logs and GuildRoll_logs.setHideScriptPersonal then
-      GuildRoll_logs:setHideScriptPersonal()
+  end
+
+  if isAttached then
+    pcall(function() T:Open("GuildRoll_personal_logs") end)
+    pcall(function() GuildRoll_logs:RefreshPersonal() end)
+
+    local alreadyDetached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
+    if alreadyDetached then
+      pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
+    else
+      pcall(function() T:Detach("GuildRoll_personal_logs") end)
     end
+
+    pcall(function() GuildRoll_logs:setHideScriptPersonal() end)
     return
   end
 
-  -- Otherwise, try to open and show a detached frame robustly
-  pcall(function()
-    if T and T.Open then T:Open("GuildRoll_personal_logs") end
-  end)
-  if GuildRoll_logs and GuildRoll_logs.RefreshPersonal then
-    GuildRoll_logs:RefreshPersonal()
-  end
-  
-  -- Check again if a detached frame was created
+  pcall(function() T:Open("GuildRoll_personal_logs") end)
+  pcall(function() GuildRoll_logs:RefreshPersonal() end)
+
   local alreadyDetached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
   if not alreadyDetached then
-    -- Create detached frame
-    pcall(function()
-      if T and T.Detach then T:Detach("GuildRoll_personal_logs") end
-    end)
-    if GuildRoll_logs and GuildRoll_logs.setHideScriptPersonal then
-      GuildRoll_logs:setHideScriptPersonal()
-    end
+    pcall(function() T:Detach("GuildRoll_personal_logs") end)
   else
-    -- If there's a detached frame but it wasn't visible, show it
-    pcall(function()
-      if alreadyDetached and alreadyDetached.Show then
-        alreadyDetached:Show()
-      end
-    end)
-    if GuildRoll_logs and GuildRoll_logs.setHideScriptPersonal then
-      GuildRoll_logs:setHideScriptPersonal()
-    end
+    pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
   end
+
+  pcall(function() GuildRoll_logs:setHideScriptPersonal() end)
 end
 
 -- Helper function to save personal log to chat for copy-paste (internal fallback only)
