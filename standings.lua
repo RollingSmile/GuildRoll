@@ -178,7 +178,8 @@ function GuildRoll_standings.import()
     report = string.format(L["%s\nFailed to import:"],report)
     for name,epgp in pairs(t) do
       -- Fixed bug: use epgp[1], epgp[2] instead of t[1], t[2]
-      report = string.format("%s%s {%s:%s}\n",report,name,epgp[1],epgp[2] or "nil")
+      local gpText = epgp[2] and tostring(epgp[2]) or "-"
+      report = string.format("%s%s {%s:%s}\n",report,name,epgp[1],gpText)
     end
     guildep_export.AddSelectText(report)
   end
