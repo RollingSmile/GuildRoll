@@ -416,6 +416,16 @@ function GuildRoll:buildMenu()
         name = "Select a rank: players with rankIndex <= selected will see the CSR button. Checkmarks show all included ranks.",
       }
 
+      -- Helper: Apply threshold change and notify
+      local function applyThresholdChange(newThreshold)
+        GuildRoll_CSRThreshold = newThreshold
+        if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
+        -- Share settings to guild if admin
+        if (IsGuildLeader()) then
+          GuildRoll:shareSettings(true)
+        end
+      end
+
       -- Collect rank names from guild roster if available
       local ranks = {}
       local maxIndex = -1
@@ -445,13 +455,9 @@ function GuildRoll:buildMenu()
         get = function() return GuildRoll_CSRThreshold == nil end,
         set = function(v)
           if v then
-            GuildRoll_CSRThreshold = nil
-            if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
-            -- Share settings to guild if admin
-            if (IsGuildLeader()) then
-              GuildRoll:shareSettings(true)
-            end
+            applyThresholdChange(nil)
           end
+          -- When v is false, user is selecting another rank, nothing to do here
         end,
         order = 0,
       }
@@ -474,24 +480,14 @@ function GuildRoll:buildMenu()
           set = function(v)
             if v then
               -- Set threshold to this rankIndex
-              GuildRoll_CSRThreshold = rankIdx
-              if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
-              -- Share settings to guild if admin
-              if (IsGuildLeader()) then
-                GuildRoll:shareSettings(true)
-              end
+              applyThresholdChange(rankIdx)
             else
               -- Unchecking: set threshold to the rank above this one (rankIdx - 1)
               -- If this is rank 0, clear threshold entirely
               if rankIdx == 0 then
-                GuildRoll_CSRThreshold = nil
+                applyThresholdChange(nil)
               else
-                GuildRoll_CSRThreshold = rankIdx - 1
-              end
-              if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
-              -- Share settings to guild if admin
-              if (IsGuildLeader()) then
-                GuildRoll:shareSettings(true)
+                applyThresholdChange(rankIdx - 1)
               end
             end
           end,
@@ -1127,7 +1123,7 @@ function GuildRoll:shareSettings(force)
     -- Format: SHARE:CSR=3;RO=1;DC=0.5;MIN=100;ALT=1.0;SC=GUILD
     -- CSR can be nil (disabled), use "NONE" to represent this in the payload
     local csr = GuildRoll_CSRThreshold
-    local csrStr = csr and tostring(tonumber(csr)) or "NONE"
+    local csrStr = csr and tostring(csr) or "NONE"
     local ro = GuildRoll_raidonly and 1 or 0
     local dc = GuildRoll_decay or self.VARS.decay
     local minep = GuildRoll_minPE or self.VARS.minPE
