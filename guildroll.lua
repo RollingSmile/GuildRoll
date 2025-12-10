@@ -1545,15 +1545,39 @@ GuildRoll.cannotDetachTooltip = true
 GuildRoll.tooltipHiddenWhenEmpty = false
 GuildRoll.independentProfile = true
 
-function GuildRoll:OnTooltipUpdate()
-  local hint = L["|cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options."]
-  local extra
-  if admin() then
-    extra = L[" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Logs. \n|cffffff00Shift+Click|r to toggle Roll UI."]
-  else
-    extra = L[" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Shift+Click|r to toggle Roll UI."]
+-- helper locale: verifica se esiste già un detached frame con ownerName
+local function hasDetachedOwner(ownerName)
+  for i = 1, 100 do
+    local f = _G[string.format("Tablet20DetachedFrame%d", i)]
+    if f and f.owner and f.owner == ownerName then
+      return true
+    end
   end
-  hint = string.format(hint, extra)
+  return false
+end
+
+function GuildRoll:OnTooltipUpdate()
+  -- Intestazione Hint:
+  local hint = L["Hint:"]
+
+  -- Parte comune (una riga per hint)
+  local common = {
+    "|cffffff00Click|r to toggle Standings.",
+    "|cffffff00Shift+Click|r to toggle Roll UI.",
+    "|cffffff00Right-Click|r to toggle Options.",
+    "|cffffff00Ctrl+Click|r to toggle Log.",
+    "|cffffff00Alt+Click|r to toggle Alts.",
+  }
+
+  for _, line in ipairs(common) do
+    hint = hint .. "\n" .. line
+  end
+
+  -- Parte extra (mostrata solo agli admin)
+  if admin() then
+    hint = hint .. "\n" .. "|cffffff00Ctrl+Shift+Click|r to toggle Admin Log."
+  end
+
   T:SetHint(hint)
 end
 
@@ -1576,7 +1600,21 @@ function GuildRoll:OnClick(button)
         pcall(function() GuildRoll_logs:Toggle(true) end)
       end
     else
-      -- Not admin: fallback to personal log
+      -- Not admin: fallback to personal log, but avoid duplicates
+      if not hasDetachedOwner("GuildRoll_logs") and not hasDetachedOwner("GuildRoll") then
+        if GuildRoll and GuildRoll.ShowPersonalLog then
+          pcall(function() GuildRoll:ShowPersonalLog() end)
+        elseif GuildRoll and GuildRoll.SavePersonalLog then
+          pcall(function() GuildRoll:SavePersonalLog() end)
+        end
+      end
+    end
+    return
+  end
+  
+  -- Ctrl+Click: Open personal log (evita duplicati)
+  if ctrl and not shift and not alt then
+    if not hasDetachedOwner("GuildRoll_logs") and not hasDetachedOwner("GuildRoll") then
       if GuildRoll and GuildRoll.ShowPersonalLog then
         pcall(function() GuildRoll:ShowPersonalLog() end)
       elseif GuildRoll and GuildRoll.SavePersonalLog then
@@ -1585,17 +1623,7 @@ function GuildRoll:OnClick(button)
     end
     return
   end
-  
-  -- Ctrl+Click: Open personal log
-  if ctrl and not shift and not alt then
-    if GuildRoll and GuildRoll.ShowPersonalLog then
-      pcall(function() GuildRoll:ShowPersonalLog() end)
-    elseif GuildRoll and GuildRoll.SavePersonalLog then
-      pcall(function() GuildRoll:SavePersonalLog() end)
-    end
-    return
-  end
-  
+
   -- Preserve existing behaviors
   if alt and not ctrl and not shift then
     if GuildRollAlts and GuildRollAlts.Toggle then

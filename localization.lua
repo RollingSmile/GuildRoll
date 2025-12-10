@@ -123,6 +123,7 @@ Results will print here when done.]],
   ["All Standing has been reset to 0/%d."] = true,
   ["You now have: %d MainStanding %d AuxStanding + (%d)"] = "You now have: %d EP (Main), %d EP (Aux) + (%d)",
   ["Close to Standing Cap. Next Decay will change your |cffff7f00PR|r by |cffff0000%.4g|r."] = true,
+  ["Hint:"] = true,
   ["|cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options."] =
     "Hint: |cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options.",
   [" \n|cffffff00Alt+Click|r to toggle Bids. \n|cffffff00Shift+Click|r to toggle Loot. \n|cffffff00Ctrl+Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Shift+Click|r to toggle Logs."] = " \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Logs. \n|cffffff00Shift+Click|r to toggle Roll UI.",
