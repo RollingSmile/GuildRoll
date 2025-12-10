@@ -124,12 +124,17 @@ Results will print here when done.]],
   ["You now have: %d MainStanding %d AuxStanding + (%d)"] = "You now have: %d EP (Main), %d EP (Aux) + (%d)",
   ["Close to Standing Cap. Next Decay will change your |cffff7f00PR|r by |cffff0000%.4g|r."] = true,
   ["|cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options."] =
-    "Hint: |cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options.",
+    "|cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options.",
   [" \n|cffffff00Alt+Click|r to toggle Bids. \n|cffffff00Shift+Click|r to toggle Loot. \n|cffffff00Ctrl+Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Shift+Click|r to toggle Logs."] = " \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Logs. \n|cffffff00Shift+Click|r to toggle Roll UI.",
   [" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Shift+Click|r to toggle Roll UI."] =
     " \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Shift+Click|r to toggle Roll UI.",
   [" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Logs. \n|cffffff00Shift+Click|r to toggle Roll UI."] =
     " \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Logs. \n|cffffff00Shift+Click|r to toggle Roll UI.",
+  -- New tooltip strings for personal log functionality
+  [" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Admin Logs. \n|cffffff00Shift+Click|r to open Personal Log."] =
+    " \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Admin Logs. \n|cffffff00Shift+Click|r to open Personal Log.",
+  [" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to open Personal Log. \n|cffffff00Shift+Click|r to open Personal Log."] =
+    " \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to open Personal Log. \n|cffffff00Shift+Click|r to open Personal Log.",
   ["Account MainStanding to %s."] = "Account EP to %s.",
   ["Account AuxStanding to %s."] = "Account EP to %s.", -- Internal use only (not GUI)
   ["guildroll options"] = true,
@@ -317,12 +322,17 @@ L:RegisterTranslations("zhCN", function() return {
   ["All Standing has been reset to 0/%d."] = "所有Standing已重置为 0/%d.",
   ["You now have: %d MainStanding %d AuxStanding + (%d)"] = "你现在有: %d EP (主), %d EP (辅) + (%d) ",
   ["Close to Standing Cap. Next Decay will change your |cffff7f00PR|r by |cffff0000%.4g|r."] = "下次递减会改变你的 |cffff7f00PR|r 从 |cffff0000%.4g|r.",
-  ["|cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options."] = "提示: |cffffff00点击|r 切换名单.%s \n|cffffff00右键|r 打开选项.",
+  ["|cffffff00Click|r to toggle Standings.%s \n|cffffff00Right-Click|r for Options."] = "|cffffff00点击|r 切换名单.%s \n|cffffff00右键|r 打开选项.",
   [" \n|cffffff00Alt+Click|r to toggle Bids. \n|cffffff00Shift+Click|r to toggle Loot. \n|cffffff00Ctrl+Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Shift+Click|r to toggle Logs."] = " \n|cffffff00Alt+Click|r 切换 小号. \n|cffffff00Ctrl+Click|r 切换 日志. \n|cffffff00Shift+Click|r 切换 掷骰界面.",
   [" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Shift+Click|r to toggle Roll UI."] =
     " \n|cffffff00Alt+Click|r 切换 小号. \n|cffffff00Shift+Click|r 切换 掷骰界面.",
   [" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Logs. \n|cffffff00Shift+Click|r to toggle Roll UI."] =
     " \n|cffffff00Alt+Click|r 切换 小号. \n|cffffff00Ctrl+Click|r 切换 日志. \n|cffffff00Shift+Click|r 切换 掷骰界面.",
+  -- New tooltip strings for personal log functionality
+  [" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to toggle Admin Logs. \n|cffffff00Shift+Click|r to open Personal Log."] =
+    " \n|cffffff00Alt+Click|r 切换 小号. \n|cffffff00Ctrl+Click|r 切换 管理员日志. \n|cffffff00Shift+Click|r 打开个人日志.",
+  [" \n|cffffff00Alt+Click|r to toggle Alts. \n|cffffff00Ctrl+Click|r to open Personal Log. \n|cffffff00Shift+Click|r to open Personal Log."] =
+    " \n|cffffff00Alt+Click|r 切换 小号. \n|cffffff00Ctrl+Click|r 打开个人日志. \n|cffffff00Shift+Click|r 打开个人日志.",
   ["Account MainStanding to %s."] = "记账 EP 到 %s.",
   ["Account AuxStanding to %s."] = "记账 EP 到 %s.", -- Internal use only (not GUI)
   ["guildroll options"] = "guildroll 设置",
