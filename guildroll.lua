@@ -425,7 +425,7 @@ function GuildRoll:buildMenu()
 
       container.args["info"] = {
         type = "header",
-        name = "Select the minimum rank to can use CSR:",
+        name = "Checked ranks will see CSR button",
       }
 
       -- Helper: Check if current player has permission to edit CSR settings
