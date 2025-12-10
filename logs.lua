@@ -24,8 +24,8 @@ function GuildRoll:personalLogAdd(target, action)
   GuildRoll_personalLogSaved[name] = GuildRoll_personalLogSaved[name] or {}
   table.insert(GuildRoll_personalLogSaved[name], {ts, action})
   
-  -- Trim to last 500 entries efficiently
-  local max_keep = 500
+  -- Trim to last 200 entries efficiently
+  local max_keep = 200
   if table.getn(GuildRoll_personalLogSaved[name]) > max_keep then
     local newLog = {}
     local startIdx = table.getn(GuildRoll_personalLogSaved[name]) - max_keep + 1
@@ -161,43 +161,134 @@ function GuildRoll_logs:OnTooltipUpdate()
   end  
 end
 
--- Helper function to show personal log
-function GuildRoll:ShowPersonalLog(name)
-  name = name or UnitName("player")
-  local logs = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
-  
-  -- Try to use guildep_export frame from standings.lua if available
-  if guildep_export and guildep_export.title and guildep_export.edit then
-    guildep_export.title:SetText("Personal Log: " .. name)
-    local text = ""
-    for i = table.getn(logs), 1, -1 do
-      local entry = logs[i]
-      if entry and entry[1] and entry[2] then
-        text = text .. entry[1] .. " - " .. entry[2] .. "\n"
+-- Personal log Tablet support
+local personalTabletRegistered = false
+local currentPersonalName = nil
+
+function GuildRoll_logs:registerPersonalTablet()
+  if personalTabletRegistered then return end
+  personalTabletRegistered = true
+
+  T:Register("GuildRoll_personal_logs",
+    "children", function()
+      if currentPersonalName then
+        T:SetTitle("Personal Log: " .. currentPersonalName)
+      else
+        T:SetTitle("Personal Log")
       end
+      GuildRoll_logs:OnTooltipUpdatePersonal()
+    end,
+    "showTitleWhenDetached", true,
+    "showHintWhenDetached", true,
+    "cantAttach", true
+    -- menu intentionally removed: personal tablet has no menu or commands
+  )
+end
+
+function GuildRoll_logs:RefreshPersonal()
+  if not personalTabletRegistered then return end
+  T:Refresh("GuildRoll_personal_logs")
+end
+
+function GuildRoll_logs:setHideScriptPersonal()
+  local i = 1
+  local tablet = getglobal(string.format("Tablet20DetachedFrame%d",i))
+  while (tablet) and i<100 do
+    if tablet.owner ~= nil and tablet.owner == "GuildRoll_personal_logs" then
+      GuildRoll:make_escable(string.format("Tablet20DetachedFrame%d",i),"add")
+      tablet:SetScript("OnHide",nil)
+      tablet:SetScript("OnHide",function()
+          if not T:IsAttached("GuildRoll_personal_logs") then
+            T:Attach("GuildRoll_personal_logs")
+            this:SetScript("OnHide",nil)
+          end
+        end)
+      break
+    end    
+    i = i+1
+    tablet = getglobal(string.format("Tablet20DetachedFrame%d",i))
+  end  
+end
+
+function GuildRoll_logs:TopPersonal()
+  if T:IsRegistered("GuildRoll_personal_logs") and (T.registry.GuildRoll_personal_logs.tooltip) then
+    T.registry.GuildRoll_personal_logs.tooltip.scroll=0
+  end  
+end
+
+function GuildRoll_logs:TogglePersonal(forceShow)
+  self:TopPersonal()
+  if T:IsAttached("GuildRoll_personal_logs") then
+    T:Detach("GuildRoll_personal_logs") -- show
+    if (T:IsLocked("GuildRoll_personal_logs")) then
+      T:ToggleLocked("GuildRoll_personal_logs")
     end
-    guildep_export.edit:SetText(text)
-    guildep_export.edit:HighlightText()
-    guildep_export:Show()
+    self:setHideScriptPersonal()
   else
-    -- Fallback to chat frame
-    DEFAULT_CHAT_FRAME:AddMessage("=== Personal Log for " .. name .. " ===")
-    for i = table.getn(logs), 1, -1 do
-      local entry = logs[i]
-      if entry and entry[1] and entry[2] then
-        DEFAULT_CHAT_FRAME:AddMessage(entry[1] .. " - " .. entry[2])
-      end
+    if (forceShow) then
+      GuildRoll_logs:RefreshPersonal()
+    else
+      T:Attach("GuildRoll_personal_logs") -- hide
     end
-    DEFAULT_CHAT_FRAME:AddMessage("=== End of Log ===")
+  end  
+end
+
+function GuildRoll_logs:OnTooltipUpdatePersonal()
+  local cat = T:AddCategory(
+      "columns", 2,
+      "text",  C:Orange(L["Time"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify",  "LEFT",
+      "text2", C:Orange(L["Action"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT"
+    )
+  local name = currentPersonalName or UnitName("player")
+  local t = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
+  -- use reverse (show newest first)
+  local rev = GuildRoll_logs:reverse(t)
+
+  if table.getn(rev) == 0 then
+    -- Show a friendly message when the personal log is empty
+    cat:AddLine(
+      "text", C:Yellow("Personal log is empty"),
+      "text2", ""
+    )
+    return
+  end
+
+  for i = 1, table.getn(rev) do
+    local timestamp, line = unpack(rev[i])
+    cat:AddLine(
+      "text", C:Silver(timestamp),
+      "text2", line
+    )
   end
 end
 
--- Helper function to save personal log to chat for copy-paste
+-- Helper function to show personal log
+function GuildRoll:ShowPersonalLog(name)
+  name = name or UnitName("player")
+  currentPersonalName = name
+  -- Register personal tablet (once)
+  GuildRoll_logs:registerPersonalTablet()
+  -- Open and detach so it becomes a window like the admin logs
+  if T:IsAttached("GuildRoll_personal_logs") then
+    T:Open("GuildRoll_personal_logs")
+  end
+  T:Detach("GuildRoll_personal_logs")
+  GuildRoll_logs:setHideScriptPersonal()
+end
+
+-- Helper function to save personal log to chat for copy-paste (internal fallback only)
 function GuildRoll:SavePersonalLog(name)
   name = name or UnitName("player")
   local logs = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
   
-  -- Try to use guildep_export frame from standings.lua if available
+  -- If Tablet personal window is available and shown, refresh that instead
+  if personalTabletRegistered then
+    currentPersonalName = name
+    GuildRoll_logs:RefreshPersonal()
+    return
+  end
+
+  -- Fallback: Try to use guildep_export frame from standings.lua if available
   if guildep_export and guildep_export.title and guildep_export.edit then
     guildep_export.title:SetText("Save Personal Log: " .. name)
     local text = ""
@@ -223,5 +314,5 @@ function GuildRoll:SavePersonalLog(name)
   end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_discount,GuildRoll_log,GuildRoll_dbver,GuildRoll_looted
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_disc[...]
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs,GuildRoll_personalLogSaved,GuildRoll_personalLogs
