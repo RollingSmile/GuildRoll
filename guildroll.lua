@@ -140,7 +140,11 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       name = "Show Personal Log",
       desc = "Show your personal EP/GP log",
       func = function() 
-        GuildRoll:ShowPersonalLog()
+        if GuildRoll and GuildRoll.ShowPersonalLog then
+          pcall(function() GuildRoll:ShowPersonalLog() end)
+        elseif GuildRoll and GuildRoll.SavePersonalLog then
+          pcall(function() GuildRoll:SavePersonalLog() end)
+        end
       end,
       order = 11,
     },
@@ -149,7 +153,9 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       name = "Save Personal Log",
       desc = "Save your personal EP/GP log for export",
       func = function() 
-        GuildRoll:SavePersonalLog()
+        if GuildRoll and GuildRoll.SavePersonalLog then
+          pcall(function() GuildRoll:SavePersonalLog() end)
+        end
       end,
       order = 12,
     },
@@ -224,7 +230,11 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       name = "Show Personal Log",
       desc = "Show your personal EP/GP log",
       func = function() 
-        GuildRoll:ShowPersonalLog()
+        if GuildRoll and GuildRoll.ShowPersonalLog then
+          pcall(function() GuildRoll:ShowPersonalLog() end)
+        elseif GuildRoll and GuildRoll.SavePersonalLog then
+          pcall(function() GuildRoll:SavePersonalLog() end)
+        end
       end,
       order = 9,
     },
@@ -233,7 +243,9 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       name = "Save Personal Log",
       desc = "Save your personal EP/GP log for export",
       func = function() 
-        GuildRoll:SavePersonalLog()
+        if GuildRoll and GuildRoll.SavePersonalLog then
+          pcall(function() GuildRoll:SavePersonalLog() end)
+        end
       end,
       order = 10,
     },
@@ -1524,25 +1536,33 @@ function GuildRoll:OnClick(button)
     if is_admin then
       -- Admin: show global admin log
       if GuildRoll_logs and GuildRoll_logs.Toggle then
-        GuildRoll_logs:Toggle(true)
+        pcall(function() GuildRoll_logs:Toggle(true) end)
       end
     else
       -- Not admin: fallback to personal log
-      GuildRoll:ShowPersonalLog()
+      if GuildRoll and GuildRoll.ShowPersonalLog then
+        pcall(function() GuildRoll:ShowPersonalLog() end)
+      elseif GuildRoll and GuildRoll.SavePersonalLog then
+        pcall(function() GuildRoll:SavePersonalLog() end)
+      end
     end
     return
   end
   
   -- Ctrl+Click: Open personal log
   if ctrl and not shift and not alt then
-    GuildRoll:ShowPersonalLog()
+    if GuildRoll and GuildRoll.ShowPersonalLog then
+      pcall(function() GuildRoll:ShowPersonalLog() end)
+    elseif GuildRoll and GuildRoll.SavePersonalLog then
+      pcall(function() GuildRoll:SavePersonalLog() end)
+    end
     return
   end
   
   -- Preserve existing behaviors
   if alt and not ctrl and not shift then
     if GuildRollAlts and GuildRollAlts.Toggle then
-      GuildRollAlts:Toggle()
+      pcall(function() GuildRollAlts:Toggle() end)
     end
     return
   end
@@ -1554,7 +1574,7 @@ function GuildRoll:OnClick(button)
     return
   end
   if GuildRoll_standings and GuildRoll_standings.Toggle then
-    GuildRoll_standings:Toggle()
+    pcall(function() GuildRoll_standings:Toggle() end)
   end
 end
 
