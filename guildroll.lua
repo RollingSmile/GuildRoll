@@ -1615,8 +1615,8 @@ function GuildRoll:ResetFrames()
 end
 
 function GuildRoll:OnTooltipUpdate()
-  -- Build hint header
-  local hint = L["Hint:"]
+  -- Build hint body (Tablet-2.0 adds "Hint:" label automatically)
+  local hint = ""
 
   -- Common hints (one line per hint)
   local common = {
@@ -1628,7 +1628,11 @@ function GuildRoll:OnTooltipUpdate()
   }
 
   for _, line in ipairs(common) do
-    hint = hint .. "\n" .. line
+    if hint == "" then
+      hint = line
+    else
+      hint = hint .. "\n" .. line
+    end
   end
 
   -- Extra hint (shown only to admins)
