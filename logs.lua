@@ -236,6 +236,14 @@ local function safeEnsureTabletOwner()
   end)
 end
 
+-- Helper function to ensure detached frame has a valid owner property
+-- This prevents Tablet-2.0 assert "Detached tooltip has no owner" in detached.Attach()
+local function ensureDetachedFrameOwner(frame, ownerName)
+  if frame and not frame.owner then
+    frame.owner = ownerName
+  end
+end
+
 function GuildRoll_logs:registerPersonalTablet()
   if personalTabletRegistered then return end
   personalTabletRegistered = true
@@ -274,6 +282,8 @@ end
 function GuildRoll_logs:setHideScriptPersonal()
   local frame = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
   if frame then
+    -- Defensive: Ensure frame.owner is set to prevent Tablet-2.0 assert
+    ensureDetachedFrameOwner(frame, "GuildRoll_personal_logs")
     GuildRoll:make_escable(frame:GetName(), "add")
     if frame.SetScript then
       frame:SetScript("OnHide", nil)
@@ -371,6 +381,8 @@ function GuildRoll:ShowPersonalLog()
     if lastPersonalShown == name then
       -- Ensure owner non-nil before operations to avoid Tablet assert
       safeEnsureTabletOwner()
+      -- Defensive: Ensure detached frame.owner is set to prevent Tablet-2.0 assert
+      ensureDetachedFrameOwner(detached, "GuildRoll_personal_logs")
 
       -- Hide the visible detached frame (toggle off)
       pcall(function() detached:Hide() end)
@@ -412,6 +424,8 @@ function GuildRoll:ShowPersonalLog()
 
     local alreadyDetached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
     if alreadyDetached then
+      -- Defensive: Ensure detached frame.owner is set to prevent Tablet-2.0 assert
+      ensureDetachedFrameOwner(alreadyDetached, "GuildRoll_personal_logs")
       pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
     else
       -- Ensure owner non-nil before detaching to avoid Tablet assert
@@ -432,6 +446,8 @@ function GuildRoll:ShowPersonalLog()
     safeEnsureTabletOwner()
     pcall(function() T:Detach("GuildRoll_personal_logs") end)
   else
+    -- Defensive: Ensure detached frame.owner is set to prevent Tablet-2.0 assert
+    ensureDetachedFrameOwner(alreadyDetached, "GuildRoll_personal_logs")
     pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
   end
 

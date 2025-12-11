@@ -71,6 +71,10 @@ end
 function GuildRollAlts:setHideScript()
   local frame = GuildRoll:FindDetachedFrame("GuildRollAlts")
   if frame then
+    -- Defensive: Ensure frame.owner is set to prevent Tablet-2.0 assert
+    if not frame.owner then
+      frame.owner = "GuildRollAlts"
+    end
     GuildRoll:make_escable(frame:GetName(), "add")
     if frame.SetScript then
       frame:SetScript("OnHide", nil)
