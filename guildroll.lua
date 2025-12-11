@@ -1361,18 +1361,56 @@ function GuildRoll:award_raid_ep(ep) -- awards ep to raid members in zone
   end
   
   if GetNumRaidMembers()>0 then
-	local award = {}
+    local award = {}
+    local adminName = UnitName("player")
+    
     for i = 1, GetNumRaidMembers(true) do
       local name, rank, subgroup, level, class, fileName, zone, online, isDead = GetRaidRosterInfo(i)
       if level >= GuildRoll.VARS.minlevel then
-		local _,mName =  self:givename_ep(name,ep,award)
-		 table.insert (award, mName)
+        local actualName = name
+        local actualEP = ep
+        local postfix = ""
+        
+        -- Handle alt -> main mapping if Altspool enabled
+        if (GuildRollAltspool) then
+          local main = self:parseAlt(name)
+          if (main) then
+            local alt = name
+            actualName = main
+            actualEP = self:num_round(GuildRoll_altpercent*ep)
+            postfix = string.format(L[", %s\'s Main."],alt)
+          end
+        end
+        
+        -- Skip if already awarded in this call (check the actual target name)
+        if not GuildRoll:TFind(award, actualName) then
+          -- Get old EP and calculate new EP
+          local old = (self:get_ep_v3(actualName) or 0)
+          local newep = actualEP + old
+          
+          -- Update EP (this triggers update_epgp_v3 which handles personal logs)
+          self:update_ep_v3(actualName, newep)
+          
+          -- Send addon message to individual player
+          local addonMsg = string.format("%s;%s;%s", actualName, "MainStanding", actualEP)
+          self:addonMessage(addonMsg, "GUILD")
+          
+          -- Add to admin log with RAID tag
+          local logMsg
+          if actualEP < 0 then
+            logMsg = string.format("[RAID] %s: %d EP Penalty to %s%s (Prev: %d, New: %d)", adminName, actualEP, actualName, postfix, old, newep)
+          else
+            logMsg = string.format("[RAID] %s: Giving %d EP to %s%s (Prev: %d, New: %d)", adminName, actualEP, actualName, postfix, old, newep)
+          end
+          self:addToLog(logMsg)
+          
+          table.insert(award, actualName)
+        end
       end
     end
+    
+    -- Send single public message about raid award
     self:simpleSay(string.format(L["Giving %d MainStanding to all raidmembers"],ep))
-    self:addToLog(string.format(L["Giving %d MainStanding to all raidmembers"],ep))    
-    local addonMsg = string.format("RAID;AWARD;%s",ep)
-    self:addonMessage(addonMsg,"RAID")
     self:refreshPRTablets() 
   else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
 end
@@ -1428,13 +1466,17 @@ function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single charac
   
   -- Always announce, log, and send addon message for both positive and negative EP
   local msg
+  local logMsg
+  local adminName = UnitName("player")
   if ep < 0 then
     msg = string.format(L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
+    logMsg = string.format("[MEMBER] %s: %d EP Penalty to %s%s (Prev: %d, New: %d)", adminName, ep, getname, postfix, old, newep)
   else
     msg = string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
+    logMsg = string.format("[MEMBER] %s: Giving %d EP to %s%s (Prev: %d, New: %d)", adminName, ep, getname, postfix, old, newep)
   end
   self:adminSay(msg)
-  self:addToLog(msg)
+  self:addToLog(logMsg)
   local addonMsg = string.format("%s;%s;%s",getname,"MainStanding",ep)
   self:addonMessage(addonMsg,"GUILD")
   
