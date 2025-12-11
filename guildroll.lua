@@ -2106,6 +2106,20 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
   end
   
   self:defaultPrint(string.format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
+  
+  -- Create structured admin log entry for migration
+  if movedCount > 0 then
+    local migrationEntry = self:createAdminLogEntry({
+      admin = UnitName("player"),
+      target = "ALL",
+      ep = 0,
+      zone = "ADMIN",
+      action = "MIGRATION",
+      raw = string.format("Moved %d main tags from public to officer notes.", movedCount)
+    })
+    self:addStructuredLogEntry(migrationEntry)
+    self:broadcastAdminLogEntry(migrationEntry)
+  end
 end
 
 
