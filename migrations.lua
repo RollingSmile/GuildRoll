@@ -17,20 +17,6 @@ function GuildRoll:v2tov3()
   end
   self:defaultPrint(string.format(L["Updated %d members to v3 storage."],count))
   GuildRoll_dbver = 3
-  
-  -- Create structured admin log entry for migration
-  if count > 0 then
-    local migrationEntry = self:createAdminLogEntry({
-      admin = UnitName("player"),
-      target = "ALL",
-      ep = 0,
-      zone = "ADMIN",
-      action = "MIGRATION",
-      raw = string.format(L["Updated %d members to v3 storage."],count)
-    })
-    self:addStructuredLogEntry(migrationEntry)
-    self:broadcastAdminLogEntry(migrationEntry)
-  end
 end
 
 -- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_discount,GuildRoll_log,GuildRoll_dbver,GuildRoll_looted

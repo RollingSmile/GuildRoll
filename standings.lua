@@ -171,18 +171,6 @@ function GuildRoll_standings.import()
         -- Pass gp as nil if not provided to preserve existing GP
         GuildRoll:update_epgp_v3(name_epgp[1],name_epgp[2],i,name,officernote)
         t[name]=nil
-        
-        -- Create structured admin log entry for import
-        local importEntry = GuildRoll:createAdminLogEntry({
-          admin = UnitName("player"),
-          target = name,
-          ep = name_epgp[1] or 0,
-          zone = "ADMIN",
-          action = "IMPORT",
-          raw = string.format("Imported %s: %d EP", name, name_epgp[1] or 0)
-        })
-        GuildRoll:addStructuredLogEntry(importEntry)
-        GuildRoll:broadcastAdminLogEntry(importEntry)
       end
     end
     GuildRoll:defaultPrint(string.format(L["Imported %d members."],count))
@@ -375,7 +363,7 @@ function GuildRoll_standings:BuildStandingsTable()
   end
   GuildRoll.alts = {}
   for i = 1, GetNumGuildMembers(1) do
-    local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
+    local name, guildRank, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
     local ep = (GuildRoll:get_ep_v3(name,officernote) or 0) 
     local gp = (GuildRoll:get_gp_v3(name,officernote) or GuildRoll.VARS.baseAE)
     local main, main_class, main_rank = GuildRoll:parseAlt(name,officernote)
@@ -398,10 +386,10 @@ function GuildRoll_standings:BuildStandingsTable()
     if ep > 0 then
       if (GuildRoll_raidonly) and next(r) then
         if r[name] then
-          table.insert(t,{displayName,class,armor_class,ep,gp,(ep+ math.min(GuildRoll.VARS.AERollCap,gp)),name})
+          table.insert(t,{displayName,class,armor_class,ep,gp,(ep+ math.min(GuildRoll.VARS.AERollCap,gp)),name,guildRank})
         end
       else
-        table.insert(t,{displayName,class,armor_class,ep,gp,(ep+ math.min(GuildRoll.VARS.AERollCap,gp)),name})
+        table.insert(t,{displayName,class,armor_class,ep,gp,(ep+ math.min(GuildRoll.VARS.AERollCap,gp)),name,guildRank})
       end
     end
   end
@@ -423,23 +411,25 @@ end
 
 
 function GuildRoll_standings:OnTooltipUpdate()
-  -- Create category with 2 columns: Name | EP
+  -- Create category with 3 columns: Rank | Name | EP
   local cat = T:AddCategory(
-      "columns", 2,
-      "text",  C:Orange(L["Name"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "LEFT",  "LEFT",
-      "text2", C:Orange(L["Main Standing"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "RIGHT", "RIGHT"
+      "columns", 3,
+      "text",  C:Orange(L["Rank"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "LEFT",  "LEFT",
+      "text2", C:Orange(L["Name"]),   "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "LEFT", "LEFT",
+      "text3", C:Orange(L["Main Standing"]),     "child_text3R",   1, "child_text3G",   1, "child_text3B",   1, "RIGHT", "RIGHT"
     )
   local t = self:BuildStandingsTable()
   local separator
   for i = 1, table.getn(t) do
-    local displayName, class, armor_class, ep, gp, pr, originalName = unpack(t[i])
+    local displayName, class, armor_class, ep, gp, pr, originalName, guildRank = unpack(t[i])
     if (GuildRoll_groupbyarmor) then
       if not (separator) then
         separator = armor_text[armor_class]
         if (separator) then
           cat:AddLine(
             "text", C:Green(separator),
-            "text2", ""
+            "text2", "",
+            "text3", ""
           )
         end
       else
@@ -448,26 +438,29 @@ function GuildRoll_standings:OnTooltipUpdate()
         if (separator) and (separator ~= last_separator) then
           cat:AddLine(
             "text", C:Green(separator),
-            "text2", ""
+            "text2", "",
+            "text3", ""
           )          
         end
       end
     end
 
-    local text = C:Colorize(BC:GetHexColor(class), displayName)
-    local text2
+    local text = guildRank or ""
+    local text2 = C:Colorize(BC:GetHexColor(class), displayName)
+    local text3
     if GuildRoll_minPE > 0 and ep < GuildRoll_minPE then
-      text2 = C:Red(string.format("%.4g", ep))
+      text3 = C:Red(string.format("%.4g", ep))
     else
-      text2 = string.format("%.4g", ep)
+      text3 = string.format("%.4g", ep)
     end
 
     if ((GuildRoll._playerName) and GuildRoll._playerName == originalName) or ((GuildRoll_main) and GuildRoll_main == originalName) then
-      text = string.format("(*)%s",text)
+      text2 = string.format("(*)%s",text2)
     end
     cat:AddLine(
       "text", text,
-      "text2", text2
+      "text2", text2,
+      "text3", text3
     )
   end
 end

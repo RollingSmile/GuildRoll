@@ -41,3 +41,4 @@ migrations.lua
 standings.lua 
 alts.lua
 logs.lua
+adminlog.lua
