@@ -1098,6 +1098,8 @@ end
 -- Have an admin change CSR threshold and verify no errors occur and UI updates correctly.
 handleSharedSettings = function(message, sender)
   -- Defensive binding: use _G.string if available, fall back to local string table
+  -- Note: Even if gstring is partially corrupted, individual function checks below
+  -- will catch missing functions and use appropriate fallbacks
   local gstring = (_G and _G.string) or string
   if not gstring then
     -- Catastrophic failure: no string functions available at all
@@ -1269,10 +1271,18 @@ handleSharedSettings = function(message, sender)
     
     -- Notify user of settings update
     if GuildRoll.defaultPrint then
-      local format_func = gstring.format or string.format
+      -- Try format function, fall back to concatenation if unavailable
+      local format_func = (gstring and gstring.format) or (string and string.format)
       if format_func then
-        GuildRoll:defaultPrint(format_func("Admin settings updated from %s", sender))
+        local success, msg = pcall(format_func, "Admin settings updated from %s", sender)
+        if success then
+          GuildRoll:defaultPrint(msg)
+        else
+          -- Format failed, use concatenation
+          GuildRoll:defaultPrint("Admin settings updated from " .. (sender or "unknown"))
+        end
       else
+        -- No format function available, use concatenation
         GuildRoll:defaultPrint("Admin settings updated from " .. (sender or "unknown"))
       end
     end
