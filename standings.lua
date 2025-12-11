@@ -411,11 +411,11 @@ end
 
 
 function GuildRoll_standings:OnTooltipUpdate()
-  -- Create category with 3 columns: Rank | Name | EP
+  -- Create category with 3 columns: Name | Rank | EP
   local cat = T:AddCategory(
       "columns", 3,
-      "text",  C:Orange(L["Rank"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "LEFT",  "LEFT",
-      "text2", C:Orange(L["Name"]),   "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "LEFT", "LEFT",
+      "text",  C:Orange(L["Name"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "LEFT",  "LEFT",
+      "text2", C:Orange(L["Rank"]),   "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "LEFT", "LEFT",
       "text3", C:Orange(L["Main Standing"]),     "child_text3R",   1, "child_text3G",   1, "child_text3B",   1, "RIGHT", "RIGHT"
     )
   local t = self:BuildStandingsTable()
@@ -445,8 +445,8 @@ function GuildRoll_standings:OnTooltipUpdate()
       end
     end
 
-    local text = guildRank or ""
-    local text2 = C:Colorize(BC:GetHexColor(class), displayName)
+    local text = C:Colorize(BC:GetHexColor(class), displayName)
+    local text2 = guildRank or ""
     local text3
     if GuildRoll_minPE > 0 and ep < GuildRoll_minPE then
       text3 = C:Red(string.format("%.4g", ep))
@@ -455,7 +455,7 @@ function GuildRoll_standings:OnTooltipUpdate()
     end
 
     if ((GuildRoll._playerName) and GuildRoll._playerName == originalName) or ((GuildRoll_main) and GuildRoll_main == originalName) then
-      text2 = string.format("(*)%s",text2)
+      text = string.format("(*)%s",text)
     end
     cat:AddLine(
       "text", text,
