@@ -110,7 +110,7 @@ GuildRoll:make_escable("guildep_exportframe","add")
 
 function GuildRoll_standings:Export()
   -- Export EP-only CSV format: Name;EP (compatible with Import function)
-  if not (CanEditOfficerNote and CanEditOfficerNote()) then return end
+  if not GuildRoll:IsAdmin() then return end
   guildep_export.action:Hide()
   guildep_export.title:SetText(C:Gold(L["Ctrl-C to copy. Esc to close."]))
   local t = {}
@@ -237,8 +237,7 @@ function GuildRoll_standings:OnEnable()
           "tooltipText", L["Refresh window"],
           "func", function() GuildRoll_standings:Refresh() end
         )
-        -- Usa direttamente CanEditOfficerNote invece della globale admin() per robustezza
-        if (CanEditOfficerNote and CanEditOfficerNote()) then
+        if GuildRoll:IsAdmin() then
           D:AddLine(
             "text", L["Export"],
             "tooltipText", L["Export standings to csv."],

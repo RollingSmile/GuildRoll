@@ -185,14 +185,7 @@ end
 function GuildRoll_logs:BuildLogsTable()
   -- Check if user is officer - show global log
   -- Otherwise show personal log
-  local isOfficer = false
-  if CanEditOfficerNote then
-    -- call safely in case the API throws; pcall returns (ok, result)
-    local ok, res = pcall(CanEditOfficerNote)
-    if ok and res then
-      isOfficer = true
-    end
-  end
+  local isOfficer = GuildRoll:IsAdmin()
 
   if isOfficer then
     -- {timestamp,line}

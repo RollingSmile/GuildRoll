@@ -384,7 +384,7 @@ function GuildRoll:buildMenu()
       name = "Migrate Main Tags",
       desc = "Move {MainCharacter} tags from public notes to officer notes (Admin only).",
       order = 75,
-      hidden = function() return not CanEditOfficerNote() end,
+      hidden = function() return not GuildRoll:IsAdmin() end,
       func = function() 
         GuildRoll:MovePublicMainTagsToOfficerNotes()
       end,
@@ -1377,7 +1377,7 @@ end
 
 
 function GuildRoll:PromptAwardRaidEP()
-  if not (IsGuildLeader() or CanEditOfficerNote()) then
+  if not GuildRoll:IsAdmin() then
     self:defaultPrint(L["You don't have permission to award EP."])
     return
   end
@@ -1898,10 +1898,10 @@ function GuildRoll:PromptSetMainIfMissing()
 end
 
 -- MovePublicMainTagsToOfficerNotes: Admin function to migrate main tags from public to officer notes
--- Requires CanEditOfficerNote() permission
+-- Requires admin permission (GuildRoll:IsAdmin)
 -- Iterates through guild roster and moves {MainName} tags from public note to officer note
 function GuildRoll:MovePublicMainTagsToOfficerNotes()
-  if not CanEditOfficerNote() then
+  if not GuildRoll:IsAdmin() then
     self:defaultPrint("You do not have permission to edit officer notes.")
     return
   end
@@ -2173,8 +2173,33 @@ function GuildRoll:camelCase(word)
     end)
 end
 
+-- IsAdmin: Unified admin permission check with fallback
+-- Returns true if player can edit officer notes or is guild leader
+-- Uses pcall for robustness in case APIs are missing or modified
+function GuildRoll:IsAdmin()
+  -- Try CanEditOfficerNote first
+  if CanEditOfficerNote then
+    local ok, result = pcall(function() return CanEditOfficerNote() end)
+    if ok and result then
+      return true
+    end
+  end
+  
+  -- Fallback to IsGuildLeader
+  if IsGuildLeader then
+    local ok, result = pcall(function() return IsGuildLeader() end)
+    if ok and result then
+      return true
+    end
+  end
+  
+  return false
+end
+
+-- admin: Local wrapper for backward compatibility
+-- Calls GuildRoll:IsAdmin() to maintain existing code functionality
 admin = function()
-  return (CanEditOfficerNote() --[[and CanEditPublicNote()]])
+  return GuildRoll:IsAdmin()
 end
 
 sanitizeNote = function(prefix,epgp,postfix)
@@ -2348,7 +2373,7 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
       UIErrorsFrame:AddMessage(string.format(L["EP value out of range (%s to %s)"], GuildRoll.VARS.minAward, GuildRoll.VARS.maxAward), 1.0, 0.0, 0.0, 1.0)
       return
     end
-    if not (IsGuildLeader() or CanEditOfficerNote()) then
+    if not GuildRoll:IsAdmin() then
       GuildRoll:defaultPrint(L["You don't have permission to award EP."])
       return
     end
@@ -2366,7 +2391,7 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
       UIErrorsFrame:AddMessage(string.format(L["EP value out of range (%s to %s)"], GuildRoll.VARS.minAward, GuildRoll.VARS.maxAward), 1.0, 0.0, 0.0, 1.0)
       return
     end
-    if not (IsGuildLeader() or CanEditOfficerNote()) then
+    if not GuildRoll:IsAdmin() then
       UIErrorsFrame:AddMessage(L["You don't have permission to award EP."], 1.0, 0.0, 0.0, 1.0)
       return
     end
