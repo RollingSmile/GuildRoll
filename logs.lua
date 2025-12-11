@@ -385,14 +385,14 @@ function GuildRoll:ShowPersonalLog()
     if lastPersonalShown == name then
       -- Ensure owner non-nil before operations to avoid Tablet assert
       safeEnsureTabletOwner()
-      -- Defensive: Ensure detached frame.owner is set to prevent Tablet-2.0 assert
-      ensureDetachedFrameOwner(detached, "GuildRoll_personal_logs")
 
       -- Hide the visible detached frame (toggle off)
       pcall(function() detached:Hide() end)
       -- Ask Tablet to attach (hide the detached tooltip) inside pcall to avoid hard errors
       pcall(function()
         if T and T.IsAttached and T.Attach then
+          -- Defensive: Ensure detached frame.owner is set right before T:Attach to prevent Tablet-2.0 assert
+          ensureDetachedFrameOwner(detached, "GuildRoll_personal_logs")
           pcall(function() T:Attach("GuildRoll_personal_logs") end)
         end
       end)
