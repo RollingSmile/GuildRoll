@@ -171,6 +171,18 @@ function GuildRoll_standings.import()
         -- Pass gp as nil if not provided to preserve existing GP
         GuildRoll:update_epgp_v3(name_epgp[1],name_epgp[2],i,name,officernote)
         t[name]=nil
+        
+        -- Create structured admin log entry for import
+        local importEntry = GuildRoll:createAdminLogEntry({
+          admin = UnitName("player"),
+          target = name,
+          ep = name_epgp[1] or 0,
+          zone = "ADMIN",
+          action = "IMPORT",
+          raw = string.format("Imported %s: %d EP", name, name_epgp[1] or 0)
+        })
+        GuildRoll:addStructuredLogEntry(importEntry)
+        GuildRoll:broadcastAdminLogEntry(importEntry)
       end
     end
     GuildRoll:defaultPrint(string.format(L["Imported %d members."],count))

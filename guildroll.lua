@@ -663,6 +663,7 @@ function GuildRoll:OnInitialize() -- ADDON_LOADED (1) unless LoD
   if GuildRollAltspool == nil then GuildRollAltspool = true end
   if GuildRoll_altpercent == nil then GuildRoll_altpercent = 1.0 end
   if GuildRoll_log == nil then GuildRoll_log = {} end
+  if GuildRoll_adminLog == nil then GuildRoll_adminLog = {} end
   if GuildRoll_looted == nil then GuildRoll_looted = {} end
   if GuildRoll_debug == nil then GuildRoll_debug = {} end
   --if GuildRoll_showRollWindow == nil then GuildRoll_showRollWindow = true end
@@ -687,6 +688,14 @@ function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
   self:RegisterEvent("GUILD_ROSTER_UPDATE",function() 
       if (arg1) then -- member join /leave
         GuildRoll:SetRefresh(true)
+        -- Request admin log sync when roster updates (e.g., new admin comes online)
+        local ok, canEdit = pcall(CanEditOfficerNote)
+        if ok and canEdit and not GuildRoll._logSyncRequested then
+          GuildRoll._logSyncRequested = true
+          GuildRoll:ScheduleEvent("GuildRoll_RequestAdminLogSync", GuildRoll.requestAdminLog, 3, GuildRoll)
+          -- Reset flag after 60 seconds to allow future syncs
+          GuildRoll:ScheduleEvent("GuildRoll_ResetSyncFlag", function() GuildRoll._logSyncRequested = false end, 60)
+        end
       end
     end)
  
@@ -858,6 +867,8 @@ function GuildRoll:delayedInit()
     if not self:IsHooked("GuildRosterSetOfficerNote") then
       self:Hook("GuildRosterSetOfficerNote")
     end
+    -- Request admin log sync after a short delay
+    self:ScheduleEvent("GuildRoll_RequestAdminLog", self.requestAdminLog, 5, self)
   end
   GuildRollMSG.delayedinit = true
   self:defaultPrint(string.format(L["v%s Loaded."],GuildRoll._versionString))
@@ -971,6 +982,12 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
   if sender == self._playerName then return end -- we don't care for messages from ourselves
   local name_g,class,rank = self:verifyGuildMember(sender,true)
   if not (name_g) then return end -- only accept messages from guild members
+  
+  -- Handle ADMINLOG messages (structured admin log synchronization)
+  if message and string.find(message, "^ADMINLOG;") then
+    self:handleAdminLogMessage(message, sender)
+    return
+  end
   
   -- Handle SHARE: messages (new admin settings broadcast)
   if message and string.find(message, "^SHARE:") then
@@ -1386,16 +1403,36 @@ function GuildRoll:award_raid_ep(ep) -- awards ep to raid members in zone
   end
   
   if GetNumRaidMembers()>0 then
-	local award = {}
+    local award = {}
+    local zoneName = GetRealZoneText() or ""
+    local zoneCode = self:getZoneCode(zoneName)
+    local adminName = UnitName("player")
+    
     for i = 1, GetNumRaidMembers(true) do
       local name, rank, subgroup, level, class, fileName, zone, online, isDead = GetRaidRosterInfo(i)
       if level >= GuildRoll.VARS.minlevel then
-		local _,mName =  self:givename_ep(name,ep,award)
-		 table.insert (award, mName)
+        local _,mName =  self:givename_ep(name,ep,award)
+        table.insert (award, mName)
+        
+        -- Create structured log entry for this player (already done in givename_ep)
+        -- No need to duplicate here since givename_ep now creates entries
       end
     end
     self:simpleSay(string.format(L["Giving %d MainStanding to all raidmembers"],ep))
-    self:addToLog(string.format(L["Giving %d MainStanding to all raidmembers"],ep))    
+    
+    -- Don't add summary to log anymore, individual entries are created by givename_ep
+    -- But keep a summary entry for the raid award action itself
+    local summaryEntry = self:createAdminLogEntry({
+      admin = adminName,
+      target = "ALL",
+      ep = ep,
+      zone = zoneCode,
+      action = "RAID_AWARD",
+      raw = string.format(L["Giving %d MainStanding to all raidmembers"],ep)
+    })
+    self:addStructuredLogEntry(summaryEntry)
+    self:broadcastAdminLogEntry(summaryEntry)
+    
     local addonMsg = string.format("RAID;AWARD;%s",ep)
     self:addonMessage(addonMsg,"RAID")
     self:refreshPRTablets() 
@@ -1477,10 +1514,32 @@ function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single charac
   local newep = ep + old
   self:update_ep_v3(getname,newep)
   self:debugPrint(string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep))
+  
+  -- Create structured admin log entry
+  local zoneName = GetRealZoneText() or ""
+  local zoneCode = self:getZoneCode(zoneName)
+  local action = ep < 0 and "PENALTY" or "MANUAL_EDIT"
+  local rawMsg = string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
+  if ep < 0 then
+    rawMsg = string.format(L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
+  end
+  
+  local logEntry = self:createAdminLogEntry({
+    admin = UnitName("player"),
+    target = getname,
+    ep = ep,
+    zone = zoneCode,
+    action = action,
+    raw = rawMsg
+  })
+  self:addStructuredLogEntry(logEntry)
+  
+  -- Broadcast to other admins
+  self:broadcastAdminLogEntry(logEntry)
+  
   if ep < 0 then
     local msg = string.format(L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
     self:adminSay(msg)
-    self:addToLog(msg)
     local addonMsg = string.format("%s;%s;%s",getname,"MainStanding",ep)
     self:addonMessage(addonMsg,"GUILD")
   end
@@ -1563,9 +1622,21 @@ function GuildRoll:decay_epgp_v3()
   local msg = string.format(L["All Standing decayed by %s%%"],(1-GuildRoll_decay)*100)
   self:simpleSay(msg)
   if not (GuildRoll_saychannel=="OFFICER") then self:adminSay(msg) end
+  
+  -- Create structured admin log entry for decay
+  local decayEntry = self:createAdminLogEntry({
+    admin = UnitName("player"),
+    target = "ALL",
+    ep = 0,
+    zone = "ADMIN",
+    action = "DECAY",
+    raw = msg
+  })
+  self:addStructuredLogEntry(decayEntry)
+  self:broadcastAdminLogEntry(decayEntry)
+  
   local addonMsg = string.format("ALL;DECAY;%s",(1-(GuildRoll_decay or GuildRoll.VARS.decay))*100)
   self:addonMessage(addonMsg,"GUILD")
-  self:addToLog(msg)
   self:refreshPRTablets() 
 end
 
@@ -2041,6 +2112,202 @@ end
 ------------
 -- Logging
 ------------
+
+-- Zone name to code mapping for admin log
+local ZoneCodeMap = {
+  [L["Molten Core"]] = "MC",
+  [L["Onyxia's Lair"]] = "ONY",
+  [L["Blackwing Lair"]] = "BWL",
+  [L["Zul'Gurub"]] = "ZG",
+  [L["Ahn'Qiraj"]] = "AQ40",
+  ["Ruins of Ahn'Qiraj"] = "AQ20",
+  [L["Naxxramas"]] = "NAX",
+  ["Tower of Karazhan"] = "K10",
+  ["Upper Tower of Karazhan"] = "K40"
+}
+
+-- Get zone code from zone name
+function GuildRoll:getZoneCode(zoneName)
+  if not zoneName or zoneName == "" then return "UNKNOWN" end
+  local code = ZoneCodeMap[zoneName]
+  if code then return code end
+  -- Try partial matching for fallback
+  for zname, zcode in pairs(ZoneCodeMap) do
+    if string.find(zoneName, zname) then
+      return zcode
+    end
+  end
+  return "OTHER"
+end
+
+-- Generate unique ID for admin log entry
+function GuildRoll:generateLogId()
+  local ts = time()
+  local random = math.random(1000, 9999)
+  return string.format("%d_%d", ts, random)
+end
+
+-- Create structured admin log entry
+-- entry: {admin, target, ep, zone, action, raw}
+function GuildRoll:createAdminLogEntry(entry)
+  if not entry then return nil end
+  
+  local logEntry = {
+    id = self:generateLogId(),
+    ts = date("%Y-%m-%dT%H:%M:%SZ"),
+    admin = entry.admin or UnitName("player"),
+    target = entry.target or "UNKNOWN",
+    ep = entry.ep or 0,
+    zone = entry.zone or "UNKNOWN",
+    action = entry.action or "UNKNOWN",
+    raw = entry.raw or ""
+  }
+  
+  return logEntry
+end
+
+-- Add structured entry to adminLog and maintain FIFO limit
+function GuildRoll:addStructuredLogEntry(entry)
+  if not entry then return end
+  
+  -- Initialize adminLog if needed
+  if not GuildRoll_adminLog then
+    GuildRoll_adminLog = {}
+  end
+  
+  -- Check for duplicate by id
+  for _, existing in ipairs(GuildRoll_adminLog) do
+    if existing.id == entry.id then
+      return -- Already exists
+    end
+  end
+  
+  -- Add new entry
+  table.insert(GuildRoll_adminLog, entry)
+  
+  -- Maintain FIFO limit
+  local maxLines = GuildRoll.VARS.maxloglines or 500
+  while table.getn(GuildRoll_adminLog) > maxLines do
+    table.remove(GuildRoll_adminLog, 1)
+  end
+  
+  -- Also update legacy GuildRoll_log for UI compatibility
+  if entry.raw and entry.raw ~= "" then
+    self:addToLog(entry.raw, false)
+  end
+  
+  -- Update personal log for target if applicable
+  if entry.target and entry.target ~= "ALL" and entry.target ~= "UNKNOWN" then
+    local personalMsg = entry.raw
+    if not personalMsg or personalMsg == "" then
+      if entry.action == "ADD_EP" then
+        personalMsg = string.format("%s awarded %d EP", entry.admin or "Admin", entry.ep or 0)
+      elseif entry.action == "DECAY" then
+        personalMsg = string.format("Decay applied by %s", entry.admin or "Admin")
+      else
+        personalMsg = string.format("%s: %s", entry.action or "Action", entry.admin or "Admin")
+      end
+    end
+    self:personalLogAdd(entry.target, personalMsg)
+  end
+end
+
+-- Broadcast admin log entry to other admins
+function GuildRoll:broadcastAdminLogEntry(entry)
+  if not entry then return end
+  
+  -- Only broadcast if we're an admin
+  local ok, canEdit = pcall(CanEditOfficerNote)
+  if not ok or not canEdit then return end
+  
+  -- Serialize entry: ADMINLOG;ADD;id;ts;admin;target;ep;zone;action;raw
+  local raw = entry.raw or ""
+  -- Escape semicolons in raw message
+  raw = string.gsub(raw, ";", "\\;")
+  
+  local msg = string.format("ADMINLOG;ADD;%s;%s;%s;%s;%s;%s;%s;%s",
+    entry.id or "",
+    entry.ts or "",
+    entry.admin or "",
+    entry.target or "",
+    tostring(entry.ep or 0),
+    entry.zone or "",
+    entry.action or "",
+    raw
+  )
+  
+  self:addonMessage(msg, "GUILD")
+end
+
+-- Request admin log from other admins
+function GuildRoll:requestAdminLog()
+  -- Only request if we're an admin
+  local ok, canEdit = pcall(CanEditOfficerNote)
+  if not ok or not canEdit then return end
+  
+  -- Send request: ADMINLOG;REQ;count
+  local currentCount = table.getn(GuildRoll_adminLog or {})
+  local msg = string.format("ADMINLOG;REQ;%d", currentCount)
+  self:addonMessage(msg, "GUILD")
+end
+
+-- Handle incoming admin log messages
+function GuildRoll:handleAdminLogMessage(message, sender)
+  -- Only admins should process admin log messages
+  local ok, canEdit = pcall(CanEditOfficerNote)
+  if not ok or not canEdit then return end
+  
+  -- Parse message type
+  local msgType = string.match(message, "^ADMINLOG;([^;]+)")
+  if not msgType then return end
+  
+  if msgType == "ADD" then
+    -- ADMINLOG;ADD;id;ts;admin;target;ep;zone;action;raw
+    local parts = self:strsplitT(";", message)
+    if table.getn(parts) >= 9 then
+      local entry = {
+        id = parts[3],
+        ts = parts[4],
+        admin = parts[5],
+        target = parts[6],
+        ep = tonumber(parts[7]) or 0,
+        zone = parts[8],
+        action = parts[9],
+        raw = parts[10] or ""
+      }
+      -- Unescape semicolons in raw message
+      entry.raw = string.gsub(entry.raw, "\\;", ";")
+      
+      -- Add to our log (will check for duplicates)
+      self:addStructuredLogEntry(entry)
+    end
+    
+  elseif msgType == "REQ" then
+    -- ADMINLOG;REQ;count - sender is requesting log entries
+    local senderCount = tonumber(string.match(message, "^ADMINLOG;REQ;(%d+)")) or 0
+    local ourCount = table.getn(GuildRoll_adminLog or {})
+    
+    -- If we have more entries, send them
+    if ourCount > senderCount then
+      -- Send missing entries (limit to avoid spam)
+      local maxToSend = 10
+      local startIdx = math.max(1, ourCount - maxToSend + 1)
+      
+      for i = startIdx, ourCount do
+        local entry = GuildRoll_adminLog[i]
+        if entry then
+          self:broadcastAdminLogEntry(entry)
+        end
+      end
+    end
+    
+  elseif msgType == "BATCH" then
+    -- ADMINLOG;BATCH;count - sender is sending batch of entries
+    -- This would be followed by multiple ADD messages
+    -- We just acknowledge the batch for now
+  end
+end
+
 function GuildRoll:addToLog(line,skipTime)
   local over = table.getn(GuildRoll_log)-GuildRoll.VARS.maxloglines+1
   if over > 0 then
