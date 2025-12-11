@@ -468,10 +468,12 @@ function GuildRoll:buildMenu()
       get = function() return GuildRoll_minPE end,
       set = function(v) 
         GuildRoll_minPE = tonumber(v)
+        -- Update header immediately if options table exists
+        if GuildRoll._options and GuildRoll._options.args and GuildRoll._options.args["set_min_ep_header"] then
+          GuildRoll._options.args["set_min_ep_header"].name = string.format(L["Minimum MainStanding: %s"],GuildRoll_minPE)
+        end
         GuildRoll:refreshPRTablets()
-        if (IsGuildLeader()) then
-          GuildRoll:shareSettings(true)
-        end        
+        -- Removed shareSettings call: Minimum EP is now local to each admin
       end,
       validate = function(v) 
         local n = tonumber(v)
@@ -1033,11 +1035,12 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
         --    settings_notice = L["New offspec price %"]
         --  end
         --end
-        if minPE and minPE ~= GuildRoll_minPE then
-          GuildRoll_minPE = minPE
-          settings_notice = L["New Minimum MainStanding"]
-          GuildRoll:refreshPRTablets()
-        end
+        -- Minimum EP removed: now local to each admin and not shared
+        --if minPE and minPE ~= GuildRoll_minPE then
+        --  GuildRoll_minPE = minPE
+        --  settings_notice = L["New Minimum MainStanding"]
+        --  GuildRoll:refreshPRTablets()
+        --end
         if decay and decay ~= GuildRoll_decay then
           GuildRoll_decay = decay
           if (admin()) then
@@ -1074,7 +1077,7 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
           self:defaultPrint(settings_notice)
          -- self._options.args["RollValueogress_tier_header"].name = string.format(L["Progress Setting: %s"],GuildRoll_progress)
          -- self._options.args["set_discount_header"].name = string.format(L["Offspec Price: %s%%"],GuildRoll_discount*100)
-          self._options.args["set_min_ep_header"].name = string.format(L["Minimum MainStanding: %s"],GuildRoll_minPE)
+         -- Minimum EP header update removed: now local to each admin and not updated from incoming messages
         end
       end
     end
@@ -1165,7 +1168,8 @@ handleSharedSettings = function(message, sender)
   end
   if settings.RO then local ro = (settings.RO == "1") if ro ~= GuildRoll_raidonly then GuildRoll_raidonly = ro; changed = true end end
   if settings.DC then local dc = tonumber(settings.DC) if dc and dc ~= GuildRoll_decay then GuildRoll_decay = dc; changed = true end end
-  if settings.MIN then local minep = tonumber(settings.MIN) if minep and minep ~= GuildRoll_minPE then GuildRoll_minPE = minep; changed = true end end
+  -- MIN removed: Minimum EP is now local to each admin and not updated from incoming messages
+  --if settings.MIN then local minep = tonumber(settings.MIN) if minep and minep ~= GuildRoll_minPE then GuildRoll_minPE = minep; changed = true end end
   if settings.ALT then local alt = tonumber(settings.ALT) if alt and alt ~= GuildRoll_altpercent then GuildRoll_altpercent = alt; changed = true end end
   if settings.SC then if settings.SC ~= GuildRoll_saychannel then GuildRoll_saychannel = settings.SC; changed = true end end
 
@@ -1195,13 +1199,13 @@ function GuildRoll:shareSettings(force)
     self._lastSettingsShare = now
     
     -- Build compact payload with admin settings
-    -- Format: SHARE:CSR=3;RO=1;DC=0.5;MIN=100;ALT=1.0;SC=GUILD
+    -- Format: SHARE:CSR=3;RO=1;DC=0.5;ALT=1.0;SC=GUILD
     -- CSR can be nil (disabled), use "NONE" to represent this in the payload
+    -- MIN removed: Minimum EP is now local to each admin and not shared
     local csr = GuildRoll_CSRThreshold
     local csrStr = csr and tostring(csr) or "NONE"
     local ro = GuildRoll_raidonly and 1 or 0
     local dc = GuildRoll_decay or self.VARS.decay
-    local minep = GuildRoll_minPE or self.VARS.minPE
     local alt = GuildRoll_altpercent or 1.0
     local sc = GuildRoll_saychannel or "GUILD"
     
@@ -1209,14 +1213,15 @@ function GuildRoll:shareSettings(force)
     sc = string.gsub(sc, "=", "%%3D")
     sc = string.gsub(sc, ";", "%%3B")
     
-    local payload = string.format("SHARE:CSR=%s;RO=%d;DC=%s;MIN=%s;ALT=%s;SC=%s",
-      csrStr, ro, tostring(dc), tostring(minep), tostring(alt), sc)
+    local payload = string.format("SHARE:CSR=%s;RO=%d;DC=%s;ALT=%s;SC=%s",
+      csrStr, ro, tostring(dc), tostring(alt), sc)
     
     -- Send via existing addonMessage method for consistency
     self:addonMessage(payload, "GUILD")
     
     -- Also send legacy SETTINGS message for backwards compatibility
-    local addonMsg = string.format("SETTINGS;%s:%s:%s:%s:%s:%s;1",0,0,dc,minep,tostring(GuildRollAltspool),alt)
+    -- Use neutral default for minPE to avoid leaking local admin preferences
+    local addonMsg = string.format("SETTINGS;%s:%s:%s:%s:%s:%s;1",0,0,dc,self.VARS.minPE,tostring(GuildRollAltspool),alt)
     self:addonMessage(addonMsg,"GUILD")
   end
 end
