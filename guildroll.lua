@@ -2008,7 +2008,7 @@ function GuildRoll:PromptSetMainIfMissing()
 end
 
 -- MovePublicMainTagsToOfficerNotes: Admin function to migrate main tags from public to officer notes
--- Requires admin permission (IsAdmin)
+-- Requires admin permission (GuildRoll:IsAdmin)
 -- Iterates through guild roster and moves {MainName} tags from public note to officer note
 function GuildRoll:MovePublicMainTagsToOfficerNotes()
   if not GuildRoll:IsAdmin() then

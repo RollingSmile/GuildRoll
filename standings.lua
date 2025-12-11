@@ -237,7 +237,6 @@ function GuildRoll_standings:OnEnable()
           "tooltipText", L["Refresh window"],
           "func", function() GuildRoll_standings:Refresh() end
         )
-        -- Use GuildRoll:IsAdmin() for unified admin permission check
         if GuildRoll:IsAdmin() then
           D:AddLine(
             "text", L["Export"],
