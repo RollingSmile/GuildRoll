@@ -1777,6 +1777,8 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
         c[class].args[name].get = "suggestedAwardMainStanding"
         c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshPRTablets() end
       elseif epgp == "AuxStanding" then
+        -- EP-only mode: AuxStanding UI now awards EP (MainStanding) instead of GP
+        -- User-visible text shows "EP" via localization mapping
         c[class].args[name].get = false
         c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshPRTablets() end
       end
