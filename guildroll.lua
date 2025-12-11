@@ -26,7 +26,7 @@ GuildRoll.VARS = {
   bop = C:Red("BoP"),
   boe = C:Yellow("BoE"),
   nobind = C:White("NoBind"), 
-  bankde = "Bank-D/E",
+  -- bankde removed: legacy PUG/Bank support removed
   reminder = C:Red("Unassigned"), 
   HostGuildName = "!",
   HostLeadName = "!" 
@@ -38,8 +38,8 @@ GuildRollMSG = {
 	prefix = "RR_",
 	RequestHostInfoUpdate = "RequestHostInfoUpdate",
 	RequestHostInfoUpdateTS = 0,
-	HostInfoUpdate = "HostInfoUpdate",
-	PugStandingUpdate = "PugStandingUpdate"
+	HostInfoUpdate = "HostInfoUpdate"
+	-- PugStandingUpdate removed: legacy PUG comms removed
 
 }
 GuildRoll._playerName = (UnitName("player"))
@@ -895,10 +895,7 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
     end    
     if oldepgp ~= nil then
       if epgp == nil or epgp ~= oldepgp then
-		 local isbnk, pugname = GuildRoll:isBank(name)
-			if isbnk then
-				GuildRoll:ReportPugManualEdit(pugname , epgp )
-			end
+        -- legacy PUG/Bank handling removed: just report the modification to admins
         self:adminSay(string.format(L["Manually modified %s\'s note. Standing was %s"],name,oldepgp))
         self:defaultPrint(string.format(L["|cffff0000Manually modified %s\'s note. Standing was %s|r"],name,oldepgp))
       end
