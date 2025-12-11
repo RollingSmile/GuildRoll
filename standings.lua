@@ -281,6 +281,10 @@ end
 function GuildRoll_standings:setHideScript()
   local frame = GuildRoll:FindDetachedFrame("GuildRoll_standings")
   if frame then
+    -- Defensive: Ensure frame.owner is set to prevent Tablet-2.0 assert
+    if not frame.owner then
+      frame.owner = "GuildRoll_standings"
+    end
     GuildRoll:make_escable(frame:GetName(), "add")
     if frame.SetScript then
       frame:SetScript("OnHide", nil)
