@@ -1401,34 +1401,7 @@ function GuildRoll:award_raid_ep(ep) -- awards ep to raid members in zone
     self:refreshPRTablets() 
   else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
 end
-function GuildRoll:award_raid_gp(gp) -- awards gp to raid members in zone
-  -- Validate input
-  if type(gp) ~= "number" then
-    UIErrorsFrame:AddMessage("Invalid GP value entered.", 1.0, 0.0, 0.0, 1.0)
-    return
-  end
-  if gp < GuildRoll.VARS.minAward or gp > GuildRoll.VARS.maxAward then
-    UIErrorsFrame:AddMessage("GP value out of range (" .. GuildRoll.VARS.minAward .. " to " .. GuildRoll.VARS.maxAward .. ")", 1.0, 0.0, 0.0, 1.0)
-    return
-  end
-  
-  if not (IsGuildLeader()) then return end
-  if GetNumRaidMembers()>0 then
-	local award = {}
-    for i = 1, GetNumRaidMembers(true) do
-      local name, rank, subgroup, level, class, fileName, zone, online, isDead = GetRaidRosterInfo(i)
-      if level >= GuildRoll.VARS.minlevel then
-		local _,mName =  self:givename_gp(name,gp,award)
-		 table.insert (award, mName)
-      end
-    end
-    self:simpleSay(string.format(L["Giving %d AuxStanding to all raidmembers"],gp))
-    self:addToLog(string.format(L["Giving %d AuxStanding to all raidmembers"],gp))    
-    local addonMsg = string.format("RAID;AWARDGP;%s",gp)
-    self:addonMessage(addonMsg,"RAID")
-    self:refreshPRTablets() 
-  else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
-end
+
 
 function GuildRoll:PromptAwardRaidEP()
   if not (IsGuildLeader() or CanEditOfficerNote()) then
@@ -1477,13 +1450,19 @@ function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single charac
   local newep = ep + old
   self:update_ep_v3(getname,newep)
   self:debugPrint(string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep))
+  
+  -- Always announce, log, and send addon message for both positive and negative EP
+  local msg
   if ep < 0 then
-    local msg = string.format(L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
-    self:adminSay(msg)
-    self:addToLog(msg)
-    local addonMsg = string.format("%s;%s;%s",getname,"MainStanding",ep)
-    self:addonMessage(addonMsg,"GUILD")
+    msg = string.format(L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
+  else
+    msg = string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
   end
+  self:adminSay(msg)
+  self:addToLog(msg)
+  local addonMsg = string.format("%s;%s;%s",getname,"MainStanding",ep)
+  self:addonMessage(addonMsg,"GUILD")
+  
   return false, getname
 end
 
@@ -1498,55 +1477,7 @@ if not t then return nil end
 return nil
 end
 
-function GuildRoll:givename_gp(getname,gp)
-  return GuildRoll:givename_gp(getname,gp,nil)
-end
 
-function GuildRoll:givename_gp(getname,gp,block) -- awards gp to a single character
-  if not (IsGuildLeader()) then return end
-
-  -- Validate GP value
-  if type(gp) ~= "number" then
-    self:defaultPrint(L["Invalid GP value entered."])
-    return false, getname
-  end
-  if gp < GuildRoll.VARS.minAward or gp > GuildRoll.VARS.maxAward then
-    self:defaultPrint(string.format(L["GP value out of range (%s to %s)"], GuildRoll.VARS.minAward, GuildRoll.VARS.maxAward))
-    return false, getname
-  end
-
-  -- PUG support removed: do not call self:isPug
-  local postfix, alt = ""
-
-  -- Keep alt -> main handling if Altspool is enabled
-  if (GuildRollAltspool) then
-    local main = self:parseAlt(getname)
-    if (main) then
-      alt = getname
-      getname = main
-      gp = self:num_round(GuildRoll_altpercent*gp)
-      postfix = string.format(L[", %s\'s Main."],alt)
-    end
-  end
-
-  if GuildRoll:TFind(block, getname) then
-    self:debugPrint(string.format("Skipping %s%s, already awarded.",getname,postfix))
-    return false, getname
-  end
-
-  local old =  (self:get_gp_v3(getname) or 0)
-  local newgp = gp + old
-  self:update_gp_v3(getname,newgp)
-  self:debugPrint(string.format(L["Giving %d AuxStanding to %s%s. (Previous: %d, New: %d)"],gp,getname,postfix,old,newgp))
-  if gp < 0 then
-    local msg = string.format(L["%s AuxStanding Penalty to %s%s. (Previous: %d, New: %d)"],gp,getname,postfix,old,newgp)
-    self:adminSay(msg)
-    self:addToLog(msg)
-    local addonMsg = string.format("%s;%s;%s",getname,"AuxStanding",gp)
-    self:addonMessage(addonMsg,"GUILD")
-  end
-  return false, getname
-end
 
 
 function GuildRoll:decay_epgp_v3()
@@ -1586,21 +1517,23 @@ function GuildRoll:gp_reset_v3()
   end
 end
 
-function GuildRoll:ClearGP_v3()
+function GuildRoll:ep_reset_v3()
   if (IsGuildLeader()) then
     for i = 1, GetNumGuildMembers(1) do
       local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
       local ep,gp = self:get_ep_v3(name,officernote), self:get_gp_v3(name,officernote)
       if (ep and gp) then
-        self:update_epgp_v3(ep,GuildRoll.VARS.baseAE,i,name,officernote)
+        self:update_epgp_v3(0,nil,i,name,officernote)
       end
     end
-    local msg = L["All AuxStanding has been reset to %d."]
-    self:debugPrint(string.format(msg,GuildRoll.VARS.baseAE))
-    self:adminSay(string.format(msg,GuildRoll.VARS.baseAE))
-    self:addToLog(string.format(msg,GuildRoll.VARS.baseAE))
+    local msg = "All EP has been reset to 0."
+    self:debugPrint(msg)
+    self:adminSay(msg)
+    self:addToLog(msg)
   end
 end
+
+
 
 
 
@@ -1867,7 +1800,7 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
         c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshPRTablets() end
       elseif epgp == "AuxStanding" then
         c[class].args[name].get = false
-        c[class].args[name].set = function(v) GuildRoll:givename_gp(name, tonumber(v)) GuildRoll:refreshPRTablets() end
+        c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshPRTablets() end
       end
       c[class].args[name].validate = function(v) 
         local num = tonumber(v)
@@ -2379,7 +2312,7 @@ StaticPopupDialogs["CONFIRM_RESET_FINAL"] = {
   button1 = TEXT(OKAY),
   button2 = TEXT(CANCEL),
   OnAccept = function()
-    GuildRoll:gp_reset_v3()
+    GuildRoll:ep_reset_v3()
   end,
   timeout = 0,
   whileDead = 1,
