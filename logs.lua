@@ -79,6 +79,16 @@ function GuildRoll_logs:OnEnable()
         )
       end      
     )
+    
+    -- Ensure tooltip has a valid owner to prevent "Detached tooltip has no owner" error
+    -- This is required for Tablet-2.0 compatibility when detaching tooltips
+    pcall(function()
+      if T and T.registry and T.registry.GuildRoll_logs and T.registry.GuildRoll_logs.tooltip then
+        if not T.registry.GuildRoll_logs.tooltip.owner then
+          T.registry.GuildRoll_logs.tooltip.owner = GuildRoll:EnsureTabletOwner()
+        end
+      end
+    end)
   end
   -- apri solo se non è già attached (coerente con gli altri moduli)
   if not T:IsAttached("GuildRoll_logs") then
@@ -212,24 +222,15 @@ local personalTabletRegistered = false
 local currentPersonalName = nil
 local lastPersonalShown = nil -- track the name currently being shown in the detached personal window
 
--- Dummy owner to avoid Tablet asserting owner==nil
-local _tablet_dummy_owner = nil
+-- Helper function to ensure personal log tooltip has a valid owner
+-- Uses the centralized GuildRoll:EnsureTabletOwner() function
 local function safeEnsureTabletOwner()
   pcall(function()
     if not T or not T.registry then return end
-    if not _tablet_dummy_owner then
-      -- try to create a tiny frame to serve as owner; fallback to UIParent
-      local ok, f = pcall(function() return CreateFrame and CreateFrame("Frame", "GuildRoll_TabletDummyOwner") end)
-      if ok and f then
-        _tablet_dummy_owner = f
-      else
-        _tablet_dummy_owner = UIParent
-      end
-    end
     if T.registry.GuildRoll_personal_logs and T.registry.GuildRoll_personal_logs.tooltip then
       if not T.registry.GuildRoll_personal_logs.tooltip.owner then
-        -- assign a non-nil owner so Tablet's asserts won't fire
-        T.registry.GuildRoll_personal_logs.tooltip.owner = _tablet_dummy_owner
+        -- Use the centralized function to get the dummy owner
+        T.registry.GuildRoll_personal_logs.tooltip.owner = GuildRoll:EnsureTabletOwner()
       end
     end
   end)
@@ -253,6 +254,16 @@ function GuildRoll_logs:registerPersonalTablet()
     "cantAttach", true
     -- menu intentionally removed: personal tablet has no menu or commands
   )
+  
+  -- Ensure tooltip has a valid owner to prevent "Detached tooltip has no owner" error
+  -- This is required for Tablet-2.0 compatibility when detaching tooltips
+  pcall(function()
+    if T and T.registry and T.registry.GuildRoll_personal_logs and T.registry.GuildRoll_personal_logs.tooltip then
+      if not T.registry.GuildRoll_personal_logs.tooltip.owner then
+        T.registry.GuildRoll_personal_logs.tooltip.owner = GuildRoll:EnsureTabletOwner()
+      end
+    end
+  end)
 end
 
 function GuildRoll_logs:RefreshPersonal()

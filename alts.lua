@@ -44,6 +44,16 @@ function GuildRollAlts:OnEnable()
         )
       end      
     )
+    
+    -- Ensure tooltip has a valid owner to prevent "Detached tooltip has no owner" error
+    -- This is required for Tablet-2.0 compatibility when detaching tooltips
+    pcall(function()
+      if T and T.registry and T.registry.GuildRollAlts and T.registry.GuildRollAlts.tooltip then
+        if not T.registry.GuildRollAlts.tooltip.owner then
+          T.registry.GuildRollAlts.tooltip.owner = GuildRoll:EnsureTabletOwner()
+        end
+      end
+    end)
   end
   if not T:IsAttached("GuildRollAlts") then
     pcall(function() T:Open("GuildRollAlts") end)

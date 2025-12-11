@@ -1647,6 +1647,34 @@ function GuildRoll:FindDetachedFrame(ownerName)
   return nil
 end
 
+-- Cached dummy owner frame for Tablet tooltips
+-- This prevents "Detached tooltip has no owner" errors from Tablet-2.0
+local _guildroll_tablet_owner = nil
+
+-- Centralized function to ensure Tablet tooltips have a valid owner
+-- This prevents Tablet-2.0 from asserting when detaching tooltips without an owner
+-- Call this after T:Register() to set tooltip.owner if it's missing
+-- Returns the dummy owner frame (or UIParent as fallback)
+function GuildRoll:EnsureTabletOwner()
+  local owner = nil
+  pcall(function()
+    -- Create or reuse the cached dummy owner frame
+    if not _guildroll_tablet_owner then
+      local ok, f = pcall(function() 
+        return CreateFrame and CreateFrame("Frame", "GuildRoll_TabletOwner") 
+      end)
+      if ok and f then
+        _guildroll_tablet_owner = f
+      else
+        -- Fallback to UIParent if frame creation fails
+        _guildroll_tablet_owner = UIParent
+      end
+    end
+    owner = _guildroll_tablet_owner
+  end)
+  return owner or UIParent
+end
+
 function GuildRoll:ResetFrames()
   -- Default visible positions for detached frames
   local defaultPositions = {
