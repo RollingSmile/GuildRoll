@@ -1697,9 +1697,9 @@ function GuildRoll:OnClick(button)
   -- No permission denied messages for non-admin
   if ctrl and shift and not alt then
     if is_admin then
-      -- Admin: toggle global admin log
-      if GuildRoll_logs and GuildRoll_logs.Toggle then
-        pcall(function() GuildRoll_logs:Toggle() end)
+      -- Admin: toggle new AdminLog module
+      if GuildRoll_AdminLog and GuildRoll_AdminLog.Toggle then
+        pcall(function() GuildRoll_AdminLog:Toggle() end)
       end
     else
       -- Not admin: open Personal Log as fallback (no error message)
