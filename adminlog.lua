@@ -375,7 +375,7 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
   if not message or not string.find(message, "^ADMINLOG;") then return end
   
   -- Normalize sender: remove realm suffix (e.g., Name-Realm -> Name)
-  local sender_norm = sender and string.gsub(sender, "%-%[^%-%]+$", "") or sender
+  local sender_norm = sender and string.gsub(sender, "%-[^%-]+$", "") or sender
   
   -- Verify sender is guild member
   local name_g = GuildRoll:verifyGuildMember(sender_norm, true)
