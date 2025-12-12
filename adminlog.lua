@@ -66,6 +66,7 @@ local snapshotInProgress = false
 local snapshotBuffer = {}
 local filterAuthor = nil -- for UI filtering
 local searchText = nil -- for UI search
+local expandedRaidEntries = {} -- track which raid entries are expanded (key = entry.id)
 
 -- Constants
 local PROTOCOL_VERSION = 1
@@ -83,7 +84,7 @@ end
 
 -- Helper: Serialize entry for transmission
 local function serializeEntry(entry)
-  -- Format: id|ts|author|action
+  -- Format: id|ts|author|action[|RAID_DATA if raid entry]
   local id = entry.id or ""
   local ts = entry.ts or 0
   local author = entry.author or ""
@@ -92,7 +93,26 @@ local function serializeEntry(entry)
   -- Escape pipe characters in action
   action = string.gsub(action, "|", "||")
   
-  return string.format("%s|%d|%s|%s", id, ts, author, action)
+  local baseStr = string.format("%s|%d|%s|%s", id, ts, author, action)
+  
+  -- If this is a raid entry, append raid_details
+  if entry.raid_details then
+    local rd = entry.raid_details
+    -- Format: RAID|ep|player_count|player1:old:new,player2:old:new,...
+    local playerList = {}
+    for i = 1, table.getn(rd.players or {}) do
+      local player = rd.players[i]
+      local counts = rd.counts[player] or {old=0, new=0}
+      table.insert(playerList, string.format("%s:%d:%d", player, counts.old, counts.new))
+    end
+    local playersStr = table.concat(playerList, ",")
+    -- Escape pipes in player data
+    playersStr = string.gsub(playersStr, "|", "||")
+    local raidData = string.format("RAID|%d|%d|%s", rd.ep or 0, table.getn(rd.players or {}), playersStr)
+    baseStr = baseStr .. "|" .. raidData
+  end
+  
+  return baseStr
 end
 
 -- Helper: Deserialize entry from transmission
@@ -128,12 +148,75 @@ local function deserializeEntry(data)
   
   if table.getn(parts) < 4 then return nil end
   
-  return {
+  local entry = {
     id = parts[1],
     ts = tonumber(parts[2]) or 0,
     author = parts[3],
     action = parts[4]
   }
+  
+  -- Check if this is a raid entry (part 5 starts with "RAID")
+  if table.getn(parts) >= 5 and parts[5] == "RAID" then
+    local ep = tonumber(parts[6]) or 0
+    local playerCount = tonumber(parts[7]) or 0
+    local playersStr = parts[8] or ""
+    
+    local players = {}
+    local counts = {}
+    
+    -- Parse player list: player1:old:new,player2:old:new,...
+    if playersStr ~= "" then
+      local playerEntries = {}
+      local currentEntry = ""
+      for j = 1, string.len(playersStr) do
+        local c = string.sub(playersStr, j, j)
+        if c == "," then
+          table.insert(playerEntries, currentEntry)
+          currentEntry = ""
+        else
+          currentEntry = currentEntry .. c
+        end
+      end
+      if currentEntry ~= "" then
+        table.insert(playerEntries, currentEntry)
+      end
+      
+      for k = 1, table.getn(playerEntries) do
+        local pEntry = playerEntries[k]
+        -- Split by :
+        local pParts = {}
+        local pCurrent = ""
+        for m = 1, string.len(pEntry) do
+          local c = string.sub(pEntry, m, m)
+          if c == ":" then
+            table.insert(pParts, pCurrent)
+            pCurrent = ""
+          else
+            pCurrent = pCurrent .. c
+          end
+        end
+        if pCurrent ~= "" then
+          table.insert(pParts, pCurrent)
+        end
+        
+        if table.getn(pParts) >= 3 then
+          local playerName = pParts[1]
+          local oldEP = tonumber(pParts[2]) or 0
+          local newEP = tonumber(pParts[3]) or 0
+          table.insert(players, playerName)
+          counts[playerName] = {old = oldEP, new = newEP}
+        end
+      end
+    end
+    
+    entry.raid_details = {
+      ep = ep,
+      players = players,
+      counts = counts
+    }
+  end
+  
+  return entry
 end
 
 -- Apply an admin log entry locally
@@ -433,6 +516,49 @@ function GuildRoll:AdminLogAdd(text)
   self:defaultPrint(string.format("Admin log entry added: %s", text))
 end
 
+-- Public API: Add a raid admin log entry with player details
+-- raid_data = {ep = number, players = {player1, player2, ...}, counts = {player1={old=x, new=y}, ...}}
+function GuildRoll:AdminLogAddRaid(ep, raid_data)
+  if not self:IsAdmin() then
+    return
+  end
+  
+  if not raid_data or not raid_data.players or table.getn(raid_data.players) == 0 then
+    return
+  end
+  
+  local playerCount = table.getn(raid_data.players)
+  local actionText
+  if ep < 0 then
+    actionText = string.format("[RAID] %d EP Penalty (%d players)", ep, playerCount)
+  else
+    actionText = string.format("[RAID] Giving %d EP (%d players)", ep, playerCount)
+  end
+  
+  local entry = {
+    id = generateEntryId(),
+    ts = time(),
+    author = UnitName("player") or "Unknown",
+    action = actionText,
+    raid_details = {
+      ep = ep,
+      players = raid_data.players,
+      counts = raid_data.counts
+    }
+  }
+  
+  -- Apply locally
+  applyAdminLogEntry(entry)
+  
+  -- Broadcast to guild
+  broadcastAdminLogEntry(entry)
+  
+  -- Refresh UI
+  if T and T:IsRegistered("GuildRoll_AdminLog") then
+    pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+  end
+end
+
 -- Public API: Request admin log snapshot
 function GuildRoll:RequestAdminLogSnapshot(since_ts)
   requestAdminLogSnapshot(since_ts)
@@ -632,11 +758,51 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
       local entry = displayEntries[i]
       local timeStr = date("%Y-%m-%d %H:%M:%S", entry.ts)
       
-      cat:AddLine(
-        "text", timeStr,
-        "text2", entry.author or "Unknown",
-        "text3", entry.action or ""
-      )
+      -- Check if this is a raid entry
+      if entry.raid_details then
+        local isExpanded = expandedRaidEntries[entry.id]
+        local expandIcon = isExpanded and "[-] " or "[+] "
+        
+        cat:AddLine(
+          "text", timeStr,
+          "text2", entry.author or "Unknown",
+          "text3", expandIcon .. (entry.action or ""),
+          "func", function()
+            -- Toggle expansion
+            if expandedRaidEntries[entry.id] then
+              expandedRaidEntries[entry.id] = nil
+            else
+              expandedRaidEntries[entry.id] = true
+            end
+            pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+          end
+        )
+        
+        -- If expanded, show player details
+        if isExpanded and entry.raid_details.players then
+          for j = 1, table.getn(entry.raid_details.players) do
+            local player = entry.raid_details.players[j]
+            local counts = entry.raid_details.counts[player] or {old=0, new=0}
+            local detailText = string.format("  %s (Prev: %d, New: %d)", player, counts.old, counts.new)
+            
+            cat:AddLine(
+              "text", "",
+              "text2", "",
+              "text3", detailText,
+              "text3R", 0.7,
+              "text3G", 0.7,
+              "text3B", 0.7
+            )
+          end
+        end
+      else
+        -- Regular entry (non-raid)
+        cat:AddLine(
+          "text", timeStr,
+          "text2", entry.author or "Unknown",
+          "text3", entry.action or ""
+        )
+      end
     end
   end
   
