@@ -30,7 +30,7 @@ function GuildRollAlts:OnEnable()
   if not T:IsRegistered("GuildRollAlts") then
     -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
     local function safeAddLine(...)
-      pcall(D.AddLine, D, ...)
+      pcall(D.AddLine, D, unpack(arg))
     end
     
     T:Register("GuildRollAlts",

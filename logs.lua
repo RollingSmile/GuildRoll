@@ -60,7 +60,7 @@ function GuildRoll_logs:OnEnable()
   if not T:IsRegistered("GuildRoll_logs") then
     -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
     local function safeAddLine(...)
-      pcall(D.AddLine, D, ...)
+      pcall(D.AddLine, D, unpack(arg))
     end
     
     T:Register("GuildRoll_logs",
@@ -494,5 +494,5 @@ function GuildRoll:SavePersonalLog(name)
   end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_disc[...]
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_discount
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs,GuildRoll_personalLogSaved,GuildRoll_personalLogs

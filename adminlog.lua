@@ -374,8 +374,11 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
   if not prefix or prefix ~= GuildRoll.VARS.prefix then return end
   if not message or not string.find(message, "^ADMINLOG;") then return end
   
+  -- Normalize sender: remove realm suffix (e.g., Name-Realm -> Name)
+  local sender_norm = sender and string.gsub(sender, "%-%[^%-%]+$", "") or sender
+  
   -- Verify sender is guild member
-  local name_g = GuildRoll:verifyGuildMember(sender, true)
+  local name_g = GuildRoll:verifyGuildMember(sender_norm, true)
   if not name_g then return end
   
   -- Parse message
@@ -531,9 +534,9 @@ function GuildRoll:AdminLogAddRaid(ep, raid_data)
   local adminName = UnitName("player") or "Unknown"
   local actionText
   if ep < 0 then
-    actionText = string.format("[RAID] %s: %d EP Penalty (%d players)", adminName, ep, playerCount)
+    actionText = string.format("[RAID] %d EP Penalty (%d players)", ep, playerCount)
   else
-    actionText = string.format("[RAID] %s: Giving %d EP (%d players)", adminName, ep, playerCount)
+    actionText = string.format("[RAID] Giving %d EP (%d players)", ep, playerCount)
   end
   
   local entry = {
@@ -723,14 +726,17 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
     "child_textR", 1,
     "child_textG", 1,
     "child_textB", 1,
+    "child_justify", "LEFT",
     "text2", "Author",
     "child_text2R", 0.5,
     "child_text2G", 1,
     "child_text2B", 0.5,
+    "child_justify2", "LEFT",
     "text3", "Action",
     "child_text3R", 1,
     "child_text3G", 1,
-    "child_text3B", 0.5
+    "child_text3B", 0.5,
+    "child_justify3", "LEFT"
   )
   
   -- Build filtered entry list
@@ -803,12 +809,15 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
           for j = 1, table.getn(entry.raid_details.players) do
             local player = entry.raid_details.players[j]
             local counts = entry.raid_details.counts[player] or {old=0, new=0}
-            local detailText = string.format("  %s (Prev: %d, New: %d)", player, counts.old, counts.new)
+            local countsText = string.format("Prev: %d, New: %d", counts.old, counts.new)
             
             cat:AddLine(
               "text", "",
-              "text2", "",
-              "text3", detailText,
+              "text2", "  " .. player,
+              "text3", countsText,
+              "text2R", 0.7,
+              "text2G", 0.7,
+              "text2B", 0.7,
               "text3R", 0.7,
               "text3G", 0.7,
               "text3B", 0.7
