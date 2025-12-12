@@ -59,8 +59,10 @@ local zone_multipliers = {}
 -- Forward-declare handler for SHARE: admin settings so addonComms can call it early
 local handleSharedSettings
 
--- Constants for note length
+-- Constants for note length and migration timing
 local MAX_NOTE_LEN = 31
+local MIGRATION_THROTTLE_SECONDS = 30
+local MIGRATION_AUTO_DELAY_SECONDS = 5
 
 -- Helper: trim public note with tag to ensure it fits within max length
 -- existing: current public note
@@ -114,7 +116,7 @@ end
 local function _attemptThrottledMigration(self)
   -- Check throttle: don't run more often than once every 30 seconds
   local now = GetTime()
-  if self._lastMigrateRun and (now - self._lastMigrateRun) < 30 then
+  if self._lastMigrateRun and (now - self._lastMigrateRun) < MIGRATION_THROTTLE_SECONDS then
     return false
   end
   
@@ -893,7 +895,7 @@ function GuildRoll:delayedInit()
     -- Auto-run migration 5 seconds after init for admins
     self:ScheduleEvent("guildroll_auto_migrate", function()
       _attemptThrottledMigration(GuildRoll)
-    end, 5)
+    end, MIGRATION_AUTO_DELAY_SECONDS)
   end
   GuildRollMSG.delayedinit = true
   self:defaultPrint(string.format(L["v%s Loaded."],GuildRoll._versionString))
@@ -2028,7 +2030,7 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
       local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
       
       -- Write officer note first (wrapped in pcall for safety)
-      local successOfficer, errOfficer = pcall(function()
+      local successOfficer = pcall(function()
         GuildRosterSetOfficerNote(i, newOfficer, true)
       end)
       
