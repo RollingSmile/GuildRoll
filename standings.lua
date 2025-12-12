@@ -205,6 +205,11 @@ end
 
 function GuildRoll_standings:OnEnable()
   if not T:IsRegistered("GuildRoll_standings") then
+    -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
+    local function safeAddLine(...)
+      pcall(D.AddLine, D, ...)
+    end
+    
     T:Register("GuildRoll_standings",
       "children", function()
         T:SetTitle(L["Standings"])
@@ -214,38 +219,38 @@ function GuildRoll_standings:OnEnable()
        	"showHintWhenDetached", true,
        	"cantAttach", true,
        	"menu", function()
-        D:AddLine(
+        safeAddLine(
           "text", L["Raid Only"],
           "tooltipText", L["Only show members in raid."],
           "checked", GuildRoll_raidonly,
           "func", function() GuildRoll_standings:ToggleRaidOnly() end
         )      
-        D:AddLine(
+        safeAddLine(
           "text", L["Group by class"],
           "tooltipText", L["Group members by class."],
           "checked", GuildRoll_groupbyclass,
           "func", function() GuildRoll_standings:ToggleGroupBy("GuildRoll_groupbyclass") end
         )
-        D:AddLine(
+        safeAddLine(
           "text", L["Group by armor"],
           "tooltipText", L["Group members by armor."],
           "checked", GuildRoll_groupbyarmor,
           "func", function() GuildRoll_standings:ToggleGroupBy("GuildRoll_groupbyarmor") end
         )
-        D:AddLine(
+        safeAddLine(
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
           "func", function() GuildRoll_standings:Refresh() end
         )
         if GuildRoll:IsAdmin() then
-          D:AddLine(
+          safeAddLine(
             "text", L["Export"],
             "tooltipText", L["Export standings to csv."],
             "func", function() GuildRoll_standings:Export() end
           )
         end
         if IsGuildLeader() then
-          D:AddLine(
+          safeAddLine(
           "text", L["Import"],
           "tooltipText", L["Import standings from csv."],
           "func", function() GuildRoll_standings:Import() end

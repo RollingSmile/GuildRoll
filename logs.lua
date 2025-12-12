@@ -58,6 +58,11 @@ end
 
 function GuildRoll_logs:OnEnable()
   if not T:IsRegistered("GuildRoll_logs") then
+    -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
+    local function safeAddLine(...)
+      pcall(D.AddLine, D, ...)
+    end
+    
     T:Register("GuildRoll_logs",
       "children", function()
         T:SetTitle(L["guildroll logs"])
@@ -67,12 +72,12 @@ function GuildRoll_logs:OnEnable()
       "showHintWhenDetached", true,
       "cantAttach", true,
       "menu", function()
-        D:AddLine(
+        safeAddLine(
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
           "func", function() GuildRoll_logs:Refresh() end
         )
-        D:AddLine(
+        safeAddLine(
           "text", L["Clear"],
           "tooltipText", L["Clear Logs."],
           "func", function() GuildRoll_logs:ConfirmClear() end

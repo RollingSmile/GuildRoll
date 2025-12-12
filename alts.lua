@@ -28,6 +28,11 @@ GuildRollAlts = GuildRoll:NewModule("GuildRollAlts", "AceDB-2.0")
 
 function GuildRollAlts:OnEnable()
   if not T:IsRegistered("GuildRollAlts") then
+    -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
+    local function safeAddLine(...)
+      pcall(D.AddLine, D, ...)
+    end
+    
     T:Register("GuildRollAlts",
       "children", function()
         T:SetTitle(L["guildroll alts"])
@@ -37,7 +42,7 @@ function GuildRollAlts:OnEnable()
       "showHintWhenDetached", true,
       "cantAttach", true,
       "menu", function()
-        D:AddLine(
+        safeAddLine(
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
           "func", function() GuildRollAlts:Refresh() end
