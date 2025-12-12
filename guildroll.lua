@@ -121,6 +121,7 @@ local function _attemptThrottledMigration(self)
   end
   
   -- Set timestamp before attempting to prevent rapid retries on failure
+  -- This ensures we don't spam attempts when guild roster isn't available yet
   self._lastMigrateRun = now
   
   -- Verify guild roster is available
@@ -894,7 +895,7 @@ function GuildRoll:delayedInit()
     
     -- Auto-run migration 5 seconds after init for admins
     self:ScheduleEvent("guildroll_auto_migrate", function()
-      _attemptThrottledMigration(GuildRoll)
+      _attemptThrottledMigration(self)
     end, MIGRATION_AUTO_DELAY_SECONDS)
   end
   GuildRollMSG.delayedinit = true
