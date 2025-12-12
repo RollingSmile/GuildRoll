@@ -59,8 +59,10 @@ local zone_multipliers = {}
 -- Forward-declare handler for SHARE: admin settings so addonComms can call it early
 local handleSharedSettings
 
--- Constants for note length
+-- Constants for note length and migration timing
 local MAX_NOTE_LEN = 31
+local MIGRATION_THROTTLE_SECONDS = 30
+local MIGRATION_AUTO_DELAY_SECONDS = 5
 
 -- Helper: trim public note with tag to ensure it fits within max length
 -- existing: current public note
@@ -107,6 +109,36 @@ local function _insertTagBeforeEP(officernote, tag)
     -- No pattern found; append tag to end
     return officernote .. tag
   end
+end
+
+-- Helper: attempt to run main tag migration with throttle check
+-- Returns true if migration was attempted, false if throttled
+local function _attemptThrottledMigration(self)
+  -- Check throttle: don't run more often than once every 30 seconds
+  local now = GetTime()
+  if self._lastMigrateRun and (now - self._lastMigrateRun) < MIGRATION_THROTTLE_SECONDS then
+    return false
+  end
+  
+  -- Set timestamp before attempting to prevent rapid retries on failure
+  -- This ensures we don't spam attempts when guild roster isn't available yet
+  self._lastMigrateRun = now
+  
+  -- Verify guild roster is available
+  local ok, numMembers = pcall(function()
+    if not IsInGuild() then return 0 end
+    return GetNumGuildMembers(1) or 0
+  end)
+  
+  if ok and numMembers > 0 then
+    -- Run migration
+    pcall(function()
+      GuildRoll:MovePublicMainTagsToOfficerNotes()
+    end)
+    return true
+  end
+  
+  return false
 end
 
 local options
@@ -382,9 +414,9 @@ function GuildRoll:buildMenu()
     options.args["migrate_main_tags"] = {
       type = "execute",
       name = "Migrate Main Tags",
-      desc = "Move {MainCharacter} tags from public notes to officer notes (Admin only).",
+      desc = "Move {MainCharacter} tags from public notes to officer notes (GM only).",
       order = 75,
-      hidden = function() return not GuildRoll:IsAdmin() end,
+      hidden = function() return not IsGuildLeader() end,
       func = function() 
         GuildRoll:MovePublicMainTagsToOfficerNotes()
       end,
@@ -860,6 +892,11 @@ function GuildRoll:delayedInit()
     if not self:IsHooked("GuildRosterSetOfficerNote") then
       self:Hook("GuildRosterSetOfficerNote")
     end
+    
+    -- Auto-run migration 5 seconds after init for admins
+    self:ScheduleEvent("guildroll_auto_migrate", function()
+      _attemptThrottledMigration(self)
+    end, MIGRATION_AUTO_DELAY_SECONDS)
   end
   GuildRollMSG.delayedinit = true
   self:defaultPrint(string.format(L["v%s Loaded."],GuildRoll._versionString))
@@ -974,6 +1011,18 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
   -- Handle SHARE: messages (new admin settings broadcast)
   if message and string.find(message, "^SHARE:") then
     handleSharedSettings(message, sender)
+    return
+  end
+  
+  -- Handle MIGRATE_MAIN_TAG_REQUEST messages
+  if message == "MIGRATE_MAIN_TAG_REQUEST" then
+    -- Only admins process migration requests
+    if not GuildRoll:IsAdmin() then
+      return
+    end
+    
+    -- Attempt throttled migration
+    _attemptThrottledMigration(self)
     return
   end
   
@@ -1942,6 +1991,9 @@ function GuildRoll:ProcessSetMainInput(inputMain)
     return
   end
   
+  -- Notify admins to run migration
+  self:addonMessage("MIGRATE_MAIN_TAG_REQUEST", "GUILD")
+  
   self:defaultPrint("Alt setup ready.")
 end
 
@@ -1957,10 +2009,11 @@ end
 -- MovePublicMainTagsToOfficerNotes: Admin function to migrate main tags from public to officer notes
 -- Requires admin permission (GuildRoll:IsAdmin)
 -- Iterates through guild roster and moves {MainName} tags from public note to officer note
+-- Returns: number of tags moved
 function GuildRoll:MovePublicMainTagsToOfficerNotes()
   if not GuildRoll:IsAdmin() then
     self:defaultPrint("You do not have permission to edit officer notes.")
-    return
+    return 0
   end
   
   local movedCount = 0
@@ -1974,30 +2027,37 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
     -- Check if public note contains a main tag pattern {name} (min 2 chars)
     local mainTag = string.match(publicNote, "({%a%a%a*})")
     if mainTag then
-      -- Escape pattern characters for safe replacement
-      local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-      -- Remove only first occurrence of the main tag from public note
-      local newPublic = string.gsub(publicNote, escapedTag, "", 1)
-      
-      -- Insert main tag before {EP:GP} in officer note
+      -- Insert main tag before {EP:GP} in officer note first (to avoid data loss)
       local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
       
-      -- Write both notes (wrapped in pcall for safety)
-      local successPublic, errPublic = pcall(function()
-        GuildRosterSetPublicNote(i, newPublic)
-      end)
-      
-      local successOfficer, errOfficer = pcall(function()
+      -- Write officer note first (wrapped in pcall for safety)
+      local successOfficer = pcall(function()
         GuildRosterSetOfficerNote(i, newOfficer, true)
       end)
       
-      if successPublic and successOfficer then
+      -- Only remove from public note if officer note write succeeded
+      if successOfficer then
         movedCount = movedCount + 1
+        
+        -- Escape pattern characters for safe replacement
+        local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+        -- Remove only first occurrence of the main tag from public note
+        local newPublic = string.gsub(publicNote, escapedTag, "", 1)
+        
+        -- Attempt to write public note (removal is best-effort)
+        pcall(function()
+          GuildRosterSetPublicNote(i, newPublic)
+        end)
       end
     end
   end
   
-  self:defaultPrint(string.format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
+  -- Only print summary if at least one tag was moved
+  if movedCount > 0 then
+    self:defaultPrint(string.format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
+  end
+  
+  return movedCount
 end
 
 
