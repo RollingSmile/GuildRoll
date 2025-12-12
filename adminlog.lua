@@ -58,7 +58,7 @@ GuildRoll_adminLogSaved = GuildRoll_adminLogSaved or {}
 GuildRoll_adminLogOrder = GuildRoll_adminLogOrder or {}
 
 -- Module definition
-GuildRoll_AdminLog = GuildRoll:NewModule("GuildRoll_AdminLog", "AceDB-2.0")
+GuildRoll_AdminLog = GuildRoll:NewModule("GuildRoll_AdminLog", "AceDB-2.0", "AceEvent-2.0")
 
 -- Local state
 local adminLogRuntime = {} -- runtime cache indexed by entry id
