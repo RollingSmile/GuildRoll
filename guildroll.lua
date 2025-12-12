@@ -382,9 +382,9 @@ function GuildRoll:buildMenu()
     options.args["migrate_main_tags"] = {
       type = "execute",
       name = "Migrate Main Tags",
-      desc = "Move {MainCharacter} tags from public notes to officer notes (Admin only).",
+      desc = "Move {MainCharacter} tags from public notes to officer notes (GM only).",
       order = 75,
-      hidden = function() return not GuildRoll:IsAdmin() end,
+      hidden = function() return not (IsGuildLeader and IsGuildLeader()) end,
       func = function() 
         GuildRoll:MovePublicMainTagsToOfficerNotes()
       end,
@@ -860,6 +860,29 @@ function GuildRoll:delayedInit()
     if not self:IsHooked("GuildRosterSetOfficerNote") then
       self:Hook("GuildRosterSetOfficerNote")
     end
+    
+    -- Auto-run migration 5 seconds after init for admins
+    self:ScheduleEvent("guildroll_auto_migrate", function()
+      -- Check throttle: don't run more often than once every 30 seconds
+      local now = GetTime()
+      if self._lastMigrateRun and (now - self._lastMigrateRun) < 30 then
+        return
+      end
+      
+      -- Verify guild roster is available
+      local ok, numMembers = pcall(function()
+        if not IsInGuild() then return 0 end
+        return GetNumGuildMembers(1) or 0
+      end)
+      
+      if ok and numMembers > 0 then
+        -- Run migration
+        pcall(function()
+          GuildRoll:MovePublicMainTagsToOfficerNotes()
+        end)
+        self._lastMigrateRun = now
+      end
+    end, 5)
   end
   GuildRollMSG.delayedinit = true
   self:defaultPrint(string.format(L["v%s Loaded."],GuildRoll._versionString))
@@ -974,6 +997,36 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
   -- Handle SHARE: messages (new admin settings broadcast)
   if message and string.find(message, "^SHARE:") then
     handleSharedSettings(message, sender)
+    return
+  end
+  
+  -- Handle MIGRATE_MAIN_TAG_REQUEST messages
+  if message == "MIGRATE_MAIN_TAG_REQUEST" then
+    -- Only admins process migration requests
+    if not GuildRoll:IsAdmin() then
+      return
+    end
+    
+    -- Check throttle: don't run more often than once every 30 seconds
+    local now = GetTime()
+    if self._lastMigrateRun and (now - self._lastMigrateRun) < 30 then
+      return
+    end
+    
+    -- Verify guild roster is available
+    local ok, numMembers = pcall(function()
+      if not IsInGuild() then return 0 end
+      return GetNumGuildMembers(1) or 0
+    end)
+    
+    if ok and numMembers > 0 then
+      -- Run migration
+      pcall(function()
+        GuildRoll:MovePublicMainTagsToOfficerNotes()
+      end)
+      self._lastMigrateRun = now
+    end
+    
     return
   end
   
@@ -1942,6 +1995,9 @@ function GuildRoll:ProcessSetMainInput(inputMain)
     return
   end
   
+  -- Notify admins to run migration
+  self:addonMessage("MIGRATE_MAIN_TAG_REQUEST", "GUILD")
+  
   self:defaultPrint("Alt setup ready.")
 end
 
@@ -1957,10 +2013,11 @@ end
 -- MovePublicMainTagsToOfficerNotes: Admin function to migrate main tags from public to officer notes
 -- Requires admin permission (GuildRoll:IsAdmin)
 -- Iterates through guild roster and moves {MainName} tags from public note to officer note
+-- Returns: number of tags moved
 function GuildRoll:MovePublicMainTagsToOfficerNotes()
   if not GuildRoll:IsAdmin() then
     self:defaultPrint("You do not have permission to edit officer notes.")
-    return
+    return 0
   end
   
   local movedCount = 0
@@ -1974,30 +2031,37 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
     -- Check if public note contains a main tag pattern {name} (min 2 chars)
     local mainTag = string.match(publicNote, "({%a%a%a*})")
     if mainTag then
-      -- Escape pattern characters for safe replacement
-      local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-      -- Remove only first occurrence of the main tag from public note
-      local newPublic = string.gsub(publicNote, escapedTag, "", 1)
-      
-      -- Insert main tag before {EP:GP} in officer note
+      -- Insert main tag before {EP:GP} in officer note first (to avoid data loss)
       local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
       
-      -- Write both notes (wrapped in pcall for safety)
-      local successPublic, errPublic = pcall(function()
-        GuildRosterSetPublicNote(i, newPublic)
-      end)
-      
+      -- Write officer note first (wrapped in pcall for safety)
       local successOfficer, errOfficer = pcall(function()
         GuildRosterSetOfficerNote(i, newOfficer, true)
       end)
       
-      if successPublic and successOfficer then
+      -- Only remove from public note if officer note write succeeded
+      if successOfficer then
         movedCount = movedCount + 1
+        
+        -- Escape pattern characters for safe replacement
+        local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+        -- Remove only first occurrence of the main tag from public note
+        local newPublic = string.gsub(publicNote, escapedTag, "", 1)
+        
+        -- Attempt to write public note (removal is best-effort)
+        pcall(function()
+          GuildRosterSetPublicNote(i, newPublic)
+        end)
       end
     end
   end
   
-  self:defaultPrint(string.format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
+  -- Only print summary if at least one tag was moved
+  if movedCount > 0 then
+    self:defaultPrint(string.format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
+  end
+  
+  return movedCount
 end
 
 
