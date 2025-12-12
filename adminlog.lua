@@ -99,35 +99,31 @@ end
 local function deserializeEntry(data)
   if not data then return nil end
   
-  -- Split by pipe, handling escaped pipes
+  -- Split by pipe, handling escaped pipes (||)
   local parts = {}
   local current = ""
-  local escaped = false
+  local i = 1
   
-  for i = 1, string.len(data) do
+  while i <= string.len(data) do
     local char = string.sub(data, i, i)
-    if char == "|" then
-      if escaped then
-        current = current .. "|"
-        escaped = false
-      else
-        table.insert(parts, current)
-        current = ""
-        escaped = true
-      end
+    local nextChar = string.sub(data, i + 1, i + 1)
+    
+    if char == "|" and nextChar == "|" then
+      -- Escaped pipe: add single pipe to current part
+      current = current .. "|"
+      i = i + 2
+    elseif char == "|" then
+      -- Unescaped pipe: delimiter between parts
+      table.insert(parts, current)
+      current = ""
+      i = i + 1
     else
-      if escaped then
-        current = current .. "|" .. char
-        escaped = false
-      else
-        current = current .. char
-      end
+      -- Regular character
+      current = current .. char
+      i = i + 1
     end
   end
   
-  if escaped then
-    current = current .. "|"
-  end
   table.insert(parts, current)
   
   if table.getn(parts) < 4 then return nil end
