@@ -141,6 +141,8 @@ Results will print here when done.]],
   ["GP value out of range (%s to %s)"] = "EP value out of range (%s to %s)",
   -- StaticPopup prompts
   ["Enter EP to award to raid members:"] = true,
+  ["GIVING_EP_MAIN_OF_ALT"] = "Giving EP to %s (main of %s); current EP: %d",
+  ["GIVING_EP_TO_CHAR"] = "Giving EP to %s; current EP: %d",
   ["Enter number of weeks you SR this item (0..15):"] = true,
   ["guildroll options"] = true,
   ["+MainStanding to Member"] = "+EP to Member",
