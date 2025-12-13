@@ -1492,6 +1492,9 @@ function GuildRoll:ShowGiveEPDialog(targetName)
     return
   end
 
+  -- Store target in pending variable before calling StaticPopup_Show to handle race conditions
+  GuildRoll._pendingGiveEPTarget = targetName
+
   -- Pass targetName as the data parameter to avoid the OnShow race condition
   local ok, dialog = pcall(function()
     return StaticPopup_Show("GUILDROLL_GIVE_EP", nil, nil, targetName)
@@ -1499,6 +1502,12 @@ function GuildRoll:ShowGiveEPDialog(targetName)
 
   if not ok then
     -- StaticPopup_Show failed for some reason; fail silently to avoid hard errors
+    -- Schedule delayed clear of pending variable
+    pcall(function()
+      GuildRoll:ScheduleEvent("GuildRoll_ClearPendingGiveEP", function()
+        GuildRoll._pendingGiveEPTarget = nil
+      end, 1)
+    end)
     return
   end
 
@@ -1509,6 +1518,36 @@ function GuildRoll:ShowGiveEPDialog(targetName)
       -- preserve legacy field for backward compatibility
       dialog.guildroll_target = targetName
     end)
+    -- Successfully set dialog fields, clear pending
+    GuildRoll._pendingGiveEPTarget = nil
+  else
+    -- StaticPopup_Show returned nil (queued); attempt to locate existing frame
+    local foundFrame = false
+    pcall(function()
+      local maxDialogs = STATICPOPUP_NUMDIALOGS or 4
+      for i = 1, maxDialogs do
+        local frameName = "StaticPopup" .. i
+        local frame = getglobal(frameName)
+        if frame and frame.which == "GUILDROLL_GIVE_EP" then
+          frame.data = targetName
+          frame.guildroll_target = targetName
+          foundFrame = true
+          break
+        end
+      end
+    end)
+    
+    if foundFrame then
+      -- Successfully set dialog fields on existing frame, clear pending
+      GuildRoll._pendingGiveEPTarget = nil
+    else
+      -- Unable to set dialog immediately; schedule delayed clear of pending variable
+      pcall(function()
+        GuildRoll:ScheduleEvent("GuildRoll_ClearPendingGiveEP", function()
+          GuildRoll._pendingGiveEPTarget = nil
+        end, 1)
+      end)
+    end
   end
 end
 
@@ -2599,8 +2638,14 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
   hasEditBox = 1,
   maxLetters = 10,
   OnShow = function()
-    -- Read from this.data (set by StaticPopup_Show) with fallback to legacy field
-    local targetName = this.data or this.guildroll_target
+    -- Read from this.data (set by StaticPopup_Show) with fallback to legacy field and pending variable
+    local targetName = this.data or this.guildroll_target or GuildRoll._pendingGiveEPTarget
+    
+    -- Clear pending variable when consumed
+    if targetName and targetName == GuildRoll._pendingGiveEPTarget then
+      GuildRoll._pendingGiveEPTarget = nil
+    end
+    
     if not targetName then
       getglobal(this:GetName().."Text"):SetText("Error: No target specified")
       return
