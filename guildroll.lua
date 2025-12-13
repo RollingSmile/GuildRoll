@@ -1487,6 +1487,16 @@ function GuildRoll:PromptAwardRaidEP()
   StaticPopup_Show("GUILDROLL_AWARD_EP_RAID_HELP")
 end
 
+function GuildRoll:ShowGiveEPDialog(targetName)
+  if not targetName then
+    return
+  end
+  local dialog = StaticPopup_Show("GUILDROLL_GIVE_EP")
+  if dialog then
+    dialog.guildroll_target = targetName
+  end
+end
+
 function GuildRoll:givename_ep(getname,ep)
   return GuildRoll:givename_ep(getname,ep,nil)
 end
@@ -1887,7 +1897,7 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
       c[class].args[name].usage = usage
       if epgp == "MainStanding" then
         c[class].args[name].get = "suggestedAwardMainStanding"
-        c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshPRTablets() end
+        c[class].args[name].set = function(v) GuildRoll:ShowGiveEPDialog(name) end
       elseif epgp == "AuxStanding" then
         c[class].args[name].get = false
         c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshPRTablets() end
@@ -2558,6 +2568,105 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
   end,
   EditBoxOnEscapePressed = function()
     this:GetParent():Hide()
+  end,
+  timeout = 0,
+  exclusive = 1,
+  whileDead = 1,
+  hideOnEscape = 1
+}
+
+StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
+  text = "",  -- Set dynamically in OnShow
+  button1 = TEXT(ACCEPT),
+  button2 = TEXT(CANCEL),
+  hasEditBox = 1,
+  maxLetters = 10,
+  OnShow = function()
+    local targetName = this.guildroll_target
+    if not targetName then
+      getglobal(this:GetName().."Text"):SetText("Error: No target specified")
+      return
+    end
+    
+    -- Determine the effective recipient (main if alt, otherwise selected)
+    local effectiveRecipient = targetName
+    local currentEP = 0
+    local headerString = ""
+    
+    -- Try to parse alt -> main
+    local mainName, mainClass, mainRank, mainOfficerNote
+    local parseSuccess, parseMain = pcall(function() return GuildRoll:parseAlt(targetName) end)
+    if parseSuccess and parseMain then
+      mainName = parseMain
+    end
+    
+    if mainName then
+      -- This is an alt with a main - show "Giving EP to MainName (main of AltName); current EP: X"
+      effectiveRecipient = mainName
+      local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(mainName) end)
+      if epSuccess and ep then
+        currentEP = ep
+      end
+      headerString = string.format(L["GIVING_EP_MAIN_OF_ALT"], mainName, targetName, currentEP)
+    else
+      -- This is a main or alt without main found - show "Giving EP to CharName; current EP: X"
+      local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(targetName) end)
+      if epSuccess and ep then
+        currentEP = ep
+      end
+      headerString = string.format(L["GIVING_EP_TO_CHAR"], targetName, currentEP)
+    end
+    
+    getglobal(this:GetName().."Text"):SetText(headerString)
+    getglobal(this:GetName().."EditBox"):SetText("")
+    getglobal(this:GetName().."EditBox"):SetFocus()
+  end,
+  OnAccept = function()
+    local targetName = this.guildroll_target
+    if not targetName then
+      return
+    end
+    
+    local editBox = getglobal(this:GetParent():GetName().."EditBox")
+    local epValue = tonumber(editBox:GetText())
+    if not epValue then
+      UIErrorsFrame:AddMessage(L["Invalid EP value entered."], 1.0, 0.0, 0.0, 1.0)
+      return
+    end
+    
+    -- Call givename_ep which handles validation, alt->main conversion, scaling, logging
+    pcall(function() GuildRoll:givename_ep(targetName, epValue) end)
+    GuildRoll:refreshPRTablets()
+  end,
+  EditBoxOnEnterPressed = function()
+    local parent = this:GetParent()
+    local targetName = parent.guildroll_target
+    if not targetName then
+      parent:Hide()
+      return
+    end
+    
+    local editBox = getglobal(parent:GetName().."EditBox")
+    local epValue = tonumber(editBox:GetText())
+    if not epValue then
+      UIErrorsFrame:AddMessage(L["Invalid EP value entered."], 1.0, 0.0, 0.0, 1.0)
+      parent:Hide()
+      return
+    end
+    
+    -- Call givename_ep which handles validation, alt->main conversion, scaling, logging
+    pcall(function() GuildRoll:givename_ep(targetName, epValue) end)
+    GuildRoll:refreshPRTablets()
+    parent:Hide()
+  end,
+  EditBoxOnEscapePressed = function()
+    this:GetParent():Hide()
+  end,
+  OnHide = function()
+    if ( ChatFrameEditBox:IsVisible() ) then
+      ChatFrameEditBox:SetFocus()
+    end
+    getglobal(this:GetName().."EditBox"):SetText("")
   end,
   timeout = 0,
   exclusive = 1,
