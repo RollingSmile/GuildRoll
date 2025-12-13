@@ -964,8 +964,11 @@ local function GetVisibleStaticPopupEditBox(dialog)
   for i = 1, num do
     local dlg = _G["StaticPopup" .. i]
     if dlg and dlg:IsShown() then
-      local eb = _G[dlg:GetName() .. "EditBox"]
-      if eb then return eb end
+      local name = dlg:GetName and dlg:GetName()
+      if name then
+        local eb = _G[name .. "EditBox"]
+        if eb then return eb end
+      end
     end
   end
   return nil
@@ -1006,11 +1009,11 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_SEARCH"] = {
       searchText = text
       pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
     end
-    local parent = editBox and editBox:GetParent()
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
     if parent and parent.Hide then parent:Hide() end
   end,
   EditBoxOnEscapePressed = function(editBox)
-    local parent = editBox and editBox:GetParent()
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
     if parent and parent.Hide then parent:Hide() end
   end,
   timeout = 0,
