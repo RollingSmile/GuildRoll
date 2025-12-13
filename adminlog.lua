@@ -994,7 +994,7 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_SEARCH"] = {
     end
   end,
   OnHide = function(self)
-    if ChatFrameEditBox and ChatFrameEditBox:IsVisible then
+    if ChatFrameEditBox and ChatFrameEditBox.IsVisible and ChatFrameEditBox:IsVisible() then
       ChatFrameEditBox:SetFocus()
     end
     local editBox = GetVisibleStaticPopupEditBox(self)
