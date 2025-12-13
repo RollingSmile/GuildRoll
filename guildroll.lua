@@ -2357,9 +2357,19 @@ function GuildRoll:IsAdmin()
     forcedList = { ["Lyrandel"] = true }
   end
   
+  -- Get player name, strip realm suffix, and normalize to lowercase for comparison
   local playerName = UnitName("player")
-  if playerName and forcedList[playerName] then
-    return true
+  if playerName then
+    playerName = string.lower(string.gsub(playerName, "%-.*$", ""))
+    -- Check against normalized forced list entries
+    for name, value in pairs(forcedList) do
+      if value and type(name) == "string" then
+        local normalizedName = string.lower(string.gsub(name, "%-.*$", ""))
+        if playerName == normalizedName then
+          return true
+        end
+      end
+    end
   end
   
   return false
