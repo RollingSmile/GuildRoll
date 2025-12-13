@@ -58,14 +58,21 @@ local function IsAlt()
         return false
     end
     
+    -- Strip realm suffix from player name for comparison
+    local playerNameClean = string.gsub(playerName, "%-[^%-]+$", "")
+    
     -- pcall-wrapped call to parseAlt
     local success, main = pcall(function()
         return GuildRoll:parseAlt(playerName)
     end)
     
     -- If parseAlt returns a main character name, this is an alt
-    if success and main and type(main) == "string" and main ~= playerName then
-        return true
+    if success and main and type(main) == "string" then
+        -- Strip realm suffix from main name for comparison
+        local mainClean = string.gsub(main, "%-[^%-]+$", "")
+        if mainClean ~= playerNameClean then
+            return true
+        end
     end
     
     return false
