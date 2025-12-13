@@ -964,7 +964,8 @@ local function GetVisibleStaticPopupEditBox(dialog)
   for i = 1, num do
     local dlg = _G["StaticPopup" .. i]
     if dlg and dlg:IsShown() then
-      local name = dlg:GetName and dlg:GetName()
+      -- Use dot to check the method exists, then call it with colon
+      local name = (dlg and dlg.GetName) and dlg:GetName()
       if name then
         local eb = _G[name .. "EditBox"]
         if eb then return eb end
