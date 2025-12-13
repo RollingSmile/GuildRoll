@@ -1766,9 +1766,7 @@ function GuildRoll:OnClick(button)
       if GuildRoll_AdminLog and GuildRoll_AdminLog.Toggle then
         pcall(function()
           -- Enable module if not already active (triggers OnEnable which registers with Tablet)
-          if GuildRoll:HasModule("GuildRoll_AdminLog") then
-            GuildRoll:ToggleModuleActive("GuildRoll_AdminLog", true)
-          end
+          GuildRoll:ToggleModuleActive("GuildRoll_AdminLog", true)
           GuildRoll_AdminLog:Toggle()
         end)
       end
