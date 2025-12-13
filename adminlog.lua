@@ -9,13 +9,13 @@ TESTING INSTRUCTIONS:
    Then /reload
 
 2. Test with two admin clients online:
-   - Client A: /gadminlog add "Test entry from A"
-   - Client B: Should automatically receive the entry (check with /gadminlog or UI)
+   - Client A: Add entry via UI (Ctrl+Shift+Click)
+   - Client B: Should automatically receive the entry (check with UI)
    - Verify both clients show the same entry
 
 3. Test snapshot sync:
    - Client A adds several entries while Client B is offline
-   - Client B comes back online and runs: /gadminlog sync
+   - Client B comes back online (automatic sync should occur)
    - Verify Client B receives only the entries added while offline
 
 4. Verify persistence:
@@ -26,6 +26,7 @@ NOTES:
 - Only admins (with CanEditOfficerNote or IsGuildLeader) can add entries and request snapshots
 - Throttling is conservative; for very large logs, consider limiting snapshots to last N entries
 - This module is isolated and does not modify existing logs.lua
+- Access the AdminLog UI via Ctrl+Shift+Click on the minimap button
 --]]
 
 --[[
