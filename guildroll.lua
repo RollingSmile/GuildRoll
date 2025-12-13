@@ -2325,53 +2325,27 @@ function GuildRoll:camelCase(word)
     end)
 end
 
--- IsAdmin: Unified admin permission check with fallback
+-- IsAdmin: Unified admin permission check with fallback (NO local forced override)
 -- Returns true if player can edit officer notes or is guild leader
 -- Uses pcall for robustness in case APIs are missing or modified
---
--- Local-only forced Guild Master override:
--- To grant admin permissions to specific characters locally (no server-side changes),
--- set the global table GuildRoll_ForcedGuildMasters before this addon loads, e.g.:
---   GuildRoll_ForcedGuildMasters = { ["CharacterName"] = true, ["AnotherName"] = true }
--- Or define it in your SavedVariables. Defaults to { ["Lyrandel"] = true }.
 function GuildRoll:IsAdmin()
-  -- Try CanEditOfficerNote first
+  -- Try CanEditOfficerNote first (wrapped in pcall)
   if CanEditOfficerNote then
     local ok, result = pcall(function() return CanEditOfficerNote() end)
     if ok and result then
       return true
     end
   end
-  
-  -- Fallback to IsGuildLeader
+
+  -- Fallback to IsGuildLeader (wrapped in pcall)
   if IsGuildLeader then
     local ok, result = pcall(function() return IsGuildLeader() end)
     if ok and result then
       return true
     end
   end
-  
-  -- Check forced Guild Master list (local override)
-  local forcedList = GuildRoll_ForcedGuildMasters
-  if not forcedList then
-    forcedList = { ["Lyrandel"] = true }
-  end
-  
-  -- Get player name, strip realm suffix, and normalize to lowercase for comparison
-  local playerName = UnitName("player")
-  if playerName then
-    playerName = string.lower(string.gsub(playerName, "%-.*$", ""))
-    -- Check against normalized forced list entries
-    for name, value in pairs(forcedList) do
-      if value and type(name) == "string" then
-        local normalizedName = string.lower(string.gsub(name, "%-.*$", ""))
-        if playerName == normalizedName then
-          return true
-        end
-      end
-    end
-  end
-  
+
+  -- No local forced override present anymore — only real permissions count
   return false
 end
 
