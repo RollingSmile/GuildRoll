@@ -521,8 +521,6 @@ function GuildRoll:AdminLogAdd(text)
   if T and T:IsRegistered("GuildRoll_AdminLog") then
     pcall(function() T:Refresh("GuildRoll_AdminLog") end)
   end
-  
-  self:defaultPrint(string.format("Admin log entry added: %s", text))
 end
 
 -- Public API: Add a raid admin log entry with player details
