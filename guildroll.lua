@@ -2328,6 +2328,12 @@ end
 -- IsAdmin: Unified admin permission check with fallback
 -- Returns true if player can edit officer notes or is guild leader
 -- Uses pcall for robustness in case APIs are missing or modified
+--
+-- Local-only forced Guild Master override:
+-- To grant admin permissions to specific characters locally (no server-side changes),
+-- set the global table GuildRoll_ForcedGuildMasters before this addon loads, e.g.:
+--   GuildRoll_ForcedGuildMasters = { ["CharacterName"] = true, ["AnotherName"] = true }
+-- Or define it in your SavedVariables. Defaults to { ["Lyrandel"] = true }.
 function GuildRoll:IsAdmin()
   -- Try CanEditOfficerNote first
   if CanEditOfficerNote then
@@ -2343,6 +2349,17 @@ function GuildRoll:IsAdmin()
     if ok and result then
       return true
     end
+  end
+  
+  -- Check forced Guild Master list (local override)
+  local forcedList = GuildRoll_ForcedGuildMasters
+  if not forcedList then
+    forcedList = { ["Lyrandel"] = true }
+  end
+  
+  local playerName = UnitName("player")
+  if playerName and forcedList[playerName] then
+    return true
   end
   
   return false
