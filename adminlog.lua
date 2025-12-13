@@ -71,6 +71,8 @@ GuildRoll_AdminLog = GuildRoll:NewModule("GuildRoll_AdminLog", "AceDB-2.0", "Ace
 local adminLogRuntime = {} -- runtime cache indexed by entry id
 local snapshotInProgress = false
 local snapshotBuffer = {}
+local snapshotMaxTS = 0 -- track max timestamp during snapshot reception
+local latestRemoteTS = 0 -- track latest remote timestamp seen
 local filterAuthor = nil -- for UI filtering
 local searchText = nil -- for UI search
 local expandedRaidEntries = {} -- track which raid entries are expanded (key = entry.id)
@@ -81,6 +83,19 @@ local CHUNK_SIZE = 10 -- entries per SNAP message
 local SYNC_THROTTLE_SEC = 5 -- minimum seconds between sync requests
 
 local lastSyncRequest = 0
+
+-- Helper: Get local latest timestamp
+local function getLocalLatestTS()
+  local maxTS = 0
+  for i = 1, table.getn(GuildRoll_adminLogOrder) do
+    local id = GuildRoll_adminLogOrder[i]
+    local entry = adminLogRuntime[id]
+    if entry and entry.ts and entry.ts > maxTS then
+      maxTS = entry.ts
+    end
+  end
+  return maxTS
+end
 
 -- Helper: Generate unique ID for log entry
 local function generateEntryId()
@@ -309,6 +324,9 @@ local function requestAdminLogSnapshot(since_ts)
   end
   lastSyncRequest = now
   
+  -- Set snapshot in progress flag
+  snapshotInProgress = true
+  
   since_ts = since_ts or 0
   local message = string.format("ADMINLOG;REQ;%d;%d", PROTOCOL_VERSION, since_ts)
   
@@ -317,6 +335,11 @@ local function requestAdminLogSnapshot(since_ts)
   end)
   
   GuildRoll:defaultPrint("Admin log sync requested...")
+  
+  -- Refresh UI to update menu state
+  if T and T:IsRegistered("GuildRoll_AdminLog") then
+    pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+  end
 end
 
 -- Send snapshot response in chunks
@@ -418,6 +441,10 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     local entry = deserializeEntry(entryData)
     if entry then
       applyAdminLogEntry(entry)
+      -- Update latestRemoteTS if this entry is newer
+      if entry.ts and entry.ts > latestRemoteTS then
+        latestRemoteTS = entry.ts
+      end
       -- Refresh UI if open
       if T and T:IsRegistered("GuildRoll_AdminLog") then
         pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -462,11 +489,15 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
       table.insert(entries, currentEntry)
     end
     
-    -- Apply entries
+    -- Apply entries and track max timestamp
     for j = 1, table.getn(entries) do
       local entry = deserializeEntry(entries[j])
       if entry then
         table.insert(snapshotBuffer, entry)
+        -- Track max timestamp during snapshot
+        if entry.ts and entry.ts > snapshotMaxTS then
+          snapshotMaxTS = entry.ts
+        end
       end
     end
     
@@ -482,7 +513,14 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     
     GuildRoll:defaultPrint(string.format("Admin log sync complete: %d new entries received.", table.getn(snapshotBuffer)))
     
-    -- Clear buffer
+    -- Update latestRemoteTS with snapshotMaxTS
+    if snapshotMaxTS > latestRemoteTS then
+      latestRemoteTS = snapshotMaxTS
+    end
+    
+    -- Reset snapshot state
+    snapshotInProgress = false
+    snapshotMaxTS = 0
     snapshotBuffer = {}
     
     -- Refresh UI
@@ -616,6 +654,19 @@ function GuildRoll_AdminLog:OnEnable()
               end
             end
             requestAdminLogSnapshot(since_ts)
+          end,
+          "disabled", function()
+            -- Disable if snapshot in progress
+            if snapshotInProgress then
+              return true
+            end
+            -- If we haven't seen any remote timestamps yet, allow sync
+            if latestRemoteTS == 0 then
+              return false
+            end
+            -- Disable if already up-to-date (remote <= local)
+            local localTS = getLocalLatestTS()
+            return latestRemoteTS <= localTS
           end
         )
         
