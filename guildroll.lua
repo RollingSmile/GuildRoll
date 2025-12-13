@@ -225,30 +225,6 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       end,
       order = 10,
     },
-    mylog = {
-      type = "execute",
-      name = "Show Personal Log",
-      desc = "Show your personal EP/GP log",
-      func = function() 
-        if GuildRoll and GuildRoll.ShowPersonalLog then
-          pcall(function() GuildRoll:ShowPersonalLog() end)
-        elseif GuildRoll and GuildRoll.SavePersonalLog then
-          pcall(function() GuildRoll:SavePersonalLog() end)
-        end
-      end,
-      order = 11,
-    },
-    savelog = {
-      type = "execute",
-      name = "Save Personal Log",
-      desc = "Save your personal EP/GP log for export",
-      func = function() 
-        if GuildRoll and GuildRoll.SavePersonalLog then
-          pcall(function() GuildRoll:SavePersonalLog() end)
-        end
-      end,
-      order = 12,
-    },
   }},
 {type = "group", handler = GuildRoll, args = {
     show = {
@@ -314,30 +290,6 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       GuildRoll:RollCommand(true, bonus)
       end,
       order = 8,
-    },
-    mylog = {
-      type = "execute",
-      name = "Show Personal Log",
-      desc = "Show your personal EP/GP log",
-      func = function() 
-        if GuildRoll and GuildRoll.ShowPersonalLog then
-          pcall(function() GuildRoll:ShowPersonalLog() end)
-        elseif GuildRoll and GuildRoll.SavePersonalLog then
-          pcall(function() GuildRoll:SavePersonalLog() end)
-        end
-      end,
-      order = 9,
-    },
-    savelog = {
-      type = "execute",
-      name = "Save Personal Log",
-      desc = "Save your personal EP/GP log for export",
-      func = function() 
-        if GuildRoll and GuildRoll.SavePersonalLog then
-          pcall(function() GuildRoll:SavePersonalLog() end)
-        end
-      end,
-      order = 10,
     },
   }}
 GuildRoll.cmdtable = function() 
@@ -875,7 +827,7 @@ function GuildRoll:delayedInit()
  
   -- init options and comms
   self._options = self:buildMenu()
-  self:RegisterChatCommand({"/GuildRoll","/guildroll","/groll"},self.cmdtable())
+  self:RegisterChatCommand({"/groll"},self.cmdtable())
   function GuildRoll:calculateBonus(input)
     local number = tonumber(input)
     if not number or number < 0 or number > 15 then
@@ -887,15 +839,6 @@ function GuildRoll:delayedInit()
     -- number is between 2 and 15
     return (number - 1) * GuildRoll.VARS.CSRWeekBonus
   end
-  
-  self:RegisterChatCommand({"/csr"}, function(input)
-    local bonus = GuildRoll:calculateBonus(input)
-    if bonus == nil then
-      self:defaultPrint(L["Invalid CSR input. Please enter a number between 0 and 15."])
-      return
-    end
-    self:RollCommand(true, bonus)
-  end)
   --self:RegisterEvent("CHAT_MSG_ADDON","addonComms")  
   -- broadcast our version
   local addonMsg = string.format("GuildRollVERSION;%s;%d",GuildRoll._versionString,major_ver or 0)
