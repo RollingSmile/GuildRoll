@@ -2589,12 +2589,11 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
     end
     
     -- Determine the effective recipient (main if alt, otherwise selected)
-    local effectiveRecipient = targetName
     local currentEP = 0
     local headerString = ""
     
     -- Try to parse alt -> main
-    local mainName, mainClass, mainRank, mainOfficerNote
+    local mainName
     local parseSuccess, parseMain = pcall(function() return GuildRoll:parseAlt(targetName) end)
     if parseSuccess and parseMain then
       mainName = parseMain
@@ -2602,7 +2601,6 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
     
     if mainName then
       -- This is an alt with a main - show "Giving EP to MainName (main of AltName); current EP: X"
-      effectiveRecipient = mainName
       local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(mainName) end)
       if epSuccess and ep then
         currentEP = ep
