@@ -1491,8 +1491,14 @@ function GuildRoll:ShowGiveEPDialog(targetName)
   if not targetName then
     return
   end
-  local dialog = StaticPopup_Show("GUILDROLL_GIVE_EP")
+  -- Pass targetName as data parameter to avoid race condition in OnShow
+  local dialog = StaticPopup_Show("GUILDROLL_GIVE_EP", nil, nil, targetName)
   if dialog then
+    -- Defensive: ensure data is set for modified/older client environments where StaticPopup_Show may not handle data parameter
+    if not dialog.data then
+      dialog.data = targetName
+    end
+    -- Keep backward compatibility with existing code
     dialog.guildroll_target = targetName
   end
 end
@@ -2584,7 +2590,8 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
   hasEditBox = 1,
   maxLetters = 10,
   OnShow = function()
-    local targetName = this.guildroll_target
+    -- Read from this.data (set by StaticPopup_Show) with fallback to legacy field
+    local targetName = this.data or this.guildroll_target
     if not targetName then
       getglobal(this:GetName().."Text"):SetText("Error: No target specified")
       return
@@ -2623,7 +2630,8 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
   end,
   OnAccept = function()
     local parent = this:GetParent()
-    local targetName = parent.guildroll_target
+    -- Read from parent.data (set by StaticPopup_Show) with fallback to legacy field
+    local targetName = parent.data or parent.guildroll_target
     if not targetName then
       return
     end
@@ -2641,7 +2649,8 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
   end,
   EditBoxOnEnterPressed = function()
     local parent = this:GetParent()
-    local targetName = parent.guildroll_target
+    -- Read from parent.data (set by StaticPopup_Show) with fallback to legacy field
+    local targetName = parent.data or parent.guildroll_target
     if not targetName then
       parent:Hide()
       return
