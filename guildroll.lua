@@ -1019,7 +1019,7 @@ function GuildRoll:addonMessage(message,channel,sender)
 end
 
 function GuildRoll:addonComms(prefix,message,channel,sender)
-  if not prefix == self.VARS.prefix then return end -- we don't care for messages from other addons
+  if prefix ~= self.VARS.prefix then return end -- we don't care for messages from other addons
   if sender == self._playerName then return end -- we don't care for messages from ourselves
   local name_g,class,rank = self:verifyGuildMember(sender,true)
   if not (name_g) then return end -- only accept messages from guild members
@@ -1917,7 +1917,7 @@ function GuildRoll:buildRosterTable()
       local main, main_class, main_rank = self:parseAlt(member_name,officernote)
       local is_raid_level = tonumber(level) and level >= GuildRoll.VARS.minlevel
       if (main) then
-        if ((self._playerName) and (name == self._playerName)) then
+        if ((self._playerName) and (member_name == self._playerName)) then
           if (not GuildRoll_main) or (GuildRoll_main and GuildRoll_main ~= main) then
             GuildRoll_main = main
             self:defaultPrint(string.format(L["Your main has been set to %s"],GuildRoll_main))
