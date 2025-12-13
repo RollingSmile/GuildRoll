@@ -2332,7 +2332,6 @@ end
 -- To grant admin permissions to specific characters locally (no server-side changes),
 -- set the global table GuildRoll_ForcedGuildMasters before this addon loads, e.g.:
 --   GuildRoll_ForcedGuildMasters = { ["CharacterName"] = true, ["AnotherName"] = true }
--- Or array-style: GuildRoll_ForcedGuildMasters = { "CharacterName", "AnotherName" }
 -- Or define it in your SavedVariables. Defaults to { ["Lyrandel"] = true }.
 function GuildRoll:IsAdmin()
   -- Try CanEditOfficerNote first
@@ -2357,64 +2356,19 @@ function GuildRoll:IsAdmin()
     forcedList = { ["Lyrandel"] = true }
   end
   
-  -- Get player name and strip realm suffix (e.g., "Name-Realm" -> "Name")
+  -- Get player name, strip realm suffix, and normalize to lowercase for comparison
   local playerName = UnitName("player")
-  if not playerName then
-    return false
-  end
-  playerName = string.gsub(playerName, "%-.*$", "")
-  
-  -- Helper function to normalize a name: strip realm suffix and convert to lowercase
-  local function normalizeName(name)
-    if type(name) ~= "string" then
-      return nil
-    end
-    -- Strip realm suffix and convert to lowercase
-    name = string.gsub(name, "%-.*$", "")
-    return string.lower(name)
-  end
-  
-  -- Normalize forcedList to a map for case-insensitive comparison
-  -- Support both map-style { ["Name"] = true } and array-style { "Name", "Other" }
-  local normalizedMap = {}
-  
-  -- Check if it's array-style (has numeric key at index 1)
-  -- For simplicity, we treat any table with a value at index 1 as array-style
-  -- and iterate numerically. Mixed tables are not expected in this use case.
-  local isArray = false
-  if type(forcedList) == "table" then
-    if forcedList[1] ~= nil then
-      isArray = true
-    end
-  end
-  
-  if isArray then
-    -- Array-style: convert to normalized map
-    -- Iterate only until first nil (standard Lua array convention for WoW 1.12)
-    local i = 1
-    while forcedList[i] do
-      local normalized = normalizeName(forcedList[i])
-      if normalized then
-        normalizedMap[normalized] = true
-      end
-      i = i + 1
-    end
-  else
-    -- Map-style: normalize keys
+  if playerName then
+    playerName = string.lower(string.gsub(playerName, "%-.*$", ""))
+    -- Check against normalized forced list entries
     for name, value in pairs(forcedList) do
-      if value then
-        local normalized = normalizeName(name)
-        if normalized then
-          normalizedMap[normalized] = true
+      if value and type(name) == "string" then
+        local normalizedName = string.lower(string.gsub(name, "%-.*$", ""))
+        if playerName == normalizedName then
+          return true
         end
       end
     end
-  end
-  
-  -- Check if player name (lowercase) is in the normalized map
-  local normalizedPlayerName = normalizeName(playerName)
-  if normalizedPlayerName and normalizedMap[normalizedPlayerName] then
-    return true
   end
   
   return false

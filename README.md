@@ -24,14 +24,9 @@ Add the following to your `SavedVariables.lua` file (located in `WTF/Account/You
 GuildRoll_ForcedGuildMasters = { ["YourCharacterName"] = true }
 ```
 
-**Map-style syntax** (recommended):
+**Multiple characters:**
 ```lua
 GuildRoll_ForcedGuildMasters = { ["CharName1"] = true, ["CharName2"] = true }
-```
-
-**Array-style syntax** (also supported):
-```lua
-GuildRoll_ForcedGuildMasters = { "CharName1", "CharName2" }
 ```
 
 After editing the file, reload the game or use `/reload` in-game.
