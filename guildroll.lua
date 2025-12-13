@@ -1694,7 +1694,8 @@ function GuildRoll:ResetFrames()
     ["GuildRoll_standings"] = {x = 400, y = 350},
     ["GuildRollAlts"] = {x = 650, y = 300},
     ["GuildRoll_logs"] = {x = 800, y = 300},
-    ["GuildRoll_personal_logs"] = {x = 500, y = 200}
+    ["GuildRoll_personal_logs"] = {x = 500, y = 200},
+    ["GuildRoll_AdminLog"] = {x = 900, y = 300}
   }
   
   local resetCount = 0
