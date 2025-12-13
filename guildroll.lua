@@ -1894,22 +1894,24 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
     end
     if (name) and (c[class].args[name] == nil) then
       c[class].args[name] = { }
-      c[class].args[name].type = "text"
-      c[class].args[name].name = name
-      c[class].args[name].desc = string.format(desc,name)
-      c[class].args[name].usage = usage
       if epgp == "MainStanding" then
-        c[class].args[name].get = "suggestedAwardMainStanding"
-        c[class].args[name].set = function(v) GuildRoll:ShowGiveEPDialog(name) end
+        c[class].args[name].type = "execute"
+        c[class].args[name].name = name
+        c[class].args[name].desc = string.format(desc,name)
+        c[class].args[name].func = function() GuildRoll:ShowGiveEPDialog(name) end
       elseif epgp == "AuxStanding" then
+        c[class].args[name].type = "text"
+        c[class].args[name].name = name
+        c[class].args[name].desc = string.format(desc,name)
+        c[class].args[name].usage = usage
         c[class].args[name].get = false
         c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshPRTablets() end
-      end
-      c[class].args[name].validate = function(v) 
-        local num = tonumber(v)
-        return (type(v) == "number" or num) 
-          and num >= GuildRoll.VARS.minAward 
-          and num <= GuildRoll.VARS.maxAward 
+        c[class].args[name].validate = function(v) 
+          local num = tonumber(v)
+          return (type(v) == "number" or num) 
+            and num >= GuildRoll.VARS.minAward 
+            and num <= GuildRoll.VARS.maxAward 
+        end
       end
     end
   end
