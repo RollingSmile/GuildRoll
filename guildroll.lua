@@ -1543,13 +1543,13 @@ function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single charac
   -- Always announce, log, and send addon message for both positive and negative EP
   local msg
   local logMsg
-  local adminName = UnitName("player")
+  -- AdminLog stores author separately (UnitName("player")), so don't include admin name in action text
   if ep < 0 then
     msg = string.format(L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
-    logMsg = string.format("%s: %d EP Penalty to %s%s (Prev: %d, New: %d)", adminName, ep, getname, postfix, old, newep)
+    logMsg = string.format("%d EP Penalty to %s%s (Prev: %d, New: %d)", ep, getname, postfix, old, newep)
   else
     msg = string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
-    logMsg = string.format("%s: Giving %d EP to %s%s (Prev: %d, New: %d)", adminName, ep, getname, postfix, old, newep)
+    logMsg = string.format("Giving %d EP to %s%s (Prev: %d, New: %d)", ep, getname, postfix, old, newep)
   end
   self:adminSay(msg)
   self:addToLog(logMsg)
