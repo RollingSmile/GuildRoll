@@ -406,15 +406,12 @@ function GuildRoll:buildMenu()
       isPercent = true
     }
     options.args["set_main"] = {
-      type = "text",
+      type = "execute",
       name = L["Set Main"],
       desc = L["Set your Main Character."],
       order = 70,
-      usage = "<MainChar>",
-      get = function() return GuildRoll_main end,
-      set = function(v) 
-        -- ProcessSetMainInput handles verification internally
-        GuildRoll:ProcessSetMainInput(v)
+      func = function()
+        StaticPopup_Show("GUILDROLL_SET_MAIN_PROMPT")
       end,
     }    
     options.args["migrate_main_tags"] = {
