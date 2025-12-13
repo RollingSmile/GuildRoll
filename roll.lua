@@ -1,3 +1,6 @@
+-- Localization support
+local L = AceLibrary("AceLocale-2.2"):new("guildroll")
+
 -- Ensure GuildRoll_RollPos is initialized with default values
 GuildRoll_RollPos = GuildRoll_RollPos or { x = 400, y = 300 }
 GuildRoll_showRollWindow = GuildRoll_showRollWindow == nil and true or GuildRoll_showRollWindow
@@ -40,6 +43,58 @@ local function PlayerHasCSRPermission()
         end
     end
 
+    return false
+end
+
+-- Helper: Check if current character is an Alt using GuildRoll:parseAlt
+-- Returns true if the character has an alt tag (has a main), false otherwise
+local function IsAlt()
+    if not GuildRoll or not GuildRoll.parseAlt then
+        return false
+    end
+    
+    local playerName = UnitName("player")
+    if not playerName then
+        return false
+    end
+    
+    -- pcall-wrapped call to parseAlt
+    local success, main = pcall(function()
+        return GuildRoll:parseAlt(playerName)
+    end)
+    
+    -- If parseAlt returns a main character name, this is an alt
+    if success and main and type(main) == "string" and main ~= playerName then
+        return true
+    end
+    
+    return false
+end
+
+-- Helper: Check if current zone is an EP zone (awards EP)
+-- Uses GuildRoll:GetReward() and IsInInstance() to determine EP eligibility
+local function IsEPZone()
+    -- First check if we're in an instance
+    local success, inInstance, instanceType = pcall(IsInInstance)
+    if not success or not inInstance then
+        return false
+    end
+    
+    -- Now check if GuildRoll:GetReward() is available
+    if not GuildRoll or not GuildRoll.GetReward then
+        return false
+    end
+    
+    -- pcall-wrapped call to GetReward
+    local rewardSuccess, isMainStanding, reward = pcall(function()
+        return GuildRoll:GetReward()
+    end)
+    
+    -- If GetReward returns a reward value, this is an EP zone
+    if rewardSuccess and reward and tonumber(reward) then
+        return true
+    end
+    
     return false
 end
 
@@ -266,22 +321,39 @@ end
 
 -- Function to build dynamic roll options list
 local function BuildRollOptions()
-    local opts = {
-        { "EP(MS)", "roll ep" },
-        { "SR", "roll sr" },
-    }
+    local opts = {}
     
-    -- Add CSR only if player has permission
-    if PlayerHasCSRPermission() then
-        table.insert(opts, { "CSR", "roll csr" })
+    -- Check if player is an Alt
+    local isAlt = IsAlt()
+    
+    if isAlt then
+        -- Alts see only: 99, 98, Standings
+        table.insert(opts, { "99", "roll 99" })
+        table.insert(opts, { "98", "roll 98" })
+        table.insert(opts, { "Standings", "show ep" })
+    else
+        -- Player is a Main
+        local isEPZone = IsEPZone()
+        
+        if isEPZone then
+            -- EP zone: show CSR (if permitted), SR, EP(MS), 99, 98, Standings
+            if PlayerHasCSRPermission() then
+                table.insert(opts, { "CSR", "roll csr" })
+            end
+            table.insert(opts, { "SR", "roll sr" })
+            table.insert(opts, { "EP(MS)", "roll ep" })
+            table.insert(opts, { "99", "roll 99" })
+            table.insert(opts, { "98", "roll 98" })
+            table.insert(opts, { "Standings", "show ep" })
+        else
+            -- Non-EP zone: show 101, 100, 99, 98, Standings
+            table.insert(opts, { "101", "roll 101" })
+            table.insert(opts, { "100", "roll 100" })
+            table.insert(opts, { "99", "roll 99" })
+            table.insert(opts, { "98", "roll 98" })
+            table.insert(opts, { "Standings", "show ep" })
+        end
     end
-    
-    -- Add numeric rolls and standings
-    table.insert(opts, { "101", "roll 101" })
-    table.insert(opts, { "100", "roll 100" })
-    table.insert(opts, { "99", "roll 99" })
-    table.insert(opts, { "98", "roll 98" })
-    table.insert(opts, { "Standings", "show ep" })
     
     return opts
 end
