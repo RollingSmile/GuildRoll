@@ -950,6 +950,27 @@ function GuildRoll_AdminLog:Toggle()
   end
 end
 
+-- Helper function to safely get EditBox from StaticPopup dialog
+local function GetVisibleStaticPopupEditBox(dialog)
+  -- Try dialog/self first
+  if dialog and dialog.GetName then
+    local name = dialog:GetName()
+    if name and _G[name .. "EditBox"] then
+      return _G[name .. "EditBox"]
+    end
+  end
+  -- Fallback: scan StaticPopup1..N
+  local num = STATICPOPUP_NUMDIALOGS or 4
+  for i = 1, num do
+    local dlg = _G["StaticPopup" .. i]
+    if dlg and dlg:IsShown() then
+      local eb = _G[dlg:GetName() .. "EditBox"]
+      if eb then return eb end
+    end
+  end
+  return nil
+end
+
 -- Static popup for search
 StaticPopupDialogs["GUILDROLL_ADMINLOG_SEARCH"] = {
   text = "Search Admin Log:",
@@ -957,35 +978,40 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_SEARCH"] = {
   button2 = TEXT(CANCEL),
   hasEditBox = 1,
   maxLetters = 50,
-  OnAccept = function()
-    local editBox = getglobal(this:GetParent():GetName().."EditBox")
-    local text = editBox:GetText()
+  OnAccept = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
     if text and text ~= "" then
       searchText = text
-      pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+      pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
     end
   end,
-  OnShow = function()
-    getglobal(this:GetName().."EditBox"):SetText(searchText or "")
-    getglobal(this:GetName().."EditBox"):SetFocus()
+  OnShow = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then
+      editBox:SetText(searchText or "")
+      if editBox.SetFocus then editBox:SetFocus() end
+    end
   end,
-  OnHide = function()
-    if ChatFrameEditBox:IsVisible() then
+  OnHide = function(self)
+    if ChatFrameEditBox and ChatFrameEditBox:IsVisible then
       ChatFrameEditBox:SetFocus()
     end
-    getglobal(this:GetParent():GetName().."EditBox"):SetText("")
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then editBox:SetText("") end
   end,
-  EditBoxOnEnterPressed = function()
-    local editBox = getglobal(this:GetParent():GetName().."EditBox")
-    local text = editBox:GetText()
+  EditBoxOnEnterPressed = function(editBox)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
     if text and text ~= "" then
       searchText = text
-      pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+      pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
     end
-    this:GetParent():Hide()
+    local parent = editBox and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
   end,
-  EditBoxOnEscapePressed = function()
-    this:GetParent():Hide()
+  EditBoxOnEscapePressed = function(editBox)
+    local parent = editBox and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
   end,
   timeout = 0,
   exclusive = 1,
