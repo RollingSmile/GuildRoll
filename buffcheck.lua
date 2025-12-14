@@ -30,9 +30,13 @@ GuildRoll_BuffCheck = GuildRoll:NewModule("GuildRoll_BuffCheck", "AceDB-2.0")
 -- Spell ID tables for buffs by provider class (Turtle WoW 1.12)
 -- WARRIOR intentionally removed - Battle Shout is not checked
 local BUFF_IDS = {
+  -- Power Word: Fortitude (10933, 27681), Divine Spirit (14782, 27683), Shadow Protection (27685, 27687)
   PRIEST = {10933, 27681, 14782, 27683, 27685, 27687},
+  -- Arcane Intellect (1459), Arcane Brilliance (23028)
   MAGE   = {1459, 23028},
+  -- Mark of the Wild (8907), Gift of the Wild (21850)
   DRUID  = {8907, 21850},
+  -- Blessings: Might (10442, 25780), Wisdom (10308, 25895), Kings (25782, 25899), Light (19978, 25916), Salvation (1038, 25898)
   PALADIN= {10442, 25780, 10308, 25895, 25782, 25899, 19978, 25916, 1038, 25898},
 }
 
@@ -65,6 +69,8 @@ local BUFF_REQUIREMENTS = {
 }
 
 -- Spell ID tables for consumables by class (Turtle WoW 1.12)
+-- Mongoose=17528, Giants=17551, Firewater=18125, Juju Power=17539, Juju Might=17540, Dumplings=24045, Sunfruit=10706, Stoneshield=17565
+-- Greater Agility=9188, Greater Firepower=17562, Shadow Power=17560, Arcane Elixir=17556, Greater Arcane=17557, Frost Power=17563, Cerebral=9030, Runn Tum=18141
 local CONSUMABLE_IDS = {
   WARRIOR = {17528, 17551, 18125, 17539, 17540, 24045, 10706, 17565},
   ROGUE   = {17528, 9188, 18125, 17539, 17540, 10706, 24045},
@@ -168,6 +174,7 @@ local CONSUMABLES = {
 }
 
 -- Spell ID tables for flasks (Turtle WoW 1.12)
+-- Flask of Distilled Wisdom (13506), Flask of Supreme Power (13508), Flask of the Titans (13507)
 local FLASK_IDS = {13506, 13508, 13507}
 
 -- Legacy name-based flasks (kept for reference only)
@@ -182,6 +189,7 @@ local FLASKS = {
 local localizedBuffs = {}      -- [className] = {[localizedName] = true}
 local localizedConsumables = {} -- [className] = {[localizedName] = true}
 local localizedFlasks = {}      -- {[localizedName] = true}
+local localizedNamesResolved = false -- Cache flag to avoid re-resolving on every check
 
 -- Helper: Compatibility wrapper for GetSpellInfo (1.12 uses GetSpellName)
 local function GetSpellNameByID(spellID)
@@ -206,6 +214,11 @@ end
 
 -- Helper: Populate localized name maps from spell IDs
 local function resolveIDLists()
+  -- Skip if already resolved (cache optimization)
+  if localizedNamesResolved then
+    return
+  end
+  
   -- Clear previous maps
   localizedBuffs = {}
   localizedConsumables = {}
@@ -244,6 +257,9 @@ local function resolveIDLists()
       localizedFlasks[spellName] = true
     end
   end
+  
+  -- Mark as resolved
+  localizedNamesResolved = true
 end
 
 -- StaticPopup dialogs (defined once at module initialization)
@@ -422,12 +438,17 @@ local function CountClassInRaid(className)
   return count
 end
 
--- Main check functions
-function GuildRoll_BuffCheck:CheckBuffs()
-  -- Clear previous state
+-- Helper: Clear report state
+local function ClearReportState(self)
   self._currentReport = nil
   self._reportTitle = nil
   self._reportAllOk = nil
+end
+
+-- Main check functions
+function GuildRoll_BuffCheck:CheckBuffs()
+  -- Clear previous state
+  ClearReportState(self)
   
   local numRaid = GetNumRaidMembers()
   if numRaid == 0 then
@@ -499,9 +520,7 @@ end
 
 function GuildRoll_BuffCheck:CheckConsumes()
   -- Clear previous state
-  self._currentReport = nil
-  self._reportTitle = nil
-  self._reportAllOk = nil
+  ClearReportState(self)
   
   local numRaid = GetNumRaidMembers()
   if numRaid == 0 then
@@ -576,9 +595,7 @@ end
 
 function GuildRoll_BuffCheck:CheckFlasks()
   -- Clear previous state
-  self._currentReport = nil
-  self._reportTitle = nil
-  self._reportAllOk = nil
+  ClearReportState(self)
   
   local numRaid = GetNumRaidMembers()
   if numRaid == 0 then
@@ -731,7 +748,8 @@ function GuildRoll_BuffCheck:AddSpellIDs(kind, idlist)
     return
   end
   
-  -- Re-resolve localized names
+  -- Invalidate cache and re-resolve localized names
+  localizedNamesResolved = false
   resolveIDLists()
   GuildRoll:defaultPrint("Spell ID lists updated and localized names refreshed.")
 end
