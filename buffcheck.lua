@@ -377,7 +377,8 @@ function GuildRoll_BuffCheck:CheckConsumes()
     local name, _, _, _, class = GetRaidRosterInfo(i)
     local unit = "raid" .. i
     
-    local consumableList = CONSUMABLES[class]
+    local normalizedClass = NormalizeClassToken(class)
+    local consumableList = CONSUMABLES[normalizedClass]
     if consumableList then
       local count = 0
       local found = {}
