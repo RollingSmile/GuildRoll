@@ -391,29 +391,162 @@ function GuildRoll:buildMenu()
       end
     }
     
-    -- Options Group
+    -- EP Actions Group (admin-only)
+    options.args["ep_actions"] = {
+      type = "group",
+      name = L["EP Actions"],
+      desc = "EP management actions (admin only)",
+      order = 2,
+      hidden = function() return not admin() end,
+      args = {}
+    }
+    
+    -- 1. Raid Only (toggle) - first in EP Actions
+    options.args["ep_actions"].args["raid_only"] = {
+      type = "toggle",
+      name = L["Raid Only"],
+      desc = L["Only show members in raid."],
+      order = 1,
+      get = function() return not not GuildRoll_memberlist_raidonly end,
+      set = function(v) 
+        GuildRoll_memberlist_raidonly = not GuildRoll_memberlist_raidonly
+        -- Trigger local UI refresh
+        GuildRoll:SetRefresh(true)
+      end,
+    }
+    
+    -- 2. Set Min EP (text) - second in EP Actions, shows current value in name
+    options.args["ep_actions"].args["set_min_ep"] = {
+      type = "text",
+      name = function() return string.format(L["Set Min EP (Current: %s)"], GuildRoll_minPE) end,
+      desc = L["Set Minimum MainStanding"],
+      usage = "<minPE>",
+      order = 2,
+      get = function() return GuildRoll_minPE end,
+      set = function(v) 
+        GuildRoll_minPE = tonumber(v)
+        -- Update the name dynamically if options table exists
+        if GuildRoll._options and GuildRoll._options.args and GuildRoll._options.args["ep_actions"] and GuildRoll._options.args["ep_actions"].args["set_min_ep"] then
+          -- Force name refresh by triggering menu rebuild on next open
+          -- The function() wrapper will automatically show updated value
+        end
+        GuildRoll:refreshPRTablets()
+        -- Removed shareSettings call: Minimum EP is now local to each admin
+      end,
+      validate = function(v) 
+        local n = tonumber(v)
+        return n and n >= 0 and n <= GuildRoll.VARS.max
+      end,
+    }
+    
+    -- 3. +EP to Member (MainStanding group) - third in EP Actions
+    options.args["ep_actions"].args["MainStanding"] = {
+      type = "group",
+      name = L["+MainStanding to Member"],
+      desc = L["Account MainStanding for member."],
+      order = 3,
+    }
+    
+    -- 4. +EP to Raid - fourth in EP Actions
+    options.args["ep_actions"].args["MainStanding_raid"] = {
+      type = "execute",
+      name = L["+MainStanding to Raid"],
+      desc = L["Award MainStanding to all raid members."],
+      order = 4,
+      func = function() GuildRoll:PromptAwardRaidEP() end,
+    }
+    
+    -- 5. Decay Standing - fifth in EP Actions
+    options.args["ep_actions"].args["decay"] = {
+      type = "execute",
+      name = L["Decay Standing"],
+      desc = string.format(L["Decays all Standing by %s%%"],(1-(GuildRoll_decay or GuildRoll.VARS.decay))*100),
+      order = 5,
+      func = function() GuildRoll:decay_epgp_v3() end 
+    }
+    
+    -- 6. Export/Import - sixth in EP Actions
+    options.args["ep_actions"].args["export_import"] = {
+      type = "group",
+      name = L["Export/Import"],
+      desc = "Export/Import standings data",
+      order = 6,
+      args = {
+        export = {
+          type = "execute",
+          name = L["Export"],
+          desc = L["Export standings to csv."],
+          order = 1,
+          func = function() 
+            if GuildRoll_standings then
+              GuildRoll_standings:Export()
+            end
+          end
+        },
+        import = {
+          type = "execute",
+          name = L["Import"],
+          desc = L["Import standings from csv."],
+          order = 2,
+          hidden = function() return not IsGuildLeader() end,
+          func = function() 
+            if GuildRoll_standings then
+              GuildRoll_standings:Import()
+            end
+          end
+        }
+      }
+    }
+    
+    -- 7. Reset Standing - last in EP Actions (GuildLeader-only)
+    options.args["ep_actions"].args["reset"] = {
+      type = "execute",
+      name = L["Reset Standing"],
+      desc = string.format(L["Resets everyone\'s Standing to 0/%d (Admin only)."],GuildRoll.VARS.baseAE),
+      order = 7,
+      hidden = function() return not (IsGuildLeader()) end,
+      func = function() StaticPopup_Show("CONFIRM_RESET") end
+    }
+    
+    -- Buff Checks Group (moved to root, admin-only)
+    options.args["buff_checks"] = {
+      type = "group",
+      name = L["Buff Checks"],
+      desc = L["Admin buff verification tools"],
+      order = 3,
+      hidden = function() return not admin() end,
+      args = {
+        check_buffs = {
+          type = "execute",
+          name = L["Check Buffs"],
+          desc = L["Check raid-level buffs required (special paladin rule)."],
+          order = 1,
+          func = function() GuildRoll_BuffCheck:CheckBuffs() end
+        },
+        check_consumes = {
+          type = "execute",
+          name = L["Check Consumes"],
+          desc = L["Check raid consumes per-class and propose awarding EP."],
+          order = 2,
+          func = function() GuildRoll_BuffCheck:CheckConsumes() end
+        },
+        check_flasks = {
+          type = "execute",
+          name = L["Check Flasks"],
+          desc = L["Check raid flasks per-class."],
+          order = 3,
+          func = function() GuildRoll_BuffCheck:CheckFlasks() end
+        }
+      }
+    }
+    
+    -- Options Group (reduced, moved items removed)
     options.args["options_group"] = {
       type = "group",
       name = L["Options"],
       desc = "Configuration options",
-      order = 2,
+      order = 4,
       args = {}
-    }
-    
-    options.args["options_group"].args["MainStanding"] = {
-      type = "group",
-      name = L["+MainStanding to Member"],
-      desc = L["Account MainStanding for member."],
-      order = 10,
-      hidden = function() return not (admin()) end,
-    }
-    options.args["options_group"].args["MainStanding_raid"] = {
-      type = "execute",
-      name = L["+MainStanding to Raid"],
-      desc = L["Award MainStanding to all raid members."],
-      order = 20,
-      func = function() GuildRoll:PromptAwardRaidEP() end,
-      hidden = function() return not (admin()) end,
     }
  
     options.args["options_group"].args["report_channel"] = {
@@ -467,36 +600,6 @@ function GuildRoll:buildMenu()
       isPercent = true
     }
     
-    options.args["options_group"].args["set_min_ep_header"] = {
-      type = "header",
-      name = string.format(L["Minimum MainStanding: %s"],GuildRoll_minPE),
-      order = 60,
-      hidden = function() return not admin() end,
-    }
-    
-    options.args["options_group"].args["set_min_ep"] = {
-      type = "text",
-      name = L["Set Min EP"],
-      desc = L["Set Minimum MainStanding"],
-      usage = "<minPE>",
-      order = 61,
-      get = function() return GuildRoll_minPE end,
-      set = function(v) 
-        GuildRoll_minPE = tonumber(v)
-        -- Update header immediately if options table exists
-        if GuildRoll._options and GuildRoll._options.args and GuildRoll._options.args["options_group"] and GuildRoll._options.args["options_group"].args["set_min_ep_header"] then
-          GuildRoll._options.args["options_group"].args["set_min_ep_header"].name = string.format(L["Minimum MainStanding: %s"],GuildRoll_minPE)
-        end
-        GuildRoll:refreshPRTablets()
-        -- Removed shareSettings call: Minimum EP is now local to each admin
-      end,
-      validate = function(v) 
-        local n = tonumber(v)
-        return n and n >= 0 and n <= GuildRoll.VARS.max
-      end,
-      hidden = function() return not admin() end,
-    }
-    
     options.args["options_group"].args["set_decay"] = {
       type = "range",
       name = L["Set Decay %"],
@@ -506,8 +609,8 @@ function GuildRoll:buildMenu()
       get = function() return (1.0-GuildRoll_decay) end,
       set = function(v) 
         GuildRoll_decay = (1 - v)
-        if GuildRoll._options and GuildRoll._options.args and GuildRoll._options.args["options_group"] and GuildRoll._options.args["options_group"].args["decay"] then
-          GuildRoll._options.args["options_group"].args["decay"].desc = string.format(L["Decays all Standing by %s%%"],(1-GuildRoll_decay)*100)
+        if GuildRoll._options and GuildRoll._options.args and GuildRoll._options.args["ep_actions"] and GuildRoll._options.args["ep_actions"].args["decay"] then
+          GuildRoll._options.args["ep_actions"].args["decay"].desc = string.format(L["Decays all Standing by %s%%"],(1-GuildRoll_decay)*100)
         end
         if (IsGuildLeader()) then
           GuildRoll:shareSettings(true)
@@ -534,47 +637,6 @@ function GuildRoll:buildMenu()
       end,
     }
     
-    options.args["options_group"].args["reset_frames"] = {
-      type = "execute",
-      name = "Reset Frames",
-      desc = "Reset detached frames to visible positions.",
-      order = 90,
-      func = function() GuildRoll:ResetFrames() end
-    }
-    
-    options.args["options_group"].args["export_import"] = {
-      type = "group",
-      name = L["Export/Import"],
-      desc = "Export/Import standings data",
-      order = 100,
-      hidden = function() return not (admin()) end,
-      args = {
-        export = {
-          type = "execute",
-          name = L["Export"],
-          desc = L["Export standings to csv."],
-          order = 1,
-          func = function() 
-            if GuildRoll_standings then
-              GuildRoll_standings:Export()
-            end
-          end
-        },
-        import = {
-          type = "execute",
-          name = L["Import"],
-          desc = L["Import standings from csv."],
-          order = 2,
-          hidden = function() return not IsGuildLeader() end,
-          func = function() 
-            if GuildRoll_standings then
-              GuildRoll_standings:Import()
-            end
-          end
-        }
-      }
-    }
-    
     options.args["options_group"].args["migrate_main_tags"] = {
       type = "execute",
       name = "Migrate Main Tags",
@@ -586,47 +648,24 @@ function GuildRoll:buildMenu()
       end,
     }
     
-    options.args["options_group"].args["reset"] = {
+    -- Reset Frames (moved to root level, visible to all)
+    options.args["reset_frames"] = {
       type = "execute",
-      name = L["Reset Standing"],
-      desc = string.format(L["Resets everyone\'s Standing to 0/%d (Admin only)."],GuildRoll.VARS.baseAE),
-      order = 120,
-      hidden = function() return not (IsGuildLeader()) end,
-      func = function() StaticPopup_Show("CONFIRM_RESET") end
+      name = "Reset Frames",
+      desc = "Reset detached frames to visible positions.",
+      order = 100,
+      func = function() GuildRoll:ResetFrames() end
     }
     
-    options.args["options_group"].args["set_main"] = {
+    -- Set Main (moved to root level, visible to all)
+    options.args["set_main"] = {
       type = "execute",
       name = L["Set Main"],
       desc = L["Set your Main Character."],
-      order = 5,
+      order = 101,
       func = function()
         StaticPopup_Show("GUILDROLL_SET_MAIN_PROMPT")
       end,
-    }
-    
-    -- Keep legacy standalone items that don't belong in either group
-    options.args["raid_only"] = {
-      type = "toggle",
-      name = L["Raid Only"],
-      desc = L["Only show members in raid."],
-      order = 200,
-      hidden = function() return not admin() end,
-      get = function() return not not GuildRoll_memberlist_raidonly end,
-      set = function(v) 
-        GuildRoll_memberlist_raidonly = not GuildRoll_memberlist_raidonly
-        -- Trigger local UI refresh
-        GuildRoll:SetRefresh(true)
-      end,
-    }
-    
-    options.args["decay"] = {
-      type = "execute",
-      name = L["Decay Standing"],
-      desc = string.format(L["Decays all Standing by %s%%"],(1-(GuildRoll_decay or GuildRoll.VARS.decay))*100),
-      order = 210,
-      hidden = function() return not (admin()) end,
-      func = function() GuildRoll:decay_epgp_v3() end 
     }
     
     -- Cumulative rank threshold selector for CSR
@@ -764,37 +803,6 @@ function GuildRoll:buildMenu()
         if GuildRoll and GuildRoll.shareSettings then GuildRoll:shareSettings(true) end
       end,
     }
-    
-    options.args["options_group"].args["buff_checks"] = {
-      type = "group",
-      name = L["Buff Checks"],
-      desc = L["Admin buff verification tools"],
-      order = 67,
-      hidden = function() return not admin() end,
-      args = {
-        check_buffs = {
-          type = "execute",
-          name = L["Check Buffs"],
-          desc = L["Check raid-level buffs required (special paladin rule)."],
-          order = 1,
-          func = function() GuildRoll_BuffCheck:CheckBuffs() end
-        },
-        check_consumes = {
-          type = "execute",
-          name = L["Check Consumes"],
-          desc = L["Check raid consumes per-class and propose awarding EP."],
-          order = 2,
-          func = function() GuildRoll_BuffCheck:CheckConsumes() end
-        },
-        check_flasks = {
-          type = "execute",
-          name = L["Check Flasks"],
-          desc = L["Check raid flasks per-class."],
-          order = 3,
-          func = function() GuildRoll_BuffCheck:CheckFlasks() end
-        }
-      }
-    }
 
   end
   if (needInit) or (needRefresh) then
@@ -827,7 +835,7 @@ function GuildRoll:buildMenu()
     self._last_scan_member_count = member_count
     self._last_scan_mode = scan_mode
     
-    options.args["options_group"].args["MainStanding"].args = GuildRoll:buildClassMemberTable(members,"MainStanding")
+    options.args["ep_actions"].args["MainStanding"].args = GuildRoll:buildClassMemberTable(members,"MainStanding")
     if (needInit) then needInit = false end
     if (needRefresh) then needRefresh = false end
   end
@@ -2005,7 +2013,6 @@ function GuildRoll:OnTooltipUpdate()
     "|cffffff00Shift+Click|r to toggle Roll UI.",
     "|cffffff00Right-Click|r for Quick Actions and Options.",
     "|cffffff00Ctrl+Click|r to toggle Log.",
-    "|cffffff00Alt+Click|r to toggle Alts.",
   }
 
   for _, line in ipairs(common) do
@@ -2016,8 +2023,9 @@ function GuildRoll:OnTooltipUpdate()
     end
   end
 
-  -- Extra hint (shown only to admins)
+  -- Extra hints (shown only to admins)
   if admin() then
+    hint = hint .. "\n" .. "|cffffff00Alt+Click|r to toggle Alts."
     hint = hint .. "\n" .. "|cffffff00Ctrl+Shift+Click|r to toggle Admin Log."
   end
 
@@ -2069,10 +2077,15 @@ function GuildRoll:OnClick(button)
     return
   end
 
-  -- Preserve existing behaviors
+  -- Alt+Click: Toggle Alts (admin-only)
   if alt and not ctrl and not shift then
-    if GuildRollAlts and GuildRollAlts.Toggle then
-      pcall(function() GuildRollAlts:Toggle() end)
+    if is_admin then
+      if GuildRollAlts and GuildRollAlts.Toggle then
+        pcall(function()
+          GuildRoll:ToggleModuleActive("GuildRollAlts", true)
+          GuildRollAlts:Toggle()
+        end)
+      end
     end
     return
   end
