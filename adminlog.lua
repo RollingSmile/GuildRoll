@@ -960,12 +960,11 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
           for j = 1, table.getn(entry.raid_details.players) do
             local player = entry.raid_details.players[j]
             local counts = entry.raid_details.counts[player] or {old=0, new=0}
-            local countsText = string.format("Prev: %d, New: %d", counts.old, counts.new)
             
             cat:AddLine(
               "text", "",
-              "text2", "  " .. player,
-              "text3", countsText,
+              "text2", "",
+              "text3", string.format("%s — Prev: %d, New: %d", player, counts.old, counts.new),
               "text2R", 0.7,
               "text2G", 0.7,
               "text2B", 0.7,
