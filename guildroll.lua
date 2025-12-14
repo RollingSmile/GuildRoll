@@ -324,8 +324,15 @@ function GuildRoll:buildMenu()
       desc = "Toggle Roll UI (same as Shift+Click)",
       order = 1,
       func = function()
-        if GuildRoll_Roll and GuildRoll_Roll.Toggle then
-          GuildRoll_Roll:Toggle()
+        local f = _G and _G["GuildEpRollFrame"]
+        if f then
+          pcall(function()
+            if f:IsShown() then f:Hide() else f:Show() end
+          end)
+        else
+          if GuildRoll and GuildRoll.defaultPrint then
+            GuildRoll:defaultPrint("Roll frame not available.")
+          end
         end
       end
     }
@@ -351,11 +358,13 @@ function GuildRoll:buildMenu()
       desc = "Show your personal EP log",
       order = 3,
       func = function()
-        if GuildRoll_logs and GuildRoll_logs.ShowPersonalLog then
-          pcall(function()
+        pcall(function()
+          if GuildRoll and GuildRoll.ShowPersonalLog then
+            GuildRoll:ShowPersonalLog()
+          elseif GuildRoll_logs and GuildRoll_logs.ShowPersonalLog then
             GuildRoll_logs:ShowPersonalLog(GuildRoll._playerName)
-          end)
-        end
+          end
+        end)
       end
     }
     
@@ -536,12 +545,13 @@ function GuildRoll:buildMenu()
       }
     }
     
-    -- Options Group (reduced, moved items removed)
+    -- Options Group -> Admin Settings (reduced, moved items removed)
     options.args["options_group"] = {
       type = "group",
-      name = L["Options"],
-      desc = "Configuration options",
+      name = L["Admin Settings"],
+      desc = L["Admin configuration options"],
       order = 4,
+      hidden = function() return not admin() end,
       args = {}
     }
  
