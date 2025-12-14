@@ -2375,13 +2375,14 @@ function GuildRoll:CheckAltAndPromptSetMain()
   end
   
   -- Check condition 2: player level >= 60
+  -- Level 60 is the maximum level in Classic WoW
   local levelNum = tonumber(playerLevel) or 0
   if levelNum < 60 then
     return
   end
   
   -- Check condition 3: officer note does NOT contain a main tag {Name}
-  -- Pattern {%a%a%a*} matches { followed by 2+ letters then }
+  -- Pattern {%a%a%a*} matches { followed by at least 2 letters then }
   if string.find(playerOfficerNote, "{%a%a%a*}") then
     return
   end
