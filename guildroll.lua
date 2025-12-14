@@ -1816,151 +1816,31 @@ function GuildRoll:EnsureTabletOwner()
 end
 
 function GuildRoll:ResetFrames()
-  -- Consolidated reset that centers all detached Tablet frames on screen (UIParent)
-  -- excluding the Roll button (GuildEpRollFrame/GuildEpRollButton).
-  -- Automatically arranges frames to avoid overlaps and ensures they're fully visible.
-  
-  -- Step 1: Discover all detached frames dynamically
-  local detachedFrames = {}  -- array of {frame=frame, owner=ownerName, width=w, height=h}
-  local knownOwners = {
-    "GuildRoll_standings",
-    "GuildRollAlts",
-    "GuildRoll_logs",
-    "GuildRoll_personal_logs",
-    "GuildRoll_AdminLog",
-    "GuildRoll_BuffCheck"
+  -- Default visible positions for detached frames
+  local defaultPositions = {
+    ["GuildRoll_standings"] = {x = 400, y = 350},
+    ["GuildRollAlts"] = {x = 650, y = 300},
+    ["GuildRoll_logs"] = {x = 800, y = 300},
+    ["GuildRoll_personal_logs"] = {x = 500, y = 200},
+    ["GuildRoll_AdminLog"] = {x = 900, y = 300}
   }
   
-  -- Try dynamic discovery from T.registry if available
-  local discoveredOwners = {}
-  pcall(function()
-    if T and type(T.registry) == "table" then
-      for k, v in pairs(T.registry) do
-        if type(k) == "string" then
-          discoveredOwners[k] = true
-        end
-      end
-    end
-  end)
-  
-  -- Merge known owners with discovered ones
-  local allOwners = {}
-  for _, owner in ipairs(knownOwners) do
-    allOwners[owner] = true
-  end
-  for owner, _ in pairs(discoveredOwners) do
-    allOwners[owner] = true
-  end
-  
-  -- Step 2: Find detached frames and get their dimensions
-  for ownerName, _ in pairs(allOwners) do
-    -- Explicitly exclude the Roll button frames
-    if ownerName ~= "GuildEpRollFrame" and ownerName ~= "GuildEpRollButton" then
-      local frame = self:FindDetachedFrame(ownerName)
-      if frame then
-        local w, h = 200, 150  -- fallback dimensions
-        pcall(function()
-          w = frame:GetWidth() or 200
-          h = frame:GetHeight() or 150
-        end)
-        table.insert(detachedFrames, {frame=frame, owner=ownerName, width=w, height=h})
-      end
-    end
-  end
-  
-  if table.getn(detachedFrames) == 0 then
-    self:defaultPrint("No detached frames found to reset.")
-    return
-  end
-  
-  -- Step 3: Calculate visible area (UIParent dimensions and scale)
-  local screenWidth, screenHeight, screenScale = 1024, 768, 1.0
-  pcall(function()
-    screenWidth = UIParent:GetWidth() or 1024
-    screenHeight = UIParent:GetHeight() or 768
-    screenScale = UIParent:GetScale() or 1.0
-  end)
-  
-  -- Step 4: Compute center-based layout with cross arrangement to avoid overlaps
-  -- First frame at center, others arranged in a cross pattern around it
-  local centerX = screenWidth / 2
-  local centerY = screenHeight / 2
-  
-  -- Calculate maximum frame dimensions for spacing
-  local maxWidth, maxHeight = 0, 0
-  for i = 1, table.getn(detachedFrames) do
-    if detachedFrames[i].width > maxWidth then maxWidth = detachedFrames[i].width end
-    if detachedFrames[i].height > maxHeight then maxHeight = detachedFrames[i].height end
-  end
-  
-  -- Spacing between frames (add 20px margin)
-  local spacingX = maxWidth + 20
-  local spacingY = maxHeight + 20
-  
-  -- Step 5: Position frames with cross layout (center, then right/top/left/bottom layers)
   local resetCount = 0
-  local resetDetails = {}
-  
-  for i = 1, table.getn(detachedFrames) do
-    local frameData = detachedFrames[i]
-    local x, y
-    
-    if i == 1 then
-      -- First frame at center
-      x = centerX
-      y = centerY
-    else
-      -- Cross pattern: arrange others around the center in layers
-      -- Each layer has 4 positions: right, top, left, bottom
-      local layer = math.floor((i - 1) / 4) + 1
-      local posInLayer = ((i - 2) % 4)
-      
-      if posInLayer == 0 then
-        -- Right
-        x = centerX + (layer * spacingX)
-        y = centerY
-      elseif posInLayer == 1 then
-        -- Top
-        x = centerX
-        y = centerY + (layer * spacingY)
-      elseif posInLayer == 2 then
-        -- Left
-        x = centerX - (layer * spacingX)
-        y = centerY
-      else
-        -- Bottom
-        x = centerX
-        y = centerY - (layer * spacingY)
-      end
-    end
-    
-    -- Step 6: Clamp to screen bounds (ensure frame is fully visible)
-    local halfW = frameData.width / 2
-    local halfH = frameData.height / 2
-    
-    if x - halfW < 0 then x = halfW end
-    if x + halfW > screenWidth then x = screenWidth - halfW end
-    if y - halfH < 0 then y = halfH end
-    if y + halfH > screenHeight then y = screenHeight - halfH end
-    
-    -- Step 7: Apply position with pcall protection
-    local success = pcall(function()
-      frameData.frame:ClearAllPoints()
-      frameData.frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
-    end)
-    
-    if success then
-      resetCount = resetCount + 1
-      table.insert(resetDetails, frameData.owner)
+  for ownerName, pos in pairs(defaultPositions) do
+    local frame = self:FindDetachedFrame(ownerName)
+    if frame then
+      pcall(function()
+        frame:ClearAllPoints()
+        frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+        resetCount = resetCount + 1
+      end)
     end
   end
   
-  -- Step 8: Print detailed results
   if resetCount > 0 then
-    local frameList = table.concat(resetDetails, ", ")
-    self:defaultPrint(string.format("Reset %d detached frame(s): %s", resetCount, frameList))
+    self:defaultPrint(string.format("Reset %d detached frame(s) to visible positions.", resetCount))
   else
-    self:defaultPrint("No frames could be repositioned.")
+    self:defaultPrint("No detached frames found to reset.")
   end
 end
 
