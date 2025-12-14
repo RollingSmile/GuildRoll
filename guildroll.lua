@@ -1052,6 +1052,12 @@ function GuildRoll:delayedInit()
       _attemptThrottledMigration(self)
     end, MIGRATION_AUTO_DELAY_SECONDS)
   end
+  
+  -- Schedule alt main prompt check after a short delay to allow roster to populate
+  self:ScheduleEvent("guildroll_check_alt_main", function()
+    self:CheckAltAndPromptSetMain()
+  end, 2)
+  
   GuildRollMSG.delayedinit = true
   self:defaultPrint(string.format(L["v%s Loaded."],GuildRoll._versionString))
 end
@@ -2314,6 +2320,73 @@ function GuildRoll:PromptSetMainIfMissing()
       StaticPopup_Show("GUILDROLL_SET_MAIN_PROMPT")
     end
   end
+end
+
+-- CheckAltAndPromptSetMain: Check if player is an Alt (rank="Alt", level>=60, no main tag in officer note)
+-- and prompt them to set their main character
+function GuildRoll:CheckAltAndPromptSetMain()
+  -- Safety check: ensure we're in a guild
+  if not IsInGuild() then
+    return
+  end
+  
+  -- Get player level (prefer UnitLevel, fallback to roster level)
+  local playerLevel = UnitLevel("player")
+  
+  -- Attempt to get guild roster info with pcall for safety
+  local success, numMembers = pcall(GetNumGuildMembers, 1)
+  if not success or not numMembers or numMembers == 0 then
+    -- Roster not available yet
+    return
+  end
+  
+  -- Strip realm suffix from player name for comparison
+  local playerName = string.gsub(self._playerName, "%-.*$", "")
+  
+  -- Search for the player in the guild roster
+  local playerRank, playerOfficerNote, rosterLevel
+  for i = 1, numMembers do
+    local success2, name, rank, rankIndex, level, class, zone, note, officernote, online = pcall(GetGuildRosterInfo, i)
+    if success2 and name then
+      -- Strip realm suffix from roster name
+      local rosterName = string.gsub(name, "%-.*$", "")
+      if rosterName == playerName then
+        playerRank = rank
+        playerOfficerNote = officernote or ""
+        rosterLevel = level
+        break
+      end
+    end
+  end
+  
+  -- If player not found in roster, exit
+  if not playerRank then
+    return
+  end
+  
+  -- Use roster level as fallback if UnitLevel didn't work
+  if not playerLevel or playerLevel == 0 then
+    playerLevel = rosterLevel
+  end
+  
+  -- Check condition 1: rank name equals "Alt" (case-sensitive)
+  if playerRank ~= "Alt" then
+    return
+  end
+  
+  -- Check condition 2: player level >= 60
+  if not playerLevel or tonumber(playerLevel) < 60 then
+    return
+  end
+  
+  -- Check condition 3: officer note does NOT contain a main tag {Name}
+  -- Pattern {%a%a%a*} matches { followed by at least 2 letters, then any more letters, then }
+  if string.find(playerOfficerNote, "{%a%a%a*}") then
+    return
+  end
+  
+  -- All conditions met: show the prompt
+  StaticPopup_Show("GUILDROLL_SET_MAIN_PROMPT")
 end
 
 -- MovePublicMainTagsToOfficerNotes: Admin function to migrate main tags from public to officer notes
