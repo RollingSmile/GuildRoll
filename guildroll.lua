@@ -381,15 +381,12 @@ function GuildRoll:buildMenu()
       name = L["Raid Only"],
       desc = L["Only show members in raid."],
       order = 80,
-      get = function() return not not GuildRoll_raidonly end,
+      hidden = function() return not admin() end,
+      get = function() return not not GuildRoll_memberlist_raidonly end,
       set = function(v) 
-        GuildRoll_raidonly = not GuildRoll_raidonly
+        GuildRoll_memberlist_raidonly = not GuildRoll_memberlist_raidonly
         -- Trigger local UI refresh
         GuildRoll:SetRefresh(true)
-        -- Share settings to guild if admin
-        if GuildRoll and GuildRoll.shareSettings then
-          GuildRoll:shareSettings()
-        end
       end,
     }
     options.args["report_channel"] = {
@@ -629,7 +626,7 @@ function GuildRoll:buildMenu()
     if GuildRoll_VARS.scanVerbose == nil then GuildRoll_VARS.scanVerbose = false end
 
     local member_count = table.getn(members)
-    local scan_mode = (GuildRoll_raidonly and "Raid" or "Full")
+    local scan_mode = (GuildRoll_memberlist_raidonly and "Raid" or "Full")
     local scan_msg = string.format(L["Scanning %d members for Standing data. (%s)"], member_count, scan_mode)
 
     local is_first_scan = (self._last_scan_member_count == nil)
@@ -668,6 +665,9 @@ function GuildRoll:OnInitialize() -- ADDON_LOADED (1) unless LoD
   if GuildRoll_debug == nil then GuildRoll_debug = {} end
   if GuildRoll_showAllRollButtons == nil then GuildRoll_showAllRollButtons = false end
   --if GuildRoll_showRollWindow == nil then GuildRoll_showRollWindow = true end
+  -- Initialize runtime-only raid filter flags (not saved to SavedVariables)
+  GuildRoll_memberlist_raidonly = false
+  GuildRoll_standings_raidonly = false
   self:RegisterDB("GuildRoll_fubar")
   self:RegisterDefaults("char",{})
   --table.insert(GuildRoll_debug,{[date("%b/%d %H:%M:%S")]="OnInitialize"})
@@ -1171,7 +1171,7 @@ handleSharedSettings = function(message, sender)
     if settings.CSR == "NONE" then csr = nil else csr = tonumber(settings.CSR) end
     if csr ~= GuildRoll_CSRThreshold then GuildRoll_CSRThreshold = csr; changed = true end
   end
-  if settings.RO then local ro = (settings.RO == "1") if ro ~= GuildRoll_raidonly then GuildRoll_raidonly = ro; changed = true end end
+  -- RO removed: raid-only toggles are now local runtime-only flags, not shared
   if settings.DC then local dc = tonumber(settings.DC) if dc and dc ~= GuildRoll_decay then GuildRoll_decay = dc; changed = true end end
   -- MIN removed: Minimum EP is now local to each admin and not updated from incoming messages
   --if settings.MIN then local minep = tonumber(settings.MIN) if minep and minep ~= GuildRoll_minPE then GuildRoll_minPE = minep; changed = true end end
@@ -1208,12 +1208,12 @@ function GuildRoll:shareSettings(force)
     self._lastSettingsShare = now
     
     -- Build compact payload with admin settings
-    -- Format: SHARE:CSR=3;RO=1;DC=0.5;ALT=1.0;SC=GUILD;SBR=0
+    -- Format: SHARE:CSR=3;DC=0.5;ALT=1.0;SC=GUILD;SBR=0
     -- CSR can be nil (disabled), use "NONE" to represent this in the payload
     -- MIN removed: Minimum EP is now local to each admin and not shared
+    -- RO removed: raid-only toggles are now local runtime-only flags, not shared
     local csr = GuildRoll_CSRThreshold
     local csrStr = csr and tostring(csr) or "NONE"
-    local ro = GuildRoll_raidonly and 1 or 0
     local dc = GuildRoll_decay or self.VARS.decay
     local alt = GuildRoll_altpercent or 1.0
     local sc = GuildRoll_saychannel or "GUILD"
@@ -1223,8 +1223,8 @@ function GuildRoll:shareSettings(force)
     sc = string.gsub(sc, "=", "%%3D")
     sc = string.gsub(sc, ";", "%%3B")
     
-    local payload = string.format("SHARE:CSR=%s;RO=%d;DC=%s;ALT=%s;SC=%s;SBR=%d",
-      csrStr, ro, tostring(dc), tostring(alt), sc, sbr)
+    local payload = string.format("SHARE:CSR=%s;DC=%s;ALT=%s;SC=%s;SBR=%d",
+      csrStr, tostring(dc), tostring(alt), sc, sbr)
     
     -- Send via existing addonMessage method for consistency
     self:addonMessage(payload, "GUILD")
@@ -1917,7 +1917,7 @@ end
 function GuildRoll:buildRosterTable()
   local g, r = { }, { }
   local numGuildMembers = GetNumGuildMembers(1)
-  if (GuildRoll_raidonly) and GetNumRaidMembers() > 0 then
+  if (GuildRoll_memberlist_raidonly) and GetNumRaidMembers() > 0 then
     for i = 1, GetNumRaidMembers(true) do
       local name, rank, subgroup, level, class, fileName, zone, online, isDead = GetRaidRosterInfo(i) 
       if (name) then
@@ -1942,7 +1942,7 @@ function GuildRoll:buildRosterTable()
         GuildRoll.alts[main] = GuildRoll.alts[main] or {}
         GuildRoll.alts[main][member_name] = class
       end
-      if (GuildRoll_raidonly) and next(r) then
+      if (GuildRoll_memberlist_raidonly) and next(r) then
         if r[member_name] and is_raid_level then
           table.insert(g,{["name"]=member_name,["class"]=class})
         end
@@ -3046,5 +3046,5 @@ function GuildRollMSG:OnCHAT_MSG_ADDON( prefix, text, channel, sender)
 		end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_discount,GuildRollAltspool,GuildRoll_altpercent,GuildRoll_log,GuildRoll_dbver,GuildRoll_looted,GuildRoll_debug,GuildRoll_fubar,GuildRoll_showRollWindow
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_discount,GuildRollAltspool,GuildRoll_altpercent,GuildRoll_log,GuildRoll_dbver,GuildRoll_looted,GuildRoll_debug,GuildRoll_fubar,GuildRoll_showRollWindow
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs

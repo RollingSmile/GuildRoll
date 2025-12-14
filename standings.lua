@@ -224,7 +224,7 @@ function GuildRoll_standings:OnEnable()
         safeAddLine(
           "text", L["Raid Only"],
           "tooltipText", L["Only show members in raid."],
-          "checked", GuildRoll_raidonly,
+          "checked", GuildRoll_standings_raidonly,
           "func", function() GuildRoll_standings:ToggleRaidOnly() end
         )      
         safeAddLine(
@@ -343,9 +343,9 @@ function GuildRoll_standings:ToggleGroupBy(setting)
 end
 
 function GuildRoll_standings:ToggleRaidOnly()
-  GuildRoll_raidonly = not GuildRoll_raidonly
+  GuildRoll_standings_raidonly = not GuildRoll_standings_raidonly
   self:Top()
-  GuildRoll:SetRefresh(true)
+  self:Refresh()
 end
 
 local pr_sorter_standings = function(a,b)
@@ -361,7 +361,7 @@ end
 function GuildRoll_standings:BuildStandingsTable()
   local t = { }
   local r = { }
-  if (GuildRoll_raidonly) and GetNumRaidMembers() > 0 then
+  if (GuildRoll_standings_raidonly) and GetNumRaidMembers() > 0 then
     for i = 1, GetNumRaidMembers(true) do
       local name, rank, subgroup, level, class, fileName, zone, online, isDead = GetRaidRosterInfo(i) 
       r[name] = true
@@ -390,7 +390,7 @@ function GuildRoll_standings:BuildStandingsTable()
     end
     local armor_class = self:getArmorClass(class)
     if ep > 0 then
-      if (GuildRoll_raidonly) and next(r) then
+      if (GuildRoll_standings_raidonly) and next(r) then
         if r[name] then
           table.insert(t,{displayName,class,armor_class,ep,gp,(ep+ math.min(GuildRoll.VARS.AERollCap,gp)),name})
         end
@@ -466,5 +466,5 @@ function GuildRoll_standings:OnTooltipUpdate()
   end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_raidonly,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs
