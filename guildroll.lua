@@ -1881,8 +1881,8 @@ function GuildRoll:ResetFrames()
     screenScale = UIParent:GetScale() or 1.0
   end)
   
-  -- Step 4: Compute center-based layout with spiral arrangement to avoid overlaps
-  -- First frame at center, others arranged in a spiral pattern
+  -- Step 4: Compute center-based layout with cross arrangement to avoid overlaps
+  -- First frame at center, others arranged in a cross pattern around it
   local centerX = screenWidth / 2
   local centerY = screenHeight / 2
   
@@ -1897,7 +1897,7 @@ function GuildRoll:ResetFrames()
   local spacingX = maxWidth + 20
   local spacingY = maxHeight + 20
   
-  -- Step 5: Position frames with spiral layout
+  -- Step 5: Position frames with cross layout (center, then right/top/left/bottom layers)
   local resetCount = 0
   local resetDetails = {}
   
@@ -1910,8 +1910,8 @@ function GuildRoll:ResetFrames()
       x = centerX
       y = centerY
     else
-      -- Spiral pattern: arrange others around the center
-      -- Simple grid-like spiral: alternate positions around center
+      -- Cross pattern: arrange others around the center in layers
+      -- Each layer has 4 positions: right, top, left, bottom
       local layer = math.floor((i - 1) / 4) + 1
       local posInLayer = ((i - 2) % 4)
       
