@@ -469,7 +469,7 @@ function GuildRoll:buildMenu()
       name = L["Decay Standing"],
       desc = string.format(L["Decays all Standing by %s%%"],(1-(GuildRoll_decay or GuildRoll.VARS.decay))*100),
       order = 5,
-      func = function() GuildRoll:decay_epgp_v3() end 
+      func = function() StaticPopup_Show("GUILDROLL_CONFIRM_DECAY") end 
     }
     
     -- 6. Export/Import - sixth in EP Actions
@@ -2967,6 +2967,44 @@ StaticPopupDialogs["GUILDROLL_CLEAR_PERSONAL_LOG"] = {
       -- Show confirmation message
       if GuildRoll and GuildRoll.defaultPrint then
         GuildRoll:defaultPrint(L["Personal log cleared"])
+      end
+    end
+  end,
+  timeout = 0,
+  exclusive = 1,
+  whileDead = 1,
+  hideOnEscape = 1
+}
+
+StaticPopupDialogs["GUILDROLL_CONFIRM_DECAY"] = {
+  text = "",  -- Set dynamically based on current decay percentage
+  button1 = TEXT(OKAY),
+  button2 = TEXT(CANCEL),
+  OnShow = function()
+    -- Calculate decay percentage to display
+    local decayPercent = (1 - (GuildRoll_decay or GuildRoll.VARS.decay)) * 100
+    local message = string.format(L["Are you sure you want to decay all Standing by %s%%? This cannot be undone."], decayPercent)
+    getglobal(this:GetName().."Text"):SetText(message)
+  end,
+  OnAccept = function()
+    -- Extra safety check: verify user is admin before executing decay
+    if GuildRoll and GuildRoll.IsAdmin then
+      local isAdmin = false
+      local ok, result = pcall(function() return GuildRoll:IsAdmin() end)
+      if ok and result then
+        isAdmin = true
+      end
+      
+      if isAdmin then
+        -- Execute decay with pcall to avoid hard errors
+        local success, err = pcall(function()
+          GuildRoll:decay_epgp_v3()
+        end)
+        if not success and err then
+          if GuildRoll.debugPrint then
+            GuildRoll:debugPrint("Error during decay: "..tostring(err))
+          end
+        end
       end
     end
   end,
