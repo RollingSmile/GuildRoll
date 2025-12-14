@@ -1445,6 +1445,71 @@ function GuildRoll:PromptAwardRaidEP()
   StaticPopup_Show("GUILDROLL_AWARD_EP_RAID_HELP")
 end
 
+-- Helper function to update the GiveEP dialog content when target changes
+-- Can be called on a visible dialog to refresh its content
+function GuildRoll:UpdateGiveEPDialog(frame)
+  if not frame then
+    return
+  end
+  
+  -- Read from frame.data with fallback to legacy field and pending variable
+  local targetName = frame.data or frame.guildroll_target or GuildRoll._pendingGiveEPTarget
+  
+  -- Clear pending variable when consumed
+  if targetName and targetName == GuildRoll._pendingGiveEPTarget then
+    GuildRoll._pendingGiveEPTarget = nil
+  end
+  
+  -- Get the text element for the dialog
+  local textElement = getglobal(frame:GetName().."Text")
+  local editBox = getglobal(frame:GetName().."EditBox")
+  
+  if not targetName then
+    if textElement then
+      textElement:SetText("Error: No target specified")
+    end
+    if editBox then
+      editBox:SetText("")
+    end
+    return
+  end
+  
+  -- Determine the effective recipient (main if alt, otherwise selected)
+  local currentEP = 0
+  local headerString = ""
+  
+  -- Try to parse alt -> main
+  local mainName
+  local parseSuccess, parseMain = pcall(function() return GuildRoll:parseAlt(targetName) end)
+  if parseSuccess and parseMain then
+    mainName = parseMain
+  end
+  
+  if mainName then
+    -- This is an alt with a main - show "Giving EP to MainName (main of AltName); current EP: X"
+    local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(mainName) end)
+    if epSuccess and ep then
+      currentEP = ep
+    end
+    headerString = string.format(L["GIVING_EP_MAIN_OF_ALT"], mainName, targetName, currentEP)
+  else
+    -- This is a main or alt without main found - show "Giving EP to CharName; current EP: X"
+    local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(targetName) end)
+    if epSuccess and ep then
+      currentEP = ep
+    end
+    headerString = string.format(L["GIVING_EP_TO_CHAR"], targetName, currentEP)
+  end
+  
+  if textElement then
+    textElement:SetText(headerString)
+  end
+  if editBox then
+    editBox:SetText("")
+    editBox:SetFocus()
+  end
+end
+
 function GuildRoll:ShowGiveEPDialog(targetName)
   if not GuildRoll:IsAdmin() then
     return
@@ -1479,11 +1544,15 @@ function GuildRoll:ShowGiveEPDialog(targetName)
       -- preserve legacy field for backward compatibility
       dialog.guildroll_target = targetName
     end)
-    -- Successfully set dialog fields, clear pending
+    -- Clear pending variable (will be cleared again in UpdateGiveEPDialog, but do it early for safety)
     GuildRoll._pendingGiveEPTarget = nil
+    -- Refresh dialog content immediately (handles case where dialog was already visible)
+    pcall(function()
+      GuildRoll:UpdateGiveEPDialog(dialog)
+    end)
   else
     -- StaticPopup_Show returned nil (queued); attempt to locate existing frame
-    local foundFrame = false
+    local foundFrame = nil
     pcall(function()
       local maxDialogs = STATICPOPUP_NUMDIALOGS or 4
       for i = 1, maxDialogs do
@@ -1492,15 +1561,18 @@ function GuildRoll:ShowGiveEPDialog(targetName)
         if frame and frame.which == "GUILDROLL_GIVE_EP" then
           frame.data = targetName
           frame.guildroll_target = targetName
-          foundFrame = true
+          foundFrame = frame
           break
         end
       end
     end)
     
     if foundFrame then
-      -- Successfully set dialog fields on existing frame, clear pending
+      -- Successfully set dialog fields on existing frame, clear pending and refresh content
       GuildRoll._pendingGiveEPTarget = nil
+      pcall(function()
+        GuildRoll:UpdateGiveEPDialog(foundFrame)
+      end)
     else
       -- Unable to set dialog immediately; schedule delayed clear of pending variable
       pcall(function()
