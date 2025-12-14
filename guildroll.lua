@@ -2375,7 +2375,8 @@ function GuildRoll:CheckAltAndPromptSetMain()
   end
   
   -- Check condition 2: player level >= 60
-  if not playerLevel or (tonumber(playerLevel) or playerLevel) < 60 then
+  local levelNum = tonumber(playerLevel) or 0
+  if levelNum < 60 then
     return
   end
   
