@@ -1299,7 +1299,21 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
           end          
         end
         if (settings_notice) and settings_notice ~= "" then
-          local sender_rank = string.format("%s(%s)",C:Colorize(BC:GetHexColor(class),sender),rank)
+          local sender_rank
+          if class and rank then
+            -- Safely build colored sender name with class color and rank
+            local success, coloredSender = pcall(function() 
+              return C:Colorize(BC:GetHexColor(class), sender) 
+            end)
+            if success and coloredSender then
+              sender_rank = string.format("%s(%s)", coloredSender, rank)
+            else
+              sender_rank = string.format("%s(%s)", sender, rank)
+            end
+          else
+            -- Fallback if class or rank is missing
+            sender_rank = sender
+          end
           settings_notice = settings_notice..string.format(L[" settings accepted from %s"],sender_rank)
           self:defaultPrint(settings_notice)
          -- self._options.args["RollValueogress_tier_header"].name = string.format(L["Progress Setting: %s"],GuildRoll_progress)
