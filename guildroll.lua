@@ -324,7 +324,7 @@ function GuildRoll:buildMenu()
       desc = "Toggle Roll UI (same as Shift+Click)",
       order = 1,
       func = function()
-        local f = _G and _G["GuildEpRollFrame"]
+        local f = _G["GuildEpRollFrame"]
         if f then
           pcall(function()
             if f:IsShown() then f:Hide() else f:Show() end
@@ -361,7 +361,7 @@ function GuildRoll:buildMenu()
         pcall(function()
           if GuildRoll and GuildRoll.ShowPersonalLog then
             GuildRoll:ShowPersonalLog()
-          elseif GuildRoll_logs and GuildRoll_logs.ShowPersonalLog then
+          elseif GuildRoll_logs and GuildRoll_logs.ShowPersonalLog and GuildRoll and GuildRoll._playerName then
             GuildRoll_logs:ShowPersonalLog(GuildRoll._playerName)
           end
         end)
