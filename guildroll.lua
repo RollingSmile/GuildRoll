@@ -1196,7 +1196,12 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
   end
   if (who) and (what) and (amount) then
     local msg
-    local for_main = (GuildRoll_main and (who == GuildRoll_main))
+    -- Improved main detection: use parseAlt as fallback to support alt pooling
+    -- Note: parseAlt is called on each message rather than cached because the main
+    -- character can be changed during the session via Set Main feature
+    local playerMain = self:parseAlt(self._playerName)
+    local for_main = (GuildRoll_main and (who == GuildRoll_main)) or (playerMain and (who == playerMain))
+    
     if (who == self._playerName) or (for_main) then
       if what == "MainStanding" then
         if amount < 0 then
@@ -1204,6 +1209,20 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
         else
           msg = string.format(L["You have been awarded %d MainStanding."],amount)
         end
+        
+        -- Add personal log entry for EP changes only
+        -- Note: Due to WoW's guild roster sync timing, get_ep_v3 usually returns the pre-change
+        -- value, making prevEP accurate. In rare cases where roster has already synced, prevEP
+        -- may reflect the post-change value, but this is unavoidable with the current API.
+        local prevEP = self:get_ep_v3(who) or 0
+        local newEP = prevEP + amount
+        local logMsg
+        if amount < 0 then
+          logMsg = string.format("%s %d EP penalty by %s (Prev: %d, New: %d)", who, math.abs(amount), sender, prevEP, newEP)
+        else
+          logMsg = string.format("%s %+d EP by %s (Prev: %d, New: %d)", who, amount, sender, prevEP, newEP)
+        end
+        self:personalLogAdd(who, logMsg)
       elseif what == "AuxStanding" then
         msg = string.format(L["You have gained %d AuxStanding."],amount)
       end
@@ -1496,22 +1515,11 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
   if (newnote) then 
     GuildRosterSetOfficerNote(guild_index,newnote,true)
     
-    -- Add personal logging
-    local actor = UnitName("player")
-    local logMsg = ""
-    if ep ~= nil and gp ~= nil then
+    -- Add personal logging for EP changes only
+    if ep ~= nil then
+      local actor = UnitName("player")
       local changeEP = ep - prevEP
-      local changeGP = gp - prevGP
-      logMsg = string.format("EP: %d -> %d (%+d), GP: %d -> %d (%+d) by %s", prevEP, ep, changeEP, prevGP, gp, changeGP, actor)
-    elseif ep ~= nil then
-      local changeEP = ep - prevEP
-      logMsg = string.format("EP: %d -> %d (%+d) by %s", prevEP, ep, changeEP, actor)
-    elseif gp ~= nil then
-      local changeGP = gp - prevGP
-      logMsg = string.format("GP: %d -> %d (%+d) by %s", prevGP, gp, changeGP, actor)
-    end
-    
-    if logMsg ~= "" then
+      local logMsg = string.format("%s %+d EP by %s (Prev: %d, New: %d)", name, changeEP, actor, prevEP, ep)
       self:personalLogAdd(name, logMsg)
     end
   end
