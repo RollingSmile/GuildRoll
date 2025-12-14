@@ -2988,23 +2988,17 @@ StaticPopupDialogs["GUILDROLL_CONFIRM_DECAY"] = {
   end,
   OnAccept = function()
     -- Extra safety check: verify user is admin before executing decay
-    if GuildRoll and GuildRoll.IsAdmin then
-      local isAdmin = false
-      local ok, result = pcall(function() return GuildRoll:IsAdmin() end)
-      if ok and result then
-        isAdmin = true
-      end
-      
-      if isAdmin then
-        -- Execute decay with pcall to avoid hard errors
-        local success, err = pcall(function()
-          GuildRoll:decay_epgp_v3()
-        end)
-        if not success and err then
-          if GuildRoll.debugPrint then
-            GuildRoll:debugPrint("Error during decay: "..tostring(err))
-          end
-        end
+    if not GuildRoll:IsAdmin() then
+      return
+    end
+    
+    -- Execute decay with pcall to avoid hard errors
+    local success, err = pcall(function()
+      GuildRoll:decay_epgp_v3()
+    end)
+    if not success and err then
+      if GuildRoll.debugPrint then
+        GuildRoll:debugPrint("Error during decay: "..tostring(err))
       end
     end
   end,
