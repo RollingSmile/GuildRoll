@@ -79,9 +79,16 @@ local CONSUMABLE_IDS = {
 
 -- Keyword fallback for consumables (for servers with custom buff names)
 local CONSUMABLE_BUFF_KEYWORDS = {
-  "Mongoose", "Giants", "Firewater", "Juju", "Stoneshield", "Sunfruit", "Dumplings",
-  "Agility", "Firepower", "Shadow Power", "Arcane Elixir", "Frost Power", 
-  "Cerebral", "Runn Tum"
+  "Mongoose", "Giants",      -- Elixir of the Mongoose, Elixir of Giants
+  "Firewater",               -- Winterfall Firewater
+  "Juju",                    -- Juju Power, Juju Might
+  "Stoneshield",             -- Greater Stoneshield Potion
+  "Sunfruit", "Dumplings",   -- Blessed Sunfruit Juice, Smoked Desert Dumplings
+  "Agility",                 -- Elixir of Greater Agility
+  "Firepower", "Shadow Power", -- Elixir of Greater Firepower, Elixir of Shadow Power
+  "Arcane Elixir",           -- Arcane Elixir, Greater Arcane Elixir
+  "Frost Power",             -- Elixir of Frost Power
+  "Cerebral", "Runn Tum"     -- Cerebral Cortex Compound, Runn Tum Tuber Surprise
 }
 
 -- Legacy name-based consumables (kept for reference only)
@@ -184,11 +191,14 @@ local function GetSpellNameByID(spellID)
     return name
   end
   
-  -- Fallback to GetSpellName for 1.12 (spellID, spellbookType)
-  -- Note: This requires the spell to be in the player's spellbook
+  -- Fallback: In 1.12, GetSpellName only works for spells in player's spellbook.
+  -- For cross-class buffs, we rely on detecting the buff when it's active on units.
+  -- The spell ID will be resolved when we scan actual buffs from raid members.
+  -- As a fallback, we'll return nil here and rely on CONSUMABLE_BUFF_KEYWORDS
+  -- for partial matching when spell IDs can't be resolved.
   if GetSpellName then
     local name = GetSpellName(spellID, BOOKTYPE_SPELL)
-    return name
+    if name then return name end
   end
   
   return nil
@@ -484,7 +494,7 @@ function GuildRoll_BuffCheck:CheckBuffs()
   self:ShowReport(report, "Buff Check", allOk)
   
   -- Refresh Tablet window in-place
-  pcall(function() T:Refresh("GuildRoll_BuffCheck") end)
+  self:Refresh()
 end
 
 function GuildRoll_BuffCheck:CheckConsumes()
@@ -561,7 +571,7 @@ function GuildRoll_BuffCheck:CheckConsumes()
   end
   
   -- Refresh Tablet window in-place
-  pcall(function() T:Refresh("GuildRoll_BuffCheck") end)
+  self:Refresh()
 end
 
 function GuildRoll_BuffCheck:CheckFlasks()
@@ -609,7 +619,7 @@ function GuildRoll_BuffCheck:CheckFlasks()
   end
   
   -- Refresh Tablet window in-place
-  pcall(function() T:Refresh("GuildRoll_BuffCheck") end)
+  self:Refresh()
 end
 
 -- Show report in Tablet
