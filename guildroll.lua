@@ -1196,7 +1196,9 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
   end
   if (who) and (what) and (amount) then
     local msg
-    -- Improved main detection: use parseAlt as fallback
+    -- Improved main detection: use parseAlt as fallback to support alt pooling
+    -- Note: parseAlt is called on each message rather than cached because the main
+    -- character can be changed during the session via Set Main feature
     local playerMain = self:parseAlt(self._playerName)
     local for_main = (GuildRoll_main and (who == GuildRoll_main)) or (playerMain and (who == playerMain))
     
@@ -1209,6 +1211,9 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
         end
         
         -- Add personal log entry for EP changes only
+        -- Note: Due to WoW's guild roster sync timing, get_ep_v3 usually returns the pre-change
+        -- value, making prevEP accurate. In rare cases where roster has already synced, prevEP
+        -- may reflect the post-change value, but this is unavoidable with the current API.
         local prevEP = self:get_ep_v3(who) or 0
         local newEP = prevEP + amount
         local logMsg

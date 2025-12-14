@@ -1141,10 +1141,16 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_CLEAR_CONFIRM"] = {
     if isGuildMaster then
       -- Broadcast ADMINLOG;CLEAR message to GUILD
       local clearMsg = string.format("ADMINLOG;CLEAR;%d", PROTOCOL_VERSION)
+      local broadcastSuccess = false
       if GuildRoll and GuildRoll.addonMessage then
-        pcall(function()
+        local ok, err = pcall(function()
           GuildRoll:addonMessage(clearMsg, "GUILD")
         end)
+        if ok then
+          broadcastSuccess = true
+        else
+          GuildRoll:defaultPrint("Warning: Failed to broadcast clear message to guild. Other admins will not be notified.")
+        end
       end
       
       -- Clear local entries
@@ -1156,7 +1162,11 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_CLEAR_CONFIRM"] = {
       -- Refresh UI
       pcall(function() T:Refresh("GuildRoll_AdminLog") end)
       
-      GuildRoll:defaultPrint("Admin log cleared (global).")
+      if broadcastSuccess then
+        GuildRoll:defaultPrint("Admin log cleared (global).")
+      else
+        GuildRoll:defaultPrint("Admin log cleared (local only - broadcast failed).")
+      end
     else
       GuildRoll:defaultPrint("Only the GuildMaster can clear the admin log.")
     end
