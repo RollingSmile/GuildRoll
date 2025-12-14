@@ -134,30 +134,37 @@ local FLASKS = {
   "Flask of the Titans",
 }
 
+-- StaticPopup dialogs (defined once at module initialization)
+StaticPopupDialogs["GUILDROLL_CONSUMES_AWARD_EP"] = {
+  text = "",  -- Will be set dynamically via L[] lookup
+  button1 = TEXT(OKAY),
+  button2 = TEXT(CANCEL),
+  OnAccept = function()
+    -- User must manually award EP - this just confirms readiness
+    GuildRoll:defaultPrint(L["ConsumesCheck_ReadyToAward"] or "All members ready. Use +EP to Raid to award points.")
+  end,
+  timeout = 0,
+  whileDead = 1,
+  hideOnEscape = 1,
+}
+
+StaticPopupDialogs["GUILDROLL_FLASKS_AWARD_EP"] = {
+  text = "",  -- Will be set dynamically via L[] lookup
+  button1 = TEXT(OKAY),
+  button2 = TEXT(CANCEL),
+  OnAccept = function()
+    -- User must manually award EP - this just confirms readiness
+    GuildRoll:defaultPrint(L["FlasksCheck_ReadyToAward"] or "All members ready. Use +EP to Raid to award points.")
+  end,
+  timeout = 0,
+  whileDead = 1,
+  hideOnEscape = 1,
+}
+
 -- Helper: substring match for buff names (case-insensitive)
 local function MatchBuff(buffName, pattern)
   if not buffName or not pattern then return false end
   return string.find(string.lower(buffName), string.lower(pattern), 1, true) ~= nil
-end
-
--- Helper: Check if player has any buff from a list (substring matching enabled)
-local function HasAnyBuff(unit, buffList)
-  for i = 1, 32 do
-    local buffName = UnitBuff(unit, i)
-    if not buffName then break end
-    -- Extract texture path from UnitBuff return (returns texture path)
-    -- We need to use tooltips to get buff name; for simplicity, use substring on texture
-    -- Actually, UnitBuff in 1.12 returns texture path, not name
-    -- We need a different approach - check using Gratuity or manual tooltip scan
-    -- For WoW 1.12, we'll use a simplified approach with texture paths
-    -- Since this is complex, we'll use a placeholder implementation
-    for _, pattern in ipairs(buffList) do
-      if MatchBuff(buffName, pattern) then
-        return true, pattern
-      end
-    end
-  end
-  return false
 end
 
 -- Helper: Get buff name from texture using tooltip scan
@@ -375,18 +382,7 @@ function GuildRoll_BuffCheck:CheckConsumes()
   
   if allOk then
     -- Show confirmation popup
-    StaticPopupDialogs["GUILDROLL_CONSUMES_AWARD_EP"] = {
-      text = L["All members have required consumes. Award EP to raid?"] or "All members have required consumes. Award EP to raid?",
-      button1 = TEXT(OKAY),
-      button2 = TEXT(CANCEL),
-      OnAccept = function()
-        -- User must manually award EP - this just confirms readiness
-        GuildRoll:defaultPrint(L["ConsumesCheck_ReadyToAward"] or "All members ready. Use +EP to Raid to award points.")
-      end,
-      timeout = 0,
-      whileDead = 1,
-      hideOnEscape = 1,
-    }
+    StaticPopupDialogs["GUILDROLL_CONSUMES_AWARD_EP"].text = L["All members have required consumes. Award EP to raid?"] or "All members have required consumes. Award EP to raid?"
     StaticPopup_Show("GUILDROLL_CONSUMES_AWARD_EP")
   else
     -- Show report in Tablet
@@ -423,18 +419,7 @@ function GuildRoll_BuffCheck:CheckFlasks()
   
   if allOk then
     -- Show confirmation popup
-    StaticPopupDialogs["GUILDROLL_FLASKS_AWARD_EP"] = {
-      text = L["All members have required flasks. Award EP to raid?"] or "All members have required flasks. Award EP to raid?",
-      button1 = TEXT(OKAY),
-      button2 = TEXT(CANCEL),
-      OnAccept = function()
-        -- User must manually award EP - this just confirms readiness
-        GuildRoll:defaultPrint(L["FlasksCheck_ReadyToAward"] or "All members ready. Use +EP to Raid to award points.")
-      end,
-      timeout = 0,
-      whileDead = 1,
-      hideOnEscape = 1,
-    }
+    StaticPopupDialogs["GUILDROLL_FLASKS_AWARD_EP"].text = L["All members have required flasks. Award EP to raid?"] or "All members have required flasks. Award EP to raid?"
     StaticPopup_Show("GUILDROLL_FLASKS_AWARD_EP")
   else
     -- Show report in Tablet
