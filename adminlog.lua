@@ -82,6 +82,7 @@ local expandedRaidEntries = {} -- track which raid entries are expanded (key = e
 local PROTOCOL_VERSION = 1
 local CHUNK_SIZE = 10 -- entries per SNAP message
 local SYNC_THROTTLE_SEC = 5 -- minimum seconds between sync requests
+local SNAPSHOT_TIMEOUT_SEC = 10 -- seconds before clearing snapshot in progress flag
 
 local lastSyncRequest = 0
 
@@ -653,7 +654,7 @@ function GuildRoll_AdminLog:OnEnable()
         if latestRemoteTS > 0 then
           tsText = string.format(L["Last remote TS: %s"], date("%Y-%m-%d %H:%M:%S", latestRemoteTS))
         else
-          tsText = L["Last remote TS: %s"]:format(L["Never synced"])
+          tsText = string.format(L["Last remote TS: %s"], L["Never synced"])
         end
         safeAddLine(
           "text", tsText,
@@ -686,7 +687,7 @@ function GuildRoll_AdminLog:OnEnable()
                   if T and T:IsRegistered("GuildRoll_AdminLog") then
                     pcall(function() T:Refresh("GuildRoll_AdminLog") end)
                   end
-                end, 10)
+                end, SNAPSHOT_TIMEOUT_SEC)
               end
             end)
             -- Refresh UI to show "in progress" state
