@@ -110,6 +110,7 @@ local CONSUMABLE_BUFF_KEYWORDS = {
   "Arcane Elixir",           -- Arcane Elixir, Greater Arcane Elixir
   "Frost Power",             -- Elixir of Frost Power
   "Cerebral", "Runn Tum",    -- Cerebral Cortex Compound, Runn Tum Tuber Surprise
+  "Scorpok",
   -- New keywords / server-specific items
   "Spirit of Zanza", "Swiftness of Zanza",
   "Danonzo", "Tel'Abim", "Tel Abim",
@@ -304,6 +305,8 @@ local CONSUMABLES = {
     "Le Fishe Au Chocolat",
     "Grilled Squid",
     "Sour Mountain Berry",
+    "Strike of the Scorpok",
+    "Mana Regeneration"
   },
 }
 
