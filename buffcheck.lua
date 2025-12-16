@@ -74,6 +74,9 @@ local BUFF_REQUIREMENTS = {
 -- Spell ID tables for consumables by class (Turtle WoW 1.12)
 -- Mongoose=17528, Giants=17551, Firewater=18125, Juju Power=17539, Juju Might=17540, Dumplings=24045, Sunfruit=10706, Stoneshield=17565
 -- Greater Agility=9188, Greater Firepower=17562, Shadow Power=17560, Arcane Elixir=17556, Greater Arcane=17557, Frost Power=17563, Cerebral=9030, Runn Tum=18141
+-- NOTE: These IDs are kept for reference and as optional fallback. The primary consumable
+-- matching strategy now uses CONSUMABLE_BUFF_KEYWORDS and legacy CONSUMABLES names with
+-- substring matching, making the addon robust on servers with custom or localized buff names.
 local CONSUMABLE_IDS = {
   WARRIOR = {17528, 17551, 18125, 17539, 17540, 24045, 10706, 17565},
   ROGUE   = {17528, 9188, 18125, 17539, 17540, 10706, 24045},
@@ -87,6 +90,9 @@ local CONSUMABLE_IDS = {
 }
 
 -- Keyword fallback for consumables (for servers with custom buff names)
+-- These keywords are used as patterns for substring matching (case-insensitive)
+-- This is now the PRIMARY matching strategy for consumables, making the addon
+-- robust on private servers where GetSpellInfo/GetSpellName may not resolve all IDs
 local CONSUMABLE_BUFF_KEYWORDS = {
   "Mongoose", "Giants",      -- Elixir of the Mongoose, Elixir of Giants
   "Firewater",               -- Winterfall Firewater
@@ -101,6 +107,7 @@ local CONSUMABLE_BUFF_KEYWORDS = {
 }
 
 -- Legacy name-based consumables (kept for reference only)
+-- These are also used as additional pattern sources for substring matching
 local CONSUMABLES = {
   WARRIOR = {
     "Elixir of the Mongoose",
@@ -216,6 +223,7 @@ local function GetSpellNameByID(spellID)
 end
 
 -- Helper: Populate localized name maps from spell IDs
+-- For consumables, this now primarily uses pattern/keyword matching instead of spell IDs
 local function resolveIDLists()
   -- Skip if already resolved (cache optimization)
   if localizedNamesResolved then
@@ -240,15 +248,34 @@ local function resolveIDLists()
     end
   end
   
-  -- Resolve CONSUMABLE_IDS
-  for className, idList in pairs(CONSUMABLE_IDS) do
+  -- Populate CONSUMABLES using pattern/keyword matching (primary path)
+  -- This makes the addon robust on servers with custom buff names
+  for className, _ in pairs(CONSUMABLE_IDS) do
     if not localizedConsumables[className] then
       localizedConsumables[className] = {}
     end
-    for _, spellID in ipairs(idList) do
-      local ok, spellName = pcall(GetSpellNameByID, spellID)
-      if ok and spellName then
-        localizedConsumables[className][spellName] = true
+    
+    -- Add patterns from CONSUMABLE_BUFF_KEYWORDS (primary source)
+    for _, keyword in ipairs(CONSUMABLE_BUFF_KEYWORDS) do
+      localizedConsumables[className][keyword] = true
+    end
+    
+    -- Add legacy names from CONSUMABLES table as additional patterns
+    if CONSUMABLES[className] then
+      for _, consumeName in ipairs(CONSUMABLES[className]) do
+        localizedConsumables[className][consumeName] = true
+      end
+    end
+    
+    -- Optional: Try to resolve spell IDs as fallback patterns
+    -- If GetSpellNameByID returns valid names, add them as well
+    local idList = CONSUMABLE_IDS[className]
+    if idList then
+      for _, spellID in ipairs(idList) do
+        local ok, spellName = pcall(GetSpellNameByID, spellID)
+        if ok and spellName then
+          localizedConsumables[className][spellName] = true
+        end
       end
     end
   end
@@ -344,7 +371,8 @@ local function GetBuffName(unit, buffIndex)
 end
 
 -- Helper: Check if player has any buff from a localized map
--- buffMap is {[localizedName] = true}
+-- buffMap is {[pattern] = true} where pattern can be exact name or substring
+-- Uses substring matching for robust detection on servers with custom names
 local function HasAnyBuffByMap(unit, buffMap)
   if not buffMap then return false end
   
@@ -353,8 +381,18 @@ local function HasAnyBuffByMap(unit, buffMap)
     if not buffTexture then break end
     
     local buffName = GetBuffName(unit, i)
-    if buffName and buffMap[buffName] then
-      return true, buffName
+    if buffName then
+      -- Try exact match first (faster)
+      if buffMap[buffName] then
+        return true, buffName
+      end
+      
+      -- Fall back to substring matching for each pattern in the map
+      for pattern, _ in pairs(buffMap) do
+        if MatchBuff(buffName, pattern) then
+          return true, buffName
+        end
+      end
     end
   end
   return false
@@ -554,7 +592,7 @@ function GuildRoll_BuffCheck:CheckConsumes()
     return
   end
   
-  -- Resolve spell IDs to localized names
+  -- Resolve patterns to localized consumables (now primarily pattern-based)
   resolveIDLists()
   
   local report = {}
@@ -566,29 +604,25 @@ function GuildRoll_BuffCheck:CheckConsumes()
     local unit = "raid" .. i
     
     local normalizedClass = NormalizeClassToken(class)
-    local consumableMap = localizedConsumables[normalizedClass]
-    if consumableMap then
+    local consumablePatterns = localizedConsumables[normalizedClass]
+    
+    if consumablePatterns then
       local count = 0
-      local found = {}
+      local foundBuffs = {}  -- Track which buffs we've already counted
       
+      -- Scan all buffs on the unit
       for j = 1, 32 do
         local buffTexture = UnitBuff(unit, j)
         if not buffTexture then break end
         
         local buffName = GetBuffName(unit, j)
-        if buffName then
-          -- Try exact match from localized map first
-          if consumableMap[buffName] and not found[buffName] then
-            count = count + 1
-            found[buffName] = true
-          else
-            -- Fallback to keyword matching for custom server buffs
-            for _, keyword in ipairs(CONSUMABLE_BUFF_KEYWORDS) do
-              if MatchBuff(buffName, keyword) and not found[buffName] then
-                count = count + 1
-                found[buffName] = true
-                break
-              end
+        if buffName and not foundBuffs[buffName] then
+          -- Check if this buff matches any consumable pattern for this class
+          for pattern, _ in pairs(consumablePatterns) do
+            if MatchBuff(buffName, pattern) then
+              count = count + 1
+              foundBuffs[buffName] = true
+              break  -- Only count each buff once
             end
           end
         end
@@ -705,19 +739,24 @@ function GuildRoll_BuffCheck:DumpBuffs(unit)
     if buffName then
       local matched = {}
       
-      -- Check if it matches any buff category
+      -- Check if it matches any buff category (exact match for buffs)
       for providerClass, buffMap in pairs(localizedBuffs) do
         if buffMap[buffName] then
           table.insert(matched, "BUFF:" .. providerClass)
         end
       end
       
-      -- Check if it matches consumables
-      if localizedConsumables[normalizedClass] and localizedConsumables[normalizedClass][buffName] then
-        table.insert(matched, "CONSUME:" .. normalizedClass)
+      -- Check if it matches consumables (pattern matching)
+      if localizedConsumables[normalizedClass] then
+        for pattern, _ in pairs(localizedConsumables[normalizedClass]) do
+          if MatchBuff(buffName, pattern) then
+            table.insert(matched, "CONSUME:" .. normalizedClass .. " (pattern: " .. pattern .. ")")
+            break  -- Only show first matching pattern
+          end
+        end
       end
       
-      -- Check if it matches flasks
+      -- Check if it matches flasks (exact match)
       if localizedFlasks[buffName] then
         table.insert(matched, "FLASK")
       end
@@ -735,6 +774,10 @@ function GuildRoll_BuffCheck:DumpBuffs(unit)
 end
 
 -- Runtime helper: Add spell IDs to the configured lists
+-- Note: With the new pattern-based matching for consumables, this function
+-- can be used to add spell IDs that will be resolved and added as additional
+-- patterns. For consumables, the primary matching is now keyword-based.
+-- Future enhancement: Could also accept pattern strings directly.
 function GuildRoll_BuffCheck:AddSpellIDs(kind, idlist)
   if not kind or not idlist then
     GuildRoll:defaultPrint("Usage: GuildRoll_BuffCheck:AddSpellIDs(\"BUFF:PRIEST\", {12345, 67890})")
@@ -774,7 +817,7 @@ function GuildRoll_BuffCheck:AddSpellIDs(kind, idlist)
     return
   end
   
-  -- Invalidate cache and re-resolve localized names
+  -- Invalidate cache and re-resolve (will rebuild patterns for consumables)
   localizedNamesResolved = false
   resolveIDLists()
   GuildRoll:defaultPrint("Spell ID lists updated and localized names refreshed.")
