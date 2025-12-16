@@ -238,9 +238,13 @@ end
 -- Helper: Get spell icon/texture by spell ID
 local function GetSpellIconByID(spellID)
   -- Try GetSpellTexture if available (TBC+)
+  -- On Turtle WoW / 1.12, GetSpellTexture exists but expects different parameters.
+  -- Use pcall to guard against runtime errors when calling with spell ID.
   if GetSpellTexture then
-    local texture = GetSpellTexture(spellID)
-    if texture then return texture end
+    local ok, texture = pcall(GetSpellTexture, spellID)
+    if ok and texture and type(texture) == "string" then
+      return texture
+    end
   end
   
   -- In 1.12, GetSpellTexture is not available and we would need to scan
