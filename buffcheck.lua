@@ -30,6 +30,12 @@ GuildRoll_BuffCheck = GuildRoll:NewModule("GuildRoll_BuffCheck", "AceDB-2.0")
 -- Configuration: Missing buff severity threshold for color coding
 local BUFF_MISSING_SEVERITY_THRESHOLD = 2
 
+-- Configuration: Minimum required consumables per player
+local CONSUMABLE_MIN_REQUIRED = 4
+
+-- Configuration: Minimum required flasks per player
+local FLASK_MIN_REQUIRED = 1
+
 -- Spell ID tables for buffs by provider class (Turtle WoW 1.12)
 -- WARRIOR intentionally removed - Battle Shout is not checked
 local BUFF_IDS = {
@@ -185,9 +191,21 @@ local CONSUMABLES = {
 
 -- Spell ID tables for flasks (Turtle WoW 1.12)
 -- Flask of Distilled Wisdom (13506), Flask of Supreme Power (13508), Flask of the Titans (13507)
+-- NOTE: These IDs are kept for reference and as optional fallback. The primary flask
+-- matching strategy now uses FLASK_KEYWORDS and legacy FLASKS names with
+-- substring matching, making the addon robust on servers with custom or localized buff names.
 local FLASK_IDS = {13506, 13508, 13507}
 
+-- Keyword fallback for flasks (for servers with custom buff names)
+-- These keywords are used as patterns for substring matching (case-insensitive)
+-- This is now the PRIMARY matching strategy for flasks, making the addon
+-- robust on private servers where GetSpellInfo/GetSpellName may not resolve all IDs
+local FLASK_KEYWORDS = {
+  "Flask of",  -- Matches standard flasks: Flask of Distilled Wisdom, Flask of Supreme Power, Flask of the Titans
+}
+
 -- Legacy name-based flasks (kept for reference only)
+-- These are also used as additional pattern sources for substring matching
 -- Common flasks (min = 1)
 local FLASKS = {
   "Flask of Distilled Wisdom",
@@ -280,7 +298,22 @@ local function resolveIDLists()
     end
   end
   
-  -- Resolve FLASK_IDS
+  -- Populate FLASKS using pattern/keyword matching (primary path)
+  -- This makes the addon robust on servers with custom buff names
+  -- NOTE: Unlike consumables, flasks are universal (not class-specific)
+  
+  -- Add patterns from FLASK_KEYWORDS (primary source)
+  for _, keyword in ipairs(FLASK_KEYWORDS) do
+    localizedFlasks[keyword] = true
+  end
+  
+  -- Add legacy names from FLASKS table as additional patterns
+  for _, flaskName in ipairs(FLASKS) do
+    localizedFlasks[flaskName] = true
+  end
+  
+  -- Optional: Try to resolve spell IDs as fallback patterns
+  -- If GetSpellNameByID returns valid names, add them as well
   for _, spellID in ipairs(FLASK_IDS) do
     local ok, spellName = pcall(GetSpellNameByID, spellID)
     if ok and spellName then
@@ -597,7 +630,7 @@ function GuildRoll_BuffCheck:CheckConsumes()
   
   local report = {}
   local allOk = true
-  local minRequired = 4
+  local minRequired = CONSUMABLE_MIN_REQUIRED
   
   for i = 1, numRaid do
     local name, _, _, _, class = GetRaidRosterInfo(i)
@@ -663,12 +696,12 @@ function GuildRoll_BuffCheck:CheckFlasks()
     return
   end
   
-  -- Resolve spell IDs to localized names
+  -- Resolve patterns to localized flasks (now primarily pattern-based)
   resolveIDLists()
   
   local report = {}
   local allOk = true
-  local minRequired = 1
+  local minRequired = FLASK_MIN_REQUIRED
   
   for i = 1, numRaid do
     local name, _, _, _, class = GetRaidRosterInfo(i)
@@ -756,9 +789,12 @@ function GuildRoll_BuffCheck:DumpBuffs(unit)
         end
       end
       
-      -- Check if it matches flasks (exact match)
-      if localizedFlasks[buffName] then
-        table.insert(matched, "FLASK")
+      -- Check if it matches flasks (pattern matching)
+      for pattern, _ in pairs(localizedFlasks) do
+        if MatchBuff(buffName, pattern) then
+          table.insert(matched, "FLASK (pattern: " .. pattern .. ")")
+          break  -- Only show first matching pattern
+        end
       end
       
       local matchStr = ""
