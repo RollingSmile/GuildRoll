@@ -217,7 +217,38 @@ local FLASKS = {
 local localizedBuffs = {}      -- [className] = {[localizedName] = true}
 local localizedConsumables = {} -- [className] = {[localizedName] = true}
 local localizedFlasks = {}      -- {[localizedName] = true}
+local localizedBuffTextures = {} -- [className] = {[textureName] = true} for texture-based matching
+local PALADIN_BLESSING_PATTERNS = {} -- Cached paladin blessing patterns
 local localizedNamesResolved = false -- Cache flag to avoid re-resolving on every check
+
+-- Helper: Extract texture file name from full texture path
+local function TextureNameFromPath(texturePath)
+  if not texturePath then return nil end
+  -- Convert to string if needed
+  local path = tostring(texturePath)
+  -- Extract filename from path (e.g., "Interface\\Icons\\Spell_Holy_PowerWordFortitude" -> "Spell_Holy_PowerWordFortitude")
+  -- Handle both backslashes and forward slashes (Lua pattern: any char except / or \)
+  local filename = string.match(path, "([^/\\]+)$")
+  if filename then
+    return string.lower(filename)
+  end
+  return string.lower(path)
+end
+
+-- Helper: Get spell icon/texture by spell ID
+local function GetSpellIconByID(spellID)
+  -- Try GetSpellTexture if available (TBC+)
+  if GetSpellTexture then
+    local texture = GetSpellTexture(spellID)
+    if texture then return texture end
+  end
+  
+  -- In 1.12, GetSpellTexture is not available and we would need to scan
+  -- the spellbook to find the texture. However, this won't work for cross-class
+  -- spells that aren't in the player's spellbook, so we simply return nil
+  -- and rely on scanning actual buffs on units to build the texture map.
+  return nil
+end
 
 -- Helper: Compatibility wrapper for GetSpellInfo (1.12 uses GetSpellName)
 local function GetSpellNameByID(spellID)
@@ -252,17 +283,46 @@ local function resolveIDLists()
   localizedBuffs = {}
   localizedConsumables = {}
   localizedFlasks = {}
+  localizedBuffTextures = {}
+  PALADIN_BLESSING_PATTERNS = {}
   
-  -- Resolve BUFF_IDS
+  -- Resolve BUFF_IDS and populate texture map
   for className, idList in pairs(BUFF_IDS) do
     if not localizedBuffs[className] then
       localizedBuffs[className] = {}
+    end
+    if not localizedBuffTextures[className] then
+      localizedBuffTextures[className] = {}
     end
     for _, spellID in ipairs(idList) do
       local ok, spellName = pcall(GetSpellNameByID, spellID)
       if ok and spellName then
         localizedBuffs[className][spellName] = true
       end
+      -- Try to get texture for this spell (will return nil in 1.12)
+      -- This is included for forward compatibility with TBC+ where GetSpellTexture exists
+      -- In 1.12, texture-based matching will work by scanning actual buffs on units
+      local texture = GetSpellIconByID(spellID)
+      if texture then
+        local textureName = TextureNameFromPath(texture)
+        if textureName then
+          localizedBuffTextures[className][textureName] = true
+        end
+      end
+    end
+    
+    -- Add fallback name-based patterns from BUFF_REQUIREMENTS
+    if BUFF_REQUIREMENTS[className] then
+      for _, buffName in ipairs(BUFF_REQUIREMENTS[className]) do
+        localizedBuffs[className][buffName] = true
+      end
+    end
+  end
+  
+  -- Build paladin blessing patterns from BUFF_REQUIREMENTS (cached globally)
+  if BUFF_REQUIREMENTS["PALADIN"] then
+    for _, buffName in ipairs(BUFF_REQUIREMENTS["PALADIN"]) do
+      table.insert(PALADIN_BLESSING_PATTERNS, buffName)
     end
   end
   
@@ -449,6 +509,49 @@ local function HasAnyBuffByName(unit, buffList)
   return false
 end
 
+-- Helper: Check if unit has any buff from a given class provider
+-- Uses both localized name patterns and texture-name matches
+local function HasAnyBuffByClass(unit, className)
+  if not className then return false end
+  
+  local buffMap = localizedBuffs[className]
+  local textureMap = localizedBuffTextures[className]
+  
+  if not buffMap and not textureMap then return false end
+  
+  for i = 1, 32 do
+    local buffTexture = UnitBuff(unit, i)
+    if not buffTexture then break end
+    
+    -- Check texture-based match
+    if textureMap then
+      local textureName = TextureNameFromPath(buffTexture)
+      if textureName and textureMap[textureName] then
+        return true, textureName
+      end
+    end
+    
+    -- Check name-based match
+    if buffMap then
+      local buffName = GetBuffName(unit, i)
+      if buffName then
+        -- Try exact match first (faster)
+        if buffMap[buffName] then
+          return true, buffName
+        end
+        
+        -- Fall back to substring matching for each pattern in the map
+        for pattern, _ in pairs(buffMap) do
+          if MatchBuff(buffName, pattern) then
+            return true, buffName
+          end
+        end
+      end
+    end
+  end
+  return false
+end
+
 -- Helper: Count distinct paladin blessings on a unit
 local function CountPaladinBlessings(unit)
   local blessings = {}
@@ -465,12 +568,23 @@ local function CountPaladinBlessings(unit)
     if not buffTexture then break end
     
     local buffName = GetBuffName(unit, i)
-    if buffName and string.find(buffName, "Blessing of") then
-      -- Extract blessing type (Might, Wisdom, etc.)
-      for bType, _ in pairs(blessingTypes) do
-        if string.find(buffName, bType) then
-          blessings[bType] = true
+    if buffName then
+      -- Check if this is a paladin blessing using cached patterns
+      local isBlessing = false
+      for _, pattern in ipairs(PALADIN_BLESSING_PATTERNS) do
+        if MatchBuff(buffName, pattern) then
+          isBlessing = true
           break
+        end
+      end
+      
+      if isBlessing then
+        -- Extract blessing type (Might, Wisdom, etc.)
+        for bType, _ in pairs(blessingTypes) do
+          if string.find(buffName, bType) then
+            blessings[bType] = true
+            break
+          end
         end
       end
     end
@@ -568,11 +682,10 @@ function GuildRoll_BuffCheck:CheckBuffs()
     local missingBuffs = {}
     local missingCount = 0
     
-    -- Check regular buffs (non-paladin) using localized maps
+    -- Check regular buffs (non-paladin) using HasAnyBuffByClass
     for providerClass, _ in pairs(providers) do
       if providerClass ~= "PALADIN" then
-        local buffMap = localizedBuffs[providerClass]
-        local hasBuff, matchedBuff = HasAnyBuffByMap(unit, buffMap)
+        local hasBuff, matchedBuff = HasAnyBuffByClass(unit, providerClass)
         if not hasBuff then
           table.insert(missingBuffs, providerClass)
           missingCount = missingCount + 1
@@ -580,7 +693,7 @@ function GuildRoll_BuffCheck:CheckBuffs()
       end
     end
     
-    -- Check paladin blessings
+    -- Check paladin blessings using improved CountPaladinBlessings
     if providers["PALADIN"] and requiredBlessings > 0 then
       local blessingCount = CountPaladinBlessings(unit)
       if blessingCount < requiredBlessings then
@@ -769,13 +882,30 @@ function GuildRoll_BuffCheck:DumpBuffs(unit)
     if not buffTexture then break end
     
     local buffName = GetBuffName(unit, i)
+    local textureName = TextureNameFromPath(buffTexture)
+    
     if buffName then
       local matched = {}
       
-      -- Check if it matches any buff category (exact match for buffs)
+      -- Check if it matches any buff category (exact or pattern match for buffs)
       for providerClass, buffMap in pairs(localizedBuffs) do
         if buffMap[buffName] then
           table.insert(matched, "BUFF:" .. providerClass)
+        else
+          -- Try pattern matching
+          for pattern, _ in pairs(buffMap) do
+            if MatchBuff(buffName, pattern) then
+              table.insert(matched, "BUFF:" .. providerClass .. " (pattern: " .. pattern .. ")")
+              break
+            end
+          end
+        end
+      end
+      
+      -- Check if it matches texture-based buff detection
+      for providerClass, textureMap in pairs(localizedBuffTextures) do
+        if textureName and textureMap[textureName] then
+          table.insert(matched, "BUFF:" .. providerClass .. " (texture: " .. textureName .. ")")
         end
       end
       
@@ -858,6 +988,44 @@ function GuildRoll_BuffCheck:AddSpellIDs(kind, idlist)
   resolveIDLists()
   GuildRoll:defaultPrint("Spell ID lists updated and localized names refreshed.")
 end
+
+-- Slash command handler for /dumpbuffs
+local function SlashCommandHandler(msg)
+  -- Parse the argument
+  local arg = string.lower(string.gsub(msg or "", "^%s*(.-)%s*$", "%1"))
+  
+  if arg == "" or arg == "help" then
+    GuildRoll:defaultPrint("Usage: /dumpbuffs <unit>")
+    GuildRoll:defaultPrint("  Examples:")
+    GuildRoll:defaultPrint("    /dumpbuffs player - Dump buffs on yourself")
+    GuildRoll:defaultPrint("    /dumpbuffs target - Dump buffs on your target")
+    GuildRoll:defaultPrint("    /dumpbuffs raid - Dump buffs on entire raid")
+    GuildRoll:defaultPrint("    /dumpbuffs raid1 - Dump buffs on raid member 1")
+    GuildRoll:defaultPrint("    /dumpbuffs raid5 - Dump buffs on raid member 5")
+    return
+  end
+  
+  -- Handle 'raid' - dump all raid members
+  if arg == "raid" then
+    local numRaid = GetNumRaidMembers()
+    if numRaid == 0 then
+      GuildRoll:defaultPrint("You are not in a raid.")
+      return
+    end
+    for i = 1, numRaid do
+      GuildRoll_BuffCheck:DumpBuffs("raid" .. i)
+    end
+    return
+  end
+  
+  -- Handle specific unit (player, target, raid1, etc.)
+  GuildRoll_BuffCheck:DumpBuffs(arg)
+end
+
+-- Register slash commands
+SLASH_DUMPBUFFS1 = "/dumpbuffs"
+SLASH_DUMPBUFFS2 = "/dbuffs"
+SlashCmdList["DUMPBUFFS"] = SlashCommandHandler
 
 -- Tablet integration
 function GuildRoll_BuffCheck:OnEnable()
