@@ -1306,22 +1306,28 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
           end          
         end
         if (settings_notice) and settings_notice ~= "" then
-          local sender_rank
-          if class and rank then
-            -- Safely build colored sender name with class color and rank
+          -- Defensive: Re-verify sender to get fresh class/rank info
+          -- This prevents crashes when class/rank from outer scope are nil or stale
+          local sender_name, sender_class, sender_rank = self:verifyGuildMember(sender, true)
+          local sender_display
+          
+          -- Attempt to format sender with class color and rank, with robust fallbacks
+          if sender_name and sender_class and sender_rank then
             local success, coloredSender = pcall(function() 
-              return C:Colorize(BC:GetHexColor(class), sender) 
+              return C:Colorize(BC:GetHexColor(sender_class), sender_name) 
             end)
             if success and coloredSender then
-              sender_rank = string.format("%s(%s)", coloredSender, rank)
+              sender_display = string.format("%s(%s)", coloredSender, sender_rank)
             else
-              sender_rank = string.format("%s(%s)", sender, rank)
+              -- Fallback if colorization fails
+              sender_display = string.format("%s(%s)", sender_name, sender_rank)
             end
           else
-            -- Fallback if class or rank is missing
-            sender_rank = sender
+            -- Fallback if sender verification fails: use raw sender name
+            sender_display = sender or "Unknown"
           end
-          settings_notice = settings_notice..string.format(L[" settings accepted from %s"],sender_rank)
+          
+          settings_notice = settings_notice..string.format(L[" settings accepted from %s"], sender_display)
           self:defaultPrint(settings_notice)
          -- self._options.args["RollValueogress_tier_header"].name = string.format(L["Progress Setting: %s"],GuildRoll_progress)
          -- self._options.args["set_discount_header"].name = string.format(L["Offspec Price: %s%%"],GuildRoll_discount*100)
@@ -1431,7 +1437,13 @@ handleSharedSettings = function(message, sender)
     if GuildRoll_standings and GuildRoll_standings.Refresh then pcall(GuildRoll_standings.Refresh, GuildRoll_standings) end
     if GuildRoll_logs and GuildRoll_logs.Refresh then pcall(GuildRoll_logs.Refresh, GuildRoll_logs) end
     if GuildRoll.SetRefresh then pcall(GuildRoll.SetRefresh, GuildRoll, true) end
-    if GuildRoll.defaultPrint then GuildRoll:defaultPrint(("Admin settings updated from %s"):format(sender)) end
+    if GuildRoll.defaultPrint then 
+      -- Defensive: safely format sender name, handle nil sender
+      local senderName = sender or "Unknown"
+      pcall(function() 
+        GuildRoll:defaultPrint(("Admin settings updated from %s"):format(senderName)) 
+      end)
+    end
   end
 end
 
