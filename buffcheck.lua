@@ -226,7 +226,8 @@ local function TextureNameFromPath(texturePath)
   -- Convert to string if needed
   local path = tostring(texturePath)
   -- Extract filename from path (e.g., "Interface\\Icons\\Spell_Holy_PowerWordFortitude" -> "Spell_Holy_PowerWordFortitude")
-  local filename = string.match(path, "([^\\]+)$")
+  -- Handle both backslashes and forward slashes
+  local filename = string.match(path, "([^\\//]+)$")
   if filename then
     return string.lower(filename)
   end
@@ -241,9 +242,10 @@ local function GetSpellIconByID(spellID)
     if texture then return texture end
   end
   
-  -- In 1.12, we need to scan the spellbook to find the texture
-  -- This won't work for cross-class spells, so we return nil
-  -- and rely on scanning actual buffs on units
+  -- In 1.12, GetSpellTexture is not available and we would need to scan
+  -- the spellbook to find the texture. However, this won't work for cross-class
+  -- spells that aren't in the player's spellbook, so we simply return nil
+  -- and rely on scanning actual buffs on units to build the texture map.
   return nil
 end
 
@@ -296,8 +298,8 @@ local function resolveIDLists()
         localizedBuffs[className][spellName] = true
       end
       -- Try to get texture for this spell
-      local ok2, texture = pcall(GetSpellIconByID, spellID)
-      if ok2 and texture then
+      local texture = GetSpellIconByID(spellID)
+      if texture then
         local textureName = TextureNameFromPath(texture)
         if textureName then
           localizedBuffTextures[className][textureName] = true
