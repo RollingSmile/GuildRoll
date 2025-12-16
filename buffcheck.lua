@@ -300,6 +300,8 @@ local function resolveIDLists()
         localizedBuffs[className][spellName] = true
       end
       -- Try to get texture for this spell (will return nil in 1.12)
+      -- This is included for forward compatibility with TBC+ where GetSpellTexture exists
+      -- In 1.12, texture-based matching will work by scanning actual buffs on units
       local texture = GetSpellIconByID(spellID)
       if texture then
         local textureName = TextureNameFromPath(texture)
