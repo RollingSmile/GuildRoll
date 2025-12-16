@@ -218,6 +218,7 @@ local localizedBuffs = {}      -- [className] = {[localizedName] = true}
 local localizedConsumables = {} -- [className] = {[localizedName] = true}
 local localizedFlasks = {}      -- {[localizedName] = true}
 local localizedBuffTextures = {} -- [className] = {[textureName] = true} for texture-based matching
+local PALADIN_BLESSING_PATTERNS = {} -- Cached paladin blessing patterns
 local localizedNamesResolved = false -- Cache flag to avoid re-resolving on every check
 
 -- Helper: Extract texture file name from full texture path
@@ -226,8 +227,8 @@ local function TextureNameFromPath(texturePath)
   -- Convert to string if needed
   local path = tostring(texturePath)
   -- Extract filename from path (e.g., "Interface\\Icons\\Spell_Holy_PowerWordFortitude" -> "Spell_Holy_PowerWordFortitude")
-  -- Handle both backslashes and forward slashes
-  local filename = string.match(path, "([^\\//]+)$")
+  -- Handle both backslashes and forward slashes (Lua pattern: any char except / or \)
+  local filename = string.match(path, "([^/\\]+)$")
   if filename then
     return string.lower(filename)
   end
@@ -283,6 +284,7 @@ local function resolveIDLists()
   localizedConsumables = {}
   localizedFlasks = {}
   localizedBuffTextures = {}
+  PALADIN_BLESSING_PATTERNS = {}
   
   -- Resolve BUFF_IDS and populate texture map
   for className, idList in pairs(BUFF_IDS) do
@@ -297,7 +299,7 @@ local function resolveIDLists()
       if ok and spellName then
         localizedBuffs[className][spellName] = true
       end
-      -- Try to get texture for this spell
+      -- Try to get texture for this spell (will return nil in 1.12)
       local texture = GetSpellIconByID(spellID)
       if texture then
         local textureName = TextureNameFromPath(texture)
@@ -312,6 +314,13 @@ local function resolveIDLists()
       for _, buffName in ipairs(BUFF_REQUIREMENTS[className]) do
         localizedBuffs[className][buffName] = true
       end
+    end
+  end
+  
+  -- Build paladin blessing patterns from BUFF_REQUIREMENTS (cached globally)
+  if BUFF_REQUIREMENTS["PALADIN"] then
+    for _, buffName in ipairs(BUFF_REQUIREMENTS["PALADIN"]) do
+      table.insert(PALADIN_BLESSING_PATTERNS, buffName)
     end
   end
   
@@ -552,21 +561,13 @@ local function CountPaladinBlessings(unit)
     ["Salvation"] = true,
   }
   
-  -- Build paladin blessing patterns from BUFF_REQUIREMENTS
-  local PALADIN_BLESSING_PATTERNS = {}
-  if BUFF_REQUIREMENTS["PALADIN"] then
-    for _, buffName in ipairs(BUFF_REQUIREMENTS["PALADIN"]) do
-      table.insert(PALADIN_BLESSING_PATTERNS, buffName)
-    end
-  end
-  
   for i = 1, 32 do
     local buffTexture = UnitBuff(unit, i)
     if not buffTexture then break end
     
     local buffName = GetBuffName(unit, i)
     if buffName then
-      -- Check if this is a paladin blessing using patterns
+      -- Check if this is a paladin blessing using cached patterns
       local isBlessing = false
       for _, pattern in ipairs(PALADIN_BLESSING_PATTERNS) do
         if MatchBuff(buffName, pattern) then
