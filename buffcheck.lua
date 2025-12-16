@@ -201,7 +201,7 @@ local FLASK_IDS = {13506, 13508, 13507}
 -- This is now the PRIMARY matching strategy for flasks, making the addon
 -- robust on private servers where GetSpellInfo/GetSpellName may not resolve all IDs
 local FLASK_KEYWORDS = {
-  "Flask",  -- Matches all standard flasks: Flask of Distilled Wisdom, Flask of Supreme Power, Flask of the Titans
+  "Flask of",  -- Matches standard flasks: Flask of Distilled Wisdom, Flask of Supreme Power, Flask of the Titans
 }
 
 -- Legacy name-based flasks (kept for reference only)
@@ -300,6 +300,7 @@ local function resolveIDLists()
   
   -- Populate FLASKS using pattern/keyword matching (primary path)
   -- This makes the addon robust on servers with custom buff names
+  -- NOTE: Unlike consumables, flasks are universal (not class-specific)
   
   -- Add patterns from FLASK_KEYWORDS (primary source)
   for _, keyword in ipairs(FLASK_KEYWORDS) do
