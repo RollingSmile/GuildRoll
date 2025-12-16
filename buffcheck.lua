@@ -865,6 +865,7 @@ function GuildRoll_BuffCheck:setHideScript()
   end
 end
 
+-- UPDATED OnTooltipUpdate: robust handling for buff/consumes/flasks report formats
 function GuildRoll_BuffCheck:OnTooltipUpdate()
   local report = self._currentReport or {}
   local title = self._reportTitle or "Buff Check"
@@ -875,10 +876,22 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   if allOk then
     local cat = T:AddCategory("columns", 1)
     cat:AddLine("text", C:Green(L["BuffCheck_AllOk"] or "All members have required buffs/consumables!"))
-  elseif table.getn(report) == 0 then
+    return
+  end
+  
+  if table.getn(report) == 0 then
     local cat = T:AddCategory("columns", 1)
     cat:AddLine("text", L["BuffCheck_Header"] or "Run a check to see results.")
-  else
+    return
+  end
+  
+  -- Detect report format (buff-style has missingCount/totalRequired; consumes use .type == "consume"; flasks .type == "flask")
+  local sample = report[1]
+  local isBuffFormat = sample and (sample.missingCount ~= nil)
+  local isConsumeFormat = sample and (sample.type == "consume")
+  local isFlaskFormat = sample and (sample.type == "flask")
+  
+  if isBuffFormat then
     local cat = T:AddCategory(
       "columns", 3,
       "text", L["Name"] or "Name",
@@ -887,23 +900,76 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
     )
     
     for _, entry in ipairs(report) do
-      -- Format count as "X/Y" where X is missing and Y is total required
-      local countText = string.format("%d/%d", entry.missingCount, entry.totalRequired)
+      local missingCount = tonumber(entry.missingCount) or 0
+      local totalReq = tonumber(entry.totalRequired) or 0
+      local missingList = tostring(entry.missingList or "")
       
-      -- Highlight based on severity (more missing = more critical)
+      local countText = string.format("%d/%d", missingCount, totalReq)
+      
       local countColor = C:Red(countText)
-      if entry.missingCount <= BUFF_MISSING_SEVERITY_THRESHOLD then
+      if missingCount <= BUFF_MISSING_SEVERITY_THRESHOLD then
         countColor = C:Orange(countText)
       end
       
-      -- Format missing buffs list with color
-      local detailsColor = C:Red(entry.missingList)
+      local detailsColor = C:Red(missingList)
       
       cat:AddLine(
-        "text", entry.player,
+        "text", tostring(entry.player or "<unknown>"),
         "text2", countColor,
         "text3", detailsColor
       )
     end
+    return
+  end
+  
+  -- Consumables report format
+  if isConsumeFormat then
+    local cat = T:AddCategory(
+      "columns", 3,
+      "text", L["Name"] or "Name",
+      "text2", L["ConsumesCheck_PlayerMissing"] or "Status",
+      "text3", "Class"
+    )
+    for _, entry in ipairs(report) do
+      local status = tostring(entry.missing or "")
+      local statusColor = C:Red(status)
+      -- Use yellow when partial (contains "/") or contains number less than required
+      if string.find(status, "/") or string.find(status, "%d") then
+        statusColor = C:Orange(status)
+      end
+      cat:AddLine(
+        "text", tostring(entry.player or "<unknown>"),
+        "text2", statusColor,
+        "text3", tostring(entry.class or "")
+      )
+    end
+    return
+  end
+  
+  -- Flasks report format (fallback generic)
+  if isFlaskFormat then
+    local cat = T:AddCategory(
+      "columns", 3,
+      "text", L["Name"] or "Name",
+      "text2", L["FlasksCheck_AllOk"] or "Missing",
+      "text3", "Class"
+    )
+    for _, entry in ipairs(report) do
+      local status = tostring(entry.missing or "Flask")
+      local statusColor = C:Red(status)
+      cat:AddLine(
+        "text", tostring(entry.player or "<unknown>"),
+        "text2", statusColor,
+        "text3", tostring(entry.class or "")
+      )
+    end
+    return
+  end
+  
+  -- Generic fallback: show whatever fields exist
+  local cat = T:AddCategory("columns", 2, "text", L["Name"] or "Name", "text2", "Info")
+  for _, entry in ipairs(report) do
+    local info = entry.missingList or entry.missing or tostring(entry.missingCount or "")
+    cat:AddLine("text", tostring(entry.player or "<unknown>"), "text2", tostring(info))
   end
 end
