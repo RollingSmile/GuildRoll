@@ -1029,12 +1029,10 @@ function GuildRoll:delayedInit()
   self._options = self:buildMenu()
   self:RegisterChatCommand({"/groll"},self.cmdtable())
   
-  -- Register /grollnogp migration command for admins
-  if admin() then
-    self:RegisterChatCommand({"/grollnogp"}, function()
-      GuildRoll:RemoveGPFromOfficerNotes()
-    end)
-  end
+  -- Register /grollnogp migration command (permission check inside function)
+  self:RegisterChatCommand({"/grollnogp"}, function()
+    GuildRoll:RemoveGPFromOfficerNotes()
+  end)
   
   function GuildRoll:calculateBonus(input)
     local number = tonumber(input)
