@@ -1096,7 +1096,7 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
       return C:Green(match)
     end)
     
-    result = string.gsub(result, "(%-  %d+)", function(match)
+    result = string.gsub(result, "(-%d+)", function(match)
       return C:Red(match)
     end)
     
