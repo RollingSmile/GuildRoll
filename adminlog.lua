@@ -1171,36 +1171,25 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
           end
         )
         
-        -- If expanded, show player details in a sub-category to prevent overlap
+        -- If expanded, show player details inline (same category) to prevent overlap
         if isExpanded and entry.raid_details.players then
-          -- Create a sub-category for raid details to ensure proper rendering
-          local subCat = T:AddCategory(
-            "columns", 3,
-            "text", "",
-            "text2", "",
-            "text3", "Players",
-            "child_textR", 0.7,
-            "child_textG", 0.7,
-            "child_textB", 0.7,
-            "child_text2R", 0.7,
-            "child_text2G", 0.7,
-            "child_text2B", 0.7,
-            "child_text3R", 0.7,
-            "child_text3G", 0.7,
-            "child_text3B", 0.7,
-            "child_justify", "LEFT",
-            "child_justify2", "LEFT",
-            "child_justify3", "LEFT"
-          )
-          
           for j = 1, table.getn(entry.raid_details.players) do
             local player = entry.raid_details.players[j]
             local counts = entry.raid_details.counts[player] or {old=0, new=0}
+            local delta = counts.new - counts.old
             
-            subCat:AddLine(
+            -- Colorize delta: green for positive/zero, red for negative
+            local deltaColored
+            if delta >= 0 then
+              deltaColored = C:Green(string.format("(+%d)", delta))
+            else
+              deltaColored = C:Red(string.format("(%d)", delta))
+            end
+            
+            cat:AddLine(
               "text", "",
               "text2", "",
-              "text3", string.format("  %s — Prev: %d, New: %d", player, counts.old, counts.new)
+              "text3", string.format("  %s — Prev: %d, New: %d %s", player, counts.old, counts.new, deltaColored)
             )
           end
         end
