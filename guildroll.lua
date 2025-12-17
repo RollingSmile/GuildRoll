@@ -2056,6 +2056,17 @@ local _guildroll_tablet_owner = nil
 -- This prevents Tablet-2.0 from asserting when detaching tooltips without an owner
 -- Call this after T:Register() to set tooltip.owner if it's missing
 -- Returns the dummy owner frame (or UIParent as fallback)
+-- Centralized function to ensure Tablet tooltips have a valid owner
+-- This prevents Tablet-2.0 from asserting when detaching tooltips without an owner
+-- Call this after T:Register() to set tooltip.owner if it's missing
+-- Returns the dummy owner frame (or UIParent as fallback)
+-- 
+-- USAGE: After calling T:Register("MyModule", ...), ensure the tooltip has an owner:
+--   if T.registry.MyModule and T.registry.MyModule.tooltip then
+--     if not T.registry.MyModule.tooltip.owner then
+--       T.registry.MyModule.tooltip.owner = GuildRoll:EnsureTabletOwner()
+--     end
+--   end
 function GuildRoll:EnsureTabletOwner()
   local owner = nil
   pcall(function()
@@ -2074,6 +2085,53 @@ function GuildRoll:EnsureTabletOwner()
     owner = _guildroll_tablet_owner
   end)
   return owner or UIParent
+end
+
+-- Centralized helper: Ensure a detached Tablet frame has owner set
+-- This is used by modules to prevent "Detached tooltip has no owner" errors
+-- when detaching tooltips in Tablet-2.0
+-- ownerName: the name string used to identify the Tablet registration (e.g., "GuildRollAlts")
+function GuildRoll:EnsureDetachedFrameOwner(ownerName)
+  if not ownerName then return end
+  local frame = self:FindDetachedFrame(ownerName)
+  if frame and not frame.owner then
+    frame.owner = ownerName
+  end
+end
+
+-- Centralized helper: Safe wrapper for Dewdrop:AddLine
+-- Prevents Dewdrop crashes by wrapping calls in pcall
+-- D: Dewdrop library instance
+-- ...: arguments to pass to D:AddLine
+-- 
+-- Note: In Lua 5.0 (WoW 1.12), varargs (...) cannot be passed directly to pcall.
+-- We must use unpack(arg) to forward the arguments.
+-- 
+-- USAGE: GuildRoll:SafeDewdropAddLine(D, "text", "Refresh", "func", myFunc)
+function GuildRoll:SafeDewdropAddLine(D, ...)
+  pcall(D.AddLine, D, unpack(arg))
+end
+
+-- Centralized SavedVariable accessor utilities (non-breaking)
+-- These don't change existing globals, but provide a clear path to reduce globals in subsequent PRs
+-- 
+-- GuildRoll:GetSaved(key, default) - Get a SavedVariable with fallback default
+-- GuildRoll:SetSaved(key, value) - Set a SavedVariable
+-- 
+-- These are convenience wrappers around _G access and do not rename or migrate any existing variables
+function GuildRoll:GetSaved(key, default)
+  if not key or type(key) ~= "string" then return default end
+  local val = _G[key]
+  if val == nil then
+    return default
+  else
+    return val
+  end
+end
+
+function GuildRoll:SetSaved(key, value)
+  if not key or type(key) ~= "string" then return end
+  _G[key] = value
 end
 
 function GuildRoll:ResetFrames()

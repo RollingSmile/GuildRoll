@@ -269,3 +269,26 @@ Results will print here when done.]],
   ["Request snapshot from peers"] = true,
   ["Never synced"] = true,
 } end)
+
+-- Localization aliasing: create shortcuts from duplicate keys to canonical keys
+-- This reduces the chance of inconsistent translations and documents canonical keys
+-- These aliases do not remove any existing keys, only create additional lookup shortcuts
+do
+  -- AuxStanding is a synonym for MainStanding (both refer to EP)
+  -- Make L["AuxStanding"] reference the same value as L["MainStanding"]
+  if L["MainStanding"] then
+    L["AuxStanding"] = L["MainStanding"]
+  end
+  
+  -- "Minimum MainStanding" is the canonical key for minimum EP threshold
+  -- Alias variants to canonical key
+  if L["Minimum MainStanding"] then
+    L["Set Minimum MainStanding"] = L["Set Minimum MainStanding"] or L["Minimum MainStanding"]
+  end
+  
+  -- "Standing" and "Main Standing" should reference the canonical key "MainStanding"
+  if L["MainStanding"] then
+    L["Standing"] = L["Standing"] or L["MainStanding"]
+    L["Main Standing"] = L["Main Standing"] or L["MainStanding"]
+  end
+end

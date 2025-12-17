@@ -1156,11 +1156,6 @@ SlashCmdList["DUMPBUFFS"] = SlashCommandHandler
 -- Tablet integration
 function GuildRoll_BuffCheck:OnEnable()
   if not T:IsRegistered("GuildRoll_BuffCheck") then
-    -- Safe wrapper for D:AddLine
-    local function safeAddLine(...)
-      pcall(D.AddLine, D, unpack(arg))
-    end
-    
     T:Register("GuildRoll_BuffCheck",
       "children", function()
         self:OnTooltipUpdate()
@@ -1169,7 +1164,8 @@ function GuildRoll_BuffCheck:OnEnable()
       "showHintWhenDetached", true,
       "cantAttach", true,
       "menu", function()
-        safeAddLine(
+        -- Use centralized safe Dewdrop wrapper
+        GuildRoll:SafeDewdropAddLine(D,
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
           "func", function() self:Refresh() end

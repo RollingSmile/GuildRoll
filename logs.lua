@@ -58,13 +58,6 @@ end
 
 function GuildRoll_logs:OnEnable()
   if not T:IsRegistered("GuildRoll_logs") then
-    -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
-    -- Note: In Lua 5.0 (WoW 1.12), varargs (...) cannot be passed directly to pcall.
-    -- We must use unpack(arg) to forward the arguments.
-    local function safeAddLine(...)
-      pcall(D.AddLine, D, unpack(arg))
-    end
-    
     T:Register("GuildRoll_logs",
       "children", function()
         T:SetTitle(L["guildroll logs"])
@@ -74,7 +67,8 @@ function GuildRoll_logs:OnEnable()
       "showHintWhenDetached", true,
       "cantAttach", true,
       "menu", function()
-        safeAddLine(
+        -- Use centralized safe Dewdrop wrapper
+        GuildRoll:SafeDewdropAddLine(D,
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
           "func", function() GuildRoll_logs:Refresh() end
@@ -220,28 +214,6 @@ local personalTabletRegistered = false
 local currentPersonalName = nil
 local lastPersonalShown = nil -- track the name currently being shown in the detached personal window
 
--- Helper function to ensure personal log tooltip has a valid owner
--- Uses the centralized GuildRoll:EnsureTabletOwner() function
-local function safeEnsureTabletOwner()
-  pcall(function()
-    if not T or not T.registry then return end
-    if T.registry.GuildRoll_personal_logs and T.registry.GuildRoll_personal_logs.tooltip then
-      if not T.registry.GuildRoll_personal_logs.tooltip.owner then
-        -- Use the centralized function to get the dummy owner
-        T.registry.GuildRoll_personal_logs.tooltip.owner = GuildRoll:EnsureTabletOwner()
-      end
-    end
-  end)
-end
-
--- Helper function to ensure detached frame has a valid owner property
--- This prevents Tablet-2.0 assert "Detached tooltip has no owner" in detached.Attach()
-local function ensureDetachedFrameOwner(frame, ownerName)
-  if frame and not frame.owner then
-    frame.owner = ownerName
-  end
-end
-
 function GuildRoll_logs:registerPersonalTablet()
   if personalTabletRegistered then return end
   personalTabletRegistered = true
@@ -259,14 +231,9 @@ function GuildRoll_logs:registerPersonalTablet()
     "showHintWhenDetached", true,
     "cantAttach", true,
     "menu", function()
-      -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
-      local function safeAddLine(...)
-        pcall(D.AddLine, D, unpack(arg))
-      end
-      
       -- Only show "Clear personal log" if viewing own log
       if currentPersonalName and currentPersonalName == GuildRoll._playerName then
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(D,
           "text", L["Clear personal log"],
           "tooltipText", L["Clear your personal log"],
           "func", function() 
@@ -275,7 +242,7 @@ function GuildRoll_logs:registerPersonalTablet()
         )
       end
       
-      safeAddLine(
+      GuildRoll:SafeDewdropAddLine(D,
         "text", L["Refresh"],
         "tooltipText", L["Refresh window"],
         "func", function() GuildRoll_logs:RefreshPersonal() end
@@ -303,7 +270,7 @@ function GuildRoll_logs:setHideScriptPersonal()
   local frame = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
   if frame then
     -- Defensive: Ensure frame.owner is set to prevent Tablet-2.0 assert
-    ensureDetachedFrameOwner(frame, "GuildRoll_personal_logs")
+    GuildRoll:EnsureDetachedFrameOwner("GuildRoll_personal_logs")
     GuildRoll:make_escable(frame:GetName(), "add")
     if frame.SetScript then
       frame:SetScript("OnHide", nil)
@@ -400,7 +367,13 @@ function GuildRoll:ShowPersonalLog()
   if detachedVisible then
     if lastPersonalShown == name then
       -- Ensure owner non-nil before operations to avoid Tablet assert
-      safeEnsureTabletOwner()
+      pcall(function()
+        if T and T.registry and T.registry.GuildRoll_personal_logs and T.registry.GuildRoll_personal_logs.tooltip then
+          if not T.registry.GuildRoll_personal_logs.tooltip.owner then
+            T.registry.GuildRoll_personal_logs.tooltip.owner = GuildRoll:EnsureTabletOwner()
+          end
+        end
+      end)
 
       -- Hide the visible detached frame (toggle off)
       pcall(function() detached:Hide() end)
@@ -408,7 +381,7 @@ function GuildRoll:ShowPersonalLog()
       pcall(function()
         if T and T.IsAttached and T.Attach then
           -- Defensive: Ensure detached frame.owner is set right before T:Attach to prevent Tablet-2.0 assert
-          ensureDetachedFrameOwner(detached, "GuildRoll_personal_logs")
+          GuildRoll:EnsureDetachedFrameOwner("GuildRoll_personal_logs")
           pcall(function() T:Attach("GuildRoll_personal_logs") end)
         end
       end)
@@ -445,11 +418,17 @@ function GuildRoll:ShowPersonalLog()
     local alreadyDetached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
     if alreadyDetached then
       -- Defensive: Ensure detached frame.owner is set to prevent Tablet-2.0 assert
-      ensureDetachedFrameOwner(alreadyDetached, "GuildRoll_personal_logs")
+      GuildRoll:EnsureDetachedFrameOwner("GuildRoll_personal_logs")
       pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
     else
       -- Ensure owner non-nil before detaching to avoid Tablet assert
-      safeEnsureTabletOwner()
+      pcall(function()
+        if T and T.registry and T.registry.GuildRoll_personal_logs and T.registry.GuildRoll_personal_logs.tooltip then
+          if not T.registry.GuildRoll_personal_logs.tooltip.owner then
+            T.registry.GuildRoll_personal_logs.tooltip.owner = GuildRoll:EnsureTabletOwner()
+          end
+        end
+      end)
       pcall(function() T:Detach("GuildRoll_personal_logs") end)
     end
 
@@ -463,11 +442,17 @@ function GuildRoll:ShowPersonalLog()
 
   local alreadyDetached = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
   if not alreadyDetached then
-    safeEnsureTabletOwner()
+    pcall(function()
+      if T and T.registry and T.registry.GuildRoll_personal_logs and T.registry.GuildRoll_personal_logs.tooltip then
+        if not T.registry.GuildRoll_personal_logs.tooltip.owner then
+          T.registry.GuildRoll_personal_logs.tooltip.owner = GuildRoll:EnsureTabletOwner()
+        end
+      end
+    end)
     pcall(function() T:Detach("GuildRoll_personal_logs") end)
   else
     -- Defensive: Ensure detached frame.owner is set to prevent Tablet-2.0 assert
-    ensureDetachedFrameOwner(alreadyDetached, "GuildRoll_personal_logs")
+    GuildRoll:EnsureDetachedFrameOwner("GuildRoll_personal_logs")
     pcall(function() if alreadyDetached.Show then alreadyDetached:Show() end end)
   end
 

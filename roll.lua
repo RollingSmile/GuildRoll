@@ -129,6 +129,80 @@ local function GetVisibleStaticPopupEditBox(dialog)
     return nil
 end
 
+-- Define CSR_INPUT static popup once at top-level (idempotent)
+-- This prevents recreation on each ExecuteCommand call and eliminates potential leak/override
+StaticPopupDialogs["CSR_INPUT"] = {
+    text = L["Enter number of weeks you SR this item (0..15):"],
+    button1 = TEXT(ACCEPT),
+    button2 = TEXT(CANCEL),
+    hasEditBox = 1,
+    maxLetters = 5,
+    OnAccept = function(self)
+        -- Use helper to get the editbox robustly
+        local editBox = GetVisibleStaticPopupEditBox(self)
+        local number = tonumber(editBox and editBox:GetText())
+        if number ~= nil then
+            if GuildRoll and GuildRoll.calculateBonus then
+                local bonus = GuildRoll:calculateBonus(number)
+                if bonus == nil then
+                    print("Invalid number entered. Valid values: 0,1 or 2..15")
+                else
+                    if GuildRoll.RollCommand then
+                        GuildRoll:RollCommand(true, bonus)
+                    end
+                end
+            else
+                print("GuildRoll not available.")
+            end
+        else
+            print("Invalid number entered.")
+        end
+    end,
+    OnShow = function(self)
+        -- Use helper and guard against nil
+        local editBox = GetVisibleStaticPopupEditBox(self)
+        if editBox then
+            editBox:SetText("")
+            editBox:SetFocus()
+        end
+    end,
+    OnHide = function(self)
+        if ChatFrameEditBox and ChatFrameEditBox:IsVisible() then
+            ChatFrameEditBox:SetFocus()
+        end
+    end,
+    EditBoxOnEnterPressed = function(editBox)
+        local parent = editBox and editBox:GetParent()
+        local number = tonumber(editBox and editBox:GetText())
+        if number ~= nil then
+            if GuildRoll and GuildRoll.calculateBonus then
+                local bonus = GuildRoll:calculateBonus(number)
+                if bonus == nil then
+                    print("Invalid number entered. Valid values: 0,1 or 2..15")
+                else
+                    if GuildRoll.RollCommand then
+                        GuildRoll:RollCommand(true, bonus)
+                    end
+                end
+            else
+                print("GuildRoll not available.")
+            end
+        else
+            print("Invalid number entered.")
+        end
+        if parent and parent.Hide then parent:Hide() end
+    end,
+    EditBoxOnEscapePressed = function(editBox)
+        -- Callback can be invoked with the editBox as argument; guard it
+        local parent = editBox and editBox:GetParent()
+        if parent and parent.Hide then parent:Hide() end
+    end,
+    timeout = 0,
+    exclusive = 1,
+    whileDead = 1,
+    hideOnEscape = 1,
+}
+
 -- Function to execute commands
 local function ExecuteCommand(command)
     if command == "roll 101" then
@@ -151,77 +225,7 @@ local function ExecuteCommand(command)
         end
     elseif command == "roll csr" then
         -- Use static popup dialog to input CSR weeks (0..15) and validate
-        StaticPopupDialogs["CSR_INPUT"] = {
-            text = L["Enter number of weeks you SR this item (0..15):"],
-            button1 = TEXT(ACCEPT),
-            button2 = TEXT(CANCEL),
-            hasEditBox = 1,
-            maxLetters = 5,
-            OnAccept = function(self)
-                -- Use helper to get the editbox robustly
-                local editBox = GetVisibleStaticPopupEditBox(self)
-                local number = tonumber(editBox and editBox:GetText())
-                if number ~= nil then
-                    if GuildRoll and GuildRoll.calculateBonus then
-                        local bonus = GuildRoll:calculateBonus(number)
-                        if bonus == nil then
-                            print("Invalid number entered. Valid values: 0,1 or 2..15")
-                        else
-                            if GuildRoll.RollCommand then
-                                GuildRoll:RollCommand(true, bonus)
-                            end
-                        end
-                    else
-                        print("GuildRoll not available.")
-                    end
-                else
-                    print("Invalid number entered.")
-                end
-            end,
-            OnShow = function(self)
-                -- Use helper and guard against nil
-                local editBox = GetVisibleStaticPopupEditBox(self)
-                if editBox then
-                    editBox:SetText("")
-                    editBox:SetFocus()
-                end
-            end,
-            OnHide = function(self)
-                if ChatFrameEditBox and ChatFrameEditBox:IsVisible() then
-                    ChatFrameEditBox:SetFocus()
-                end
-            end,
-            EditBoxOnEnterPressed = function(editBox)
-                local parent = editBox and editBox:GetParent()
-                local number = tonumber(editBox and editBox:GetText())
-                if number ~= nil then
-                    if GuildRoll and GuildRoll.calculateBonus then
-                        local bonus = GuildRoll:calculateBonus(number)
-                        if bonus == nil then
-                            print("Invalid number entered. Valid values: 0,1 or 2..15")
-                        else
-                            if GuildRoll.RollCommand then
-                                GuildRoll:RollCommand(true, bonus)
-                            end
-                        end
-                    else
-                        print("GuildRoll not available.")
-                    end
-                else
-                    print("Invalid number entered.")
-                end
-                if parent and parent.Hide then parent:Hide() end
-            end,
-            EditBoxOnEscapePressed = function(editBox)
-                -- Callback can be invoked with the editBox as argument; guard it
-                local parent = editBox and editBox:GetParent()
-                if parent and parent.Hide then parent:Hide() end
-            end,
-            timeout = 0,
-            exclusive = 1,
-            whileDead = 1,
-            hideOnEscape = 1,
-        }
+        -- CSR_INPUT is defined at top-level to prevent recreation on each call
         StaticPopup_Show("CSR_INPUT")
     elseif command == "show ep" then
         if GuildRoll_standings and GuildRoll_standings.Toggle then
@@ -450,15 +454,21 @@ end)
 rollFrame:SetScript("OnMouseUp", function(_, button)
     if button == "LeftButton" then
         rollFrame:StopMovingOrSizing()
-        GuildRoll_RollPos.x = rollFrame:GetLeft()
-        GuildRoll_RollPos.y = rollFrame:GetTop()
+        -- Safe fallback for GetLeft/GetTop which may return nil
+        local x = rollFrame:GetLeft() or GuildRoll_RollPos.x or 400
+        local y = rollFrame:GetTop() or GuildRoll_RollPos.y or 300
+        GuildRoll_RollPos.x = x
+        GuildRoll_RollPos.y = y
     end
 end)
 rollFrame:SetScript("OnDragStart", function() rollFrame:StartMoving() end)
 rollFrame:SetScript("OnDragStop", function()
     rollFrame:StopMovingOrSizing()
-    GuildRoll_RollPos.x = rollFrame:GetLeft()
-    GuildRoll_RollPos.y = rollFrame:GetTop()
+    -- Safe fallback for GetLeft/GetTop which may return nil
+    local x = rollFrame:GetLeft() or GuildRoll_RollPos.x or 400
+    local y = rollFrame:GetTop() or GuildRoll_RollPos.y or 300
+    GuildRoll_RollPos.x = x
+    GuildRoll_RollPos.y = y
 end)
 
 -- Restore saved position on load
