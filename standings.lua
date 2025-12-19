@@ -371,7 +371,7 @@ function GuildRoll_standings:BuildStandingsTable()
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
     local ep = (GuildRoll:get_ep_v3(name,officernote) or 0) 
-    -- GP is deprecated, no longer used
+    local gp = (GuildRoll:get_gp_v3(name,officernote) or GuildRoll.VARS.baseAE)
     local main, main_class, main_rank = GuildRoll:parseAlt(name,officernote)
     
     -- NoPugs: Removed getPugName call - displayName is just name
@@ -392,10 +392,10 @@ function GuildRoll_standings:BuildStandingsTable()
     if ep > 0 then
       if (GuildRoll_standings_raidonly) and next(r) then
         if r[name] then
-          table.insert(t,{displayName,class,armor_class,ep,0,ep,name})
+          table.insert(t,{displayName,class,armor_class,ep,gp,(ep+ math.min(GuildRoll.VARS.AERollCap,gp)),name})
         end
       else
-        table.insert(t,{displayName,class,armor_class,ep,0,ep,name})
+        table.insert(t,{displayName,class,armor_class,ep,gp,(ep+ math.min(GuildRoll.VARS.AERollCap,gp)),name})
       end
     end
   end

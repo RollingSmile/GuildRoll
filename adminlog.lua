@@ -791,9 +791,11 @@ function GuildRoll_AdminLog:OnEnable()
   -- Load saved entries
   loadSavedEntries()
   
-  -- Register CHAT_MSG_ADDON handler with named method
+  -- Register CHAT_MSG_ADDON handler
   if not self.addonHandlerRegistered then
-    self:RegisterEvent("CHAT_MSG_ADDON", "OnChatMsgAddon")
+    self:RegisterEvent("CHAT_MSG_ADDON", function()
+      handleAdminLogMessage(arg1, arg2, arg3, arg4)
+    end)
     self.addonHandlerRegistered = true
   end
   
@@ -1061,11 +1063,6 @@ function GuildRoll_AdminLog:setHideScript()
   end
 end
 
--- OnChatMsgAddon: Named handler for CHAT_MSG_ADDON event
-function GuildRoll_AdminLog:OnChatMsgAddon(prefix, message, channel, sender)
-  handleAdminLogMessage(prefix or arg1, message or arg2, channel or arg3, sender or arg4)
-end
-
 function GuildRoll_AdminLog:OnTooltipUpdate()
   local cat = T:AddCategory(
     "columns", 3,
@@ -1174,15 +1171,8 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
           end
         )
         
-        -- If expanded, create a separate sub-category for player details
+        -- If expanded, show player details inline (same category) to prevent overlap
         if isExpanded and entry.raid_details.players then
-          local subcat = T:AddCategory(
-            "columns", 1,
-            "child_textR", 0.7,
-            "child_textG", 0.7,
-            "child_textB", 0.7
-          )
-          
           for j = 1, table.getn(entry.raid_details.players) do
             local player = entry.raid_details.players[j]
             local counts = entry.raid_details.counts[player] or {old=0, new=0}
@@ -1196,8 +1186,10 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
               deltaColored = C:Red(string.format("(%d)", delta))
             end
             
-            subcat:AddLine(
-              "text", string.format("  %s — Prev: %d, New: %d %s", player, counts.old, counts.new, deltaColored)
+            cat:AddLine(
+              "text", "",
+              "text2", "",
+              "text3", string.format("  %s — Prev: %d, New: %d %s", player, counts.old, counts.new, deltaColored)
             )
           end
         end

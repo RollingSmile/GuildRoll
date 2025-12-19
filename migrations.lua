@@ -6,8 +6,9 @@ function GuildRoll:v2tov3()
     local epv2 = GuildRoll:get_ep_v2(name,note)
     local gpv2 = GuildRoll:get_gp_v2(name,officernote)
     local epv3 = GuildRoll:get_ep_v3(name,officernote)
-    if (epv3) then
-      -- do nothing, we've migrated already (EP exists in v3 format)
+    local gpv3 = GuildRoll:get_gp_v3(name,officernote)
+    if (epv3 and gpv3) then
+      -- do nothing, we've migrated already
     elseif (epv2 and gpv2) and (epv2 > 0 and gpv2 >= GuildRoll.VARS.baseAE) then
       count = count + 1
       -- self:defaultPrint(string.format("MainStandingv2:%s,gpv2:%s,i:%s,n:%s,o:%s",epv2,gpv2,i,name,officernote))
