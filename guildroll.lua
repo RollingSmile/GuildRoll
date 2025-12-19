@@ -2535,9 +2535,7 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
   
   for i = 1, numMembers do
     -- Wrap GetGuildRosterInfo in pcall for safety
-    local success, name, r2, r3, r4, r5, r6, publicNote, officerNote, r9, r10 = pcall(function()
-      return GetGuildRosterInfo(i)
-    end)
+    local success, name, r2, r3, r4, r5, r6, publicNote, officerNote, r9, r10 = pcall(GetGuildRosterInfo, i)
     
     -- Process only if GetGuildRosterInfo succeeded and returned valid data
     if success and name then
@@ -2555,9 +2553,7 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
           -- Validate newOfficer is a string before writing
           if type(newOfficer) == "string" then
             -- Write officer note first (wrapped in pcall for safety)
-            local successOfficer = pcall(function()
-              GuildRosterSetOfficerNote(i, newOfficer, true)
-            end)
+            local successOfficer = pcall(GuildRosterSetOfficerNote, i, newOfficer, true)
             
             -- Only remove from public note if officer note write succeeded
             if successOfficer then
@@ -2619,9 +2615,7 @@ function GuildRoll:RemoveGPFromOfficerNotes()
     
     for i = currentIndex, batchEnd do
       -- Wrap GetGuildRosterInfo in pcall for safety
-      local success, name, r2, r3, r4, r5, r6, publicNote, officerNote, r9, r10 = pcall(function()
-        return GetGuildRosterInfo(i)
-      end)
+      local success, name, r2, r3, r4, r5, r6, publicNote, officerNote, r9, r10 = pcall(GetGuildRosterInfo, i)
       
       -- Process only if GetGuildRosterInfo succeeded and returned valid data
       if success and name and type(officerNote) == "string" and officerNote ~= "" then
@@ -2639,9 +2633,7 @@ function GuildRoll:RemoveGPFromOfficerNotes()
             -- Validate newOfficerNote is a string before writing
             if type(newOfficerNote) == "string" then
               -- Write officer note (wrapped in pcall for safety)
-              local writeSuccess = pcall(function()
-                GuildRosterSetOfficerNote(i, newOfficerNote, true)
-              end)
+              local writeSuccess = pcall(GuildRosterSetOfficerNote, i, newOfficerNote, true)
               
               if writeSuccess then
                 batchMigrated = batchMigrated + 1
