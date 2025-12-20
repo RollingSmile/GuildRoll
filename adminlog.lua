@@ -1080,7 +1080,7 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
     "child_text3R", 1,
     "child_text3G", 1,
     "child_text3B", 0.5,
-    "child_justify3", "LEFT"
+    "child_justify3", "RIGHT"
   )
   
   -- Helper function to colorize numeric deltas in action text
@@ -1176,7 +1176,10 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
           -- Create a subcategory for player details (aligned to Action column)
           local subcat = cat:AddCategory(
             "columns", 3,
-            "hideBlankLine", true
+            "hideBlankLine", true,
+            "child_justify", "LEFT",
+            "child_justify2", "LEFT",
+            "child_justify3", "RIGHT"
           )
           
           for j = 1, table.getn(entry.raid_details.players) do
