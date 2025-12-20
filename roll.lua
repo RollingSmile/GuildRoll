@@ -437,7 +437,7 @@ local options = BuildRollOptions()
 -- Create roll buttons dynamically with closer spacing
 local previousButton = rollOptionsFrame
 for _, option in ipairs(options) do
-    local buttonFrame = CreateRollButton(option[1], rollOptionsFrame, option[2], previousButton, option[3] or 110, option[4] or false)
+    local buttonFrame = CreateRollButton(option[1], rollOptionsFrame, option[2], previousButton, option[3] or 110, option[4] or false, false)
 
     if previousButton == rollOptionsFrame then
         buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)
@@ -464,28 +464,25 @@ end
 -- Toggle roll buttons on Roll button click
 -- Use OnMouseUp to detect which button was clicked
 rollButton:SetScript("OnMouseUp", function(self, button)
-    -- Hide both frames first
-    rollOptionsFrame:Hide()
-    adminOptionsFrame:Hide()
-    
     if button == "RightButton" then
-        -- Right-click: show admin menu if admin, otherwise show normal menu
+        -- Right-click: hide both frames first, then show admin menu if admin, otherwise show normal menu
+        rollOptionsFrame:Hide()
+        adminOptionsFrame:Hide()
+        
         local isAdmin = (GuildRoll and GuildRoll.IsAdmin) and GuildRoll:IsAdmin() or false
         if isAdmin then
             adminOptionsFrame:Show()
         else
             rollOptionsFrame:Show()
         end
-    end
-end)
-
--- Keep OnClick for left-click behavior (toggle normal menu)
-rollButton:SetScript("OnClick", function()
-    adminOptionsFrame:Hide()
-    if rollOptionsFrame:IsShown() then
-        rollOptionsFrame:Hide()
-    else
-        rollOptionsFrame:Show()
+    elseif button == "LeftButton" then
+        -- Left-click: toggle normal menu, hide admin menu
+        adminOptionsFrame:Hide()
+        if rollOptionsFrame:IsShown() then
+            rollOptionsFrame:Hide()
+        else
+            rollOptionsFrame:Show()
+        end
     end
 end)
 
@@ -513,7 +510,7 @@ function GuildRoll:RebuildRollOptions()
     -- Recreate buttons
     local previousButton = rollOptionsFrame
     for _, opt in ipairs(newOptions) do
-        local buttonFrame = CreateRollButton(opt[1], rollOptionsFrame, opt[2], previousButton, opt[3] or 110, opt[4] or false)
+        local buttonFrame = CreateRollButton(opt[1], rollOptionsFrame, opt[2], previousButton, opt[3] or 110, opt[4] or false, false)
         if previousButton == rollOptionsFrame then
             buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)
         else
