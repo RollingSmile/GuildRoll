@@ -404,109 +404,42 @@ local function resolveIDLists()
   if localizedNamesResolved then
     return
   end
-  
+
   -- Clear previous maps
   localizedBuffs = {}
   localizedConsumables = {}
   localizedFlasks = {}
-  localizedBuffTextures = {}
+  localizedBuffTextures = {} -- keep empty: we drop texture-based matching
   PALADIN_BLESSING_PATTERNS = {}
-  
-  -- Resolve BUFF_IDS and populate texture map
-  for className, idList in pairs(BUFF_IDS) do
-    if not localizedBuffs[className] then
-      localizedBuffs[className] = {}
-    end
-    if not localizedBuffTextures[className] then
-      localizedBuffTextures[className] = {}
-    end
-    for _, spellID in ipairs(idList) do
-      local ok, spellName = pcall(GetSpellNameByID, spellID)
-      if ok and spellName then
-        localizedBuffs[className][spellName] = true
-      end
-      -- Try to get texture for this spell (will return nil in 1.12)
-      -- This is included for forward compatibility with TBC+ where GetSpellTexture exists
-      -- In 1.12, texture-based matching will work by scanning actual buffs on units
-      local texture = GetSpellIconByID(spellID)
-      if texture then
-        local textureName = TextureNameFromPath(texture)
-        if textureName then
-          localizedBuffTextures[className][textureName] = true
-        end
-      end
-    end
-    
-    -- Add fallback name-based patterns from BUFF_REQUIREMENTS
-    if BUFF_REQUIREMENTS[className] then
-      for _, buffName in ipairs(BUFF_REQUIREMENTS[className]) do
-        localizedBuffs[className][buffName] = true
-      end
+
+  -- Populate buffs from legacy BUFF_REQUIREMENTS only (exact-name matching)
+  for className, buffList in pairs(BUFF_REQUIREMENTS) do
+    localizedBuffs[className] = localizedBuffs[className] or {}
+    for _, buffName in ipairs(buffList) do
+      localizedBuffs[className][buffName] = true
     end
   end
-  
+
   -- Build paladin blessing patterns from BUFF_REQUIREMENTS (cached globally)
   if BUFF_REQUIREMENTS["PALADIN"] then
     for _, buffName in ipairs(BUFF_REQUIREMENTS["PALADIN"]) do
       table.insert(PALADIN_BLESSING_PATTERNS, buffName)
     end
   end
-  
-  -- Populate CONSUMABLES using pattern/keyword matching (primary path)
-  -- This makes the addon robust on servers with custom buff names
-  for className, _ in pairs(CONSUMABLE_IDS) do
-    if not localizedConsumables[className] then
-      localizedConsumables[className] = {}
-    end
-    
-    -- Add patterns from CONSUMABLE_BUFF_KEYWORDS (primary source)
-    for _, keyword in ipairs(CONSUMABLE_BUFF_KEYWORDS) do
-      localizedConsumables[className][keyword] = true
-    end
-    
-    -- Add legacy names from CONSUMABLES table as additional patterns
-    if CONSUMABLES[className] then
-      for _, consumeName in ipairs(CONSUMABLES[className]) do
-        localizedConsumables[className][consumeName] = true
-      end
-    end
-    
-    -- Optional: Try to resolve spell IDs as fallback patterns
-    -- If GetSpellNameByID returns valid names, add them as well
-    local idList = CONSUMABLE_IDS[className]
-    if idList then
-      for _, spellID in ipairs(idList) do
-        local ok, spellName = pcall(GetSpellNameByID, spellID)
-        if ok and spellName then
-          localizedConsumables[className][spellName] = true
-        end
-      end
+
+  -- Populate consumables from legacy CONSUMABLES only (exact-name matching)
+  for className, consumeList in pairs(CONSUMABLES) do
+    localizedConsumables[className] = localizedConsumables[className] or {}
+    for _, consumeName in ipairs(consumeList) do
+      localizedConsumables[className][consumeName] = true
     end
   end
-  
-  -- Populate FLASKS using pattern/keyword matching (primary path)
-  -- This makes the addon robust on servers with custom buff names
-  -- NOTE: Unlike consumables, flasks are universal (not class-specific)
-  
-  -- Add patterns from FLASK_KEYWORDS (primary source)
-  for _, keyword in ipairs(FLASK_KEYWORDS) do
-    localizedFlasks[keyword] = true
-  end
-  
-  -- Add legacy names from FLASKS table as additional patterns
+
+  -- Populate flasks from legacy FLASKS only (exact-name matching)
   for _, flaskName in ipairs(FLASKS) do
     localizedFlasks[flaskName] = true
   end
-  
-  -- Optional: Try to resolve spell IDs as fallback patterns
-  -- If GetSpellNameByID returns valid names, add them as well
-  for _, spellID in ipairs(FLASK_IDS) do
-    local ok, spellName = pcall(GetSpellNameByID, spellID)
-    if ok and spellName then
-      localizedFlasks[spellName] = true
-    end
-  end
-  
+
   -- Mark as resolved
   localizedNamesResolved = true
 end
