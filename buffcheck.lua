@@ -688,7 +688,7 @@ local function CountPriestBuffTypes(unit)
       if isPriestBuff then
         -- Extract buff type (Fortitude, Spirit, Shadow Protection)
         for buffType, _ in pairs(priestBuffCategories) do
-          if string.find(buffName, buffType) then
+          if string.find(string.lower(buffName), string.lower(buffType)) then
             buffTypes[buffType] = true
             break
           end
