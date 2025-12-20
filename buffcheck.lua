@@ -658,6 +658,52 @@ local function CountPaladinBlessings(unit)
   return count
 end
 
+-- Helper: Count distinct priest buff types on a unit
+-- Priest has 3 buff types: Fortitude, Spirit, Shadow Protection (each in short/long version)
+local function CountPriestBuffTypes(unit)
+  local buffTypes = {}
+  local priestBuffCategories = {
+    ["Fortitude"] = true,
+    ["Spirit"] = true,
+    ["Shadow Protection"] = true,
+  }
+  
+  for i = 1, 32 do
+    local buffTexture = UnitBuff(unit, i)
+    if not buffTexture then break end
+    
+    local buffName = GetBuffName(unit, i)
+    if buffName then
+      -- Check if this is a priest buff using BUFF_REQUIREMENTS patterns
+      local isPriestBuff = false
+      if BUFF_REQUIREMENTS["PRIEST"] then
+        for _, pattern in ipairs(BUFF_REQUIREMENTS["PRIEST"]) do
+          if MatchBuff(buffName, pattern) then
+            isPriestBuff = true
+            break
+          end
+        end
+      end
+      
+      if isPriestBuff then
+        -- Extract buff type (Fortitude, Spirit, Shadow Protection)
+        for buffType, _ in pairs(priestBuffCategories) do
+          if string.find(buffName, buffType) then
+            buffTypes[buffType] = true
+            break
+          end
+        end
+      end
+    end
+  end
+  
+  local count = 0
+  for _, _ in pairs(buffTypes) do
+    count = count + 1
+  end
+  return count
+end
+
 -- Helper: Check if class is present in raid
 local function IsClassInRaid(className)
   local numRaid = GetNumRaidMembers()
@@ -726,7 +772,11 @@ function GuildRoll_BuffCheck:CheckBuffs()
   -- Calculate total required buffs for each player
   local totalRequired = 0
   for providerClass, _ in pairs(providers) do
-    if providerClass ~= "PALADIN" then
+    if providerClass == "PALADIN" then
+      -- Paladins handled separately
+    elseif providerClass == "PRIEST" then
+      totalRequired = totalRequired + 3 -- Priest has 3 buff types: Fortitude, Spirit, Shadow Protection
+    else
       totalRequired = totalRequired + 1
     end
   end
@@ -743,9 +793,20 @@ function GuildRoll_BuffCheck:CheckBuffs()
     local missingBuffs = {}
     local missingCount = 0
     
-    -- Check regular buffs (non-paladin) using HasAnyBuffByClass
+    -- Check priest buffs (requires all 3 buff types)
+    if providers["PRIEST"] then
+      local priestBuffCount = CountPriestBuffTypes(unit)
+      local requiredPriestBuffs = 3
+      if priestBuffCount < requiredPriestBuffs then
+        local missingPriestBuffs = requiredPriestBuffs - priestBuffCount
+        table.insert(missingBuffs, string.format("Priest(%d)", missingPriestBuffs))
+        missingCount = missingCount + missingPriestBuffs
+      end
+    end
+    
+    -- Check regular buffs (non-paladin, non-priest) using HasAnyBuffByClass
     for providerClass, _ in pairs(providers) do
-      if providerClass ~= "PALADIN" then
+      if providerClass ~= "PALADIN" and providerClass ~= "PRIEST" then
         local hasBuff, matchedBuff = HasAnyBuffByClass(unit, providerClass)
         if not hasBuff then
           table.insert(missingBuffs, providerClass)
