@@ -51,7 +51,6 @@ local running_check,running_bid
 local partyUnit,raidUnit = {},{}
 local hexColorQuality = {}
 local RaidKey = {}
-local zone_multipliers = {}
 -- Forward-declare handler for SHARE: admin settings so addonComms can call it early
 local handleSharedSettings
 
@@ -2866,83 +2865,34 @@ function GuildRoll:make_escable(framename,operation)
   end
 end
 
-local raidZones = {[L["Molten Core"]]="T1",[L["Onyxia\'s Lair"]]="T1.5",[L["Blackwing Lair"]]="T2",[L["Ahn\'Qiraj"]]="T2.5",[L["Naxxramas"]]="T3"}
-zone_multipliers = {
-  ["T3"] =   {["T3"]=1,["T2.5"]=0.75,["T2"]=0.5,["T1.5"]=0.25,["T1"]=0.25},
-  ["T2.5"] = {["T3"]=1,["T2.5"]=1,   ["T2"]=0.7,["T1.5"]=0.4, ["T1"]=0.4},
-  ["T2"] =   {["T3"]=1,["T2.5"]=1,   ["T2"]=1,  ["T1.5"]=0.5, ["T1"]=0.5},
-  ["T1"] =   {["T3"]=1,["T2.5"]=1,   ["T2"]=1,  ["T1.5"]=1,   ["T1"]=1}
-}
+-- suggestedAwardMainStanding: Returns suggested EP award for main standing
+-- Calls GetReward() defensively with pcall and returns that value if present and numeric;
+-- otherwise returns GuildRoll.VARS.baseawardpoints as a fallback.
 function GuildRoll:suggestedAwardMainStanding()
-
-
-    local isMainStanding , reward = GuildRoll.GetReward()
-    if not isMainStanding and reward then
-        return reward
-    end
-
-
-return GuildRoll.VARS.baseawardpoints
--- local currentTier, zoneEN, zoneLoc, checkTier, multiplier
--- local inInstance, instanceType = IsInInstance()
--- if (inInstance == nil) or (instanceType ~= nil and instanceType == "none") then
---   currentTier = "T1.5"   
--- end
--- if (inInstance) and (instanceType == "raid") then
---   zoneLoc = GetRealZoneText()
---   if (BZ:HasReverseTranslation(zoneLoc)) then
---     zoneEN = BZ:GetReverseTranslation(zoneLoc)
---     checkTier = raidZones[zoneEN]
---     if (checkTier) then
---       currentTier = checkTier
---     end
---   end
--- end
--- if not currentTier then 
---   return GuildRoll.VARS.baseawardpoints
--- else
---   multiplier = zone_multipliers[GuildRoll_progress][currentTier]
--- end
--- if (multiplier) then
---   return multiplier*GuildRoll.VARS.baseawardpoints
--- else
---   return GuildRoll.VARS.baseawardpoints
--- end
+  local success, isMainStanding, reward = pcall(function()
+    return GuildRoll.GetReward()
+  end)
+  
+  if success and not isMainStanding and reward and type(reward) == "number" then
+    return reward
+  end
+  
+  return GuildRoll.VARS.baseawardpoints
 end
+
+-- suggestedAwardAuxStanding: Returns suggested EP award for aux standing
+-- Calls GetReward() defensively with pcall and returns that value if present and numeric;
+-- otherwise returns GuildRoll.VARS.baseawardpoints as a fallback.
 function GuildRoll:suggestedAwardAuxStanding()
-
-    local isMainStanding , reward = GuildRoll.GetReward()
-    if ( isMainStanding) and reward then
-        return reward
-    end
-
-
-return GuildRoll.VARS.baseawardpoints
--- local currentTier, zoneEN, zoneLoc, checkTier, multiplier
--- local inInstance, instanceType = IsInInstance()
--- if (inInstance == nil) or (instanceType ~= nil and instanceType == "none") then
---   currentTier = "T1.5"   
--- end
--- if (inInstance) and (instanceType == "raid") then
---   zoneLoc = GetRealZoneText()
---   if (BZ:HasReverseTranslation(zoneLoc)) then
---     zoneEN = BZ:GetReverseTranslation(zoneLoc)
---     checkTier = raidZones[zoneEN]
---     if (checkTier) then
---       currentTier = checkTier
---     end
---   end
--- end
--- if not currentTier then 
---   return GuildRoll.VARS.baseawardpoints
--- else
---   multiplier = zone_multipliers[GuildRoll_progress][currentTier]
--- end
--- if (multiplier) then
---   return multiplier*GuildRoll.VARS.baseawardpoints
--- else
---   return GuildRoll.VARS.baseawardpoints
--- end
+  local success, isMainStanding, reward = pcall(function()
+    return GuildRoll.GetReward()
+  end)
+  
+  if success and isMainStanding and reward and type(reward) == "number" then
+    return reward
+  end
+  
+  return GuildRoll.VARS.baseawardpoints
 end
 function GuildRoll:parseVersion(version,otherVersion)
 	if   version then  
