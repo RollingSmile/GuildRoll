@@ -76,7 +76,6 @@ local snapshotMaxTS = 0 -- track max timestamp during snapshot reception
 local latestRemoteTS = 0 -- track latest remote timestamp seen
 local filterAuthor = nil -- for UI filtering
 local searchText = nil -- for UI search
-local expandedRaidEntries = {} -- track which raid entries are expanded (key = entry.id)
 
 -- Constants
 local PROTOCOL_VERSION = 1
@@ -695,7 +694,6 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     GuildRoll_adminLogSaved = {}
     GuildRoll_adminLogOrder = {}
     adminLogRuntime = {}
-    expandedRaidEntries = {}
     
     -- Refresh UI
     if T and T:IsRegistered("GuildRoll_AdminLog") then
@@ -989,7 +987,6 @@ function GuildRoll_AdminLog:OnEnable()
             GuildRoll_adminLogSaved = {}
             GuildRoll_adminLogOrder = {}
             adminLogRuntime = {}
-            expandedRaidEntries = {}
             
             -- Refresh UI
             pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -1349,7 +1346,6 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_CLEAR_CONFIRM"] = {
       GuildRoll_adminLogSaved = {}
       GuildRoll_adminLogOrder = {}
       adminLogRuntime = {}
-      expandedRaidEntries = {}
       
       -- Refresh UI
       pcall(function() T:Refresh("GuildRoll_AdminLog") end)
