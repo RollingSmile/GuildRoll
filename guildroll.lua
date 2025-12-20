@@ -2060,7 +2060,8 @@ function GuildRoll:migrateToEPOnly(throttleDelay)
     local success, name, rank, rankIndex, level, class, zone, note, officernote = pcall(GetGuildRosterInfo, i)
     if success and name and officernote then
       -- Match {EP:GP} pattern (support optional negative GP)
-      local prefix, ep, gp, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+      -- Pattern captures: prefix, fullTag, ep, gp, postfix (5 total)
+      local prefix, fullTag, ep, gp, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
       if ep and gp then
         table.insert(toMigrate, {
           name = name,
