@@ -349,14 +349,14 @@ function GuildRoll_standings:ToggleRaidOnly()
 end
 
 local pr_sorter_standings = function(a,b)
-    if a[6] ~= b[6] then
-      return tonumber(a[6]) > tonumber(b[6])
+    if a[5] ~= b[5] then
+      return tonumber(a[5]) > tonumber(b[5])
     else
       return tonumber(a[4]) > tonumber(b[4])
     end
 end
 -- Builds a standings table with record:
--- name, class, armor_class, roles, EP, GP, PR
+-- name, class, armor_class, EP, PR (EP-based), originalName
 -- and sorted by PR
 function GuildRoll_standings:BuildStandingsTable()
   local t = { }
@@ -371,7 +371,6 @@ function GuildRoll_standings:BuildStandingsTable()
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
     local ep = (GuildRoll:get_ep_v3(name,officernote) or 0) 
-    local gp = (GuildRoll:get_gp_v3(name,officernote) or GuildRoll.VARS.baseAE)
     local main, main_class, main_rank = GuildRoll:parseAlt(name,officernote)
     
     -- NoPugs: Removed getPugName call - displayName is just name
@@ -392,10 +391,10 @@ function GuildRoll_standings:BuildStandingsTable()
     if ep > 0 then
       if (GuildRoll_standings_raidonly) and next(r) then
         if r[name] then
-          table.insert(t,{displayName,class,armor_class,ep,gp,(ep+ math.min(GuildRoll.VARS.AERollCap,gp)),name})
+          table.insert(t,{displayName,class,armor_class,ep,ep,name})
         end
       else
-        table.insert(t,{displayName,class,armor_class,ep,gp,(ep+ math.min(GuildRoll.VARS.AERollCap,gp)),name})
+        table.insert(t,{displayName,class,armor_class,ep,ep,name})
       end
     end
   end
@@ -426,7 +425,7 @@ function GuildRoll_standings:OnTooltipUpdate()
   local t = self:BuildStandingsTable()
   local separator
   for i = 1, table.getn(t) do
-    local displayName, class, armor_class, ep, gp, pr, originalName = unpack(t[i])
+    local displayName, class, armor_class, ep, pr, originalName = unpack(t[i])
     if (GuildRoll_groupbyarmor) then
       if not (separator) then
         separator = armor_text[armor_class]
