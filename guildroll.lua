@@ -1570,7 +1570,8 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
     local hasLegacy = string.find(officernote,"{%d+:%-?%d+}")
     if hasLegacy then
       -- Convert {EP:GP} to {EP}
-      local prefix, epVal, gpVal, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+      -- Pattern captures: prefix, fullTag, epVal, gpVal, postfix (5 total)
+      local prefix, fullTag, epVal, gpVal, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
       if epVal then
         local newTag = string.format("{%d}", tonumber(epVal))
         local newNote = (prefix or "") .. newTag .. (postfix or "")
