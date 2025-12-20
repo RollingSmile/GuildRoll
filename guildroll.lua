@@ -221,6 +221,18 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       end,
       order = 10,
     },
+    nogp = {
+      type = "text",
+      name = "Migrate to EP-only",
+      desc = "Convert officer notes from {EP:GP} to {EP} format with GP backup. Usage: /groll nogp [throttleDelay]",
+      usage = "[throttleDelay]",
+      get = false,
+      set = function(input)
+        local throttleDelay = tonumber(input) or 0.25
+        GuildRoll:migrateToEPOnly(throttleDelay)
+      end,
+      order = 11,
+    },
   }},
 {type = "group", handler = GuildRoll, args = {
     show = {
@@ -1028,6 +1040,20 @@ function GuildRoll:delayedInit()
   -- init options and comms
   self._options = self:buildMenu()
   self:RegisterChatCommand({"/groll"},self.cmdtable())
+  
+  -- Register standalone /grollnogp command for admin-only migration
+  self:RegisterChatCommand({"/grollnogp"}, {
+    type = "text",
+    name = "Migrate to EP-only",
+    desc = "Convert officer notes from {EP:GP} to {EP} format with GP backup",
+    usage = "[throttleDelay]",
+    get = false,
+    set = function(input)
+      local throttleDelay = tonumber(input) or 0.25
+      GuildRoll:migrateToEPOnly(throttleDelay)
+    end,
+  })
+  
   function GuildRoll:calculateBonus(input)
     local number = tonumber(input)
     if not number or number < 0 or number > 15 then
@@ -1997,6 +2023,138 @@ function GuildRoll:ep_reset_v3()
   end
 end
 
+-- migrateToEPOnly: Convert officer notes from {EP:GP} format to {EP} format
+-- Backs up GP values to GuildRoll_oldGP saved variable
+-- Admin-only function with throttled updates to avoid server spam
+function GuildRoll:migrateToEPOnly(throttleDelay)
+  -- Admin permission check
+  if not self:IsAdmin() then
+    self:defaultPrint(L["You must be a guild officer or leader to run this migration."] or "You must be a guild officer or leader to run this migration.")
+    return
+  end
+  
+  -- Default throttle delay
+  throttleDelay = tonumber(throttleDelay) or 0.25
+  if throttleDelay < 0.1 then
+    throttleDelay = 0.1  -- Minimum safety threshold
+  end
+  
+  -- Initialize GuildRoll_oldGP if it doesn't exist
+  if not GuildRoll_oldGP then
+    GuildRoll_oldGP = {}
+  end
+  
+  -- Scan roster and collect members needing migration
+  local toMigrate = {}
+  local ok, numMembers = pcall(function()
+    if not IsInGuild() then return 0 end
+    return GetNumGuildMembers(1) or 0
+  end)
+  
+  if not ok or numMembers == 0 then
+    self:defaultPrint("Guild roster not available. Please try again in a moment.")
+    return
+  end
+  
+  for i = 1, numMembers do
+    local success, name, rank, rankIndex, level, class, zone, note, officernote = pcall(GetGuildRosterInfo, i)
+    if success and name and officernote then
+      -- Match {EP:GP} pattern (support optional negative GP)
+      local prefix, ep, gp, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+      if ep and gp then
+        table.insert(toMigrate, {
+          name = name,
+          oldNote = officernote,
+          prefix = prefix or "",
+          ep = tonumber(ep),
+          gp = tonumber(gp),
+          postfix = postfix or ""
+        })
+      end
+    end
+  end
+  
+  if table.getn(toMigrate) == 0 then
+    self:defaultPrint("No officer notes found with {EP:GP} format. Migration complete.")
+    return
+  end
+  
+  self:defaultPrint(string.format("Starting migration of %d member(s) from {EP:GP} to {EP} format...", table.getn(toMigrate)))
+  
+  -- Create frame for throttled updates
+  local frame = CreateFrame("Frame")
+  local currentIndex = 1
+  local timeSinceLastUpdate = 0
+  
+  frame:SetScript("OnUpdate", function()
+    local elapsed = arg1  -- Lua 5.0 uses arg1 for elapsed time
+    timeSinceLastUpdate = timeSinceLastUpdate + elapsed
+    
+    if timeSinceLastUpdate >= throttleDelay and currentIndex <= table.getn(toMigrate) then
+      timeSinceLastUpdate = 0
+      
+      local entry = toMigrate[currentIndex]
+      
+      -- Build new note with {EP} format
+      local newTag = string.format("{%d}", entry.ep)
+      local newNote = entry.prefix .. newTag .. entry.postfix
+      
+      -- Ensure note doesn't exceed MAX_NOTE_LEN (31 chars)
+      if string.len(newNote) > MAX_NOTE_LEN then
+        -- Trim prefix and postfix evenly to fit
+        local tagLen = string.len(newTag)
+        local availableLen = MAX_NOTE_LEN - tagLen
+        local prefixLen = string.len(entry.prefix)
+        local postfixLen = string.len(entry.postfix)
+        local totalExtra = prefixLen + postfixLen
+        
+        if totalExtra > availableLen then
+          -- Trim proportionally
+          local prefixAllowed = math.floor((prefixLen / totalExtra) * availableLen)
+          local postfixAllowed = availableLen - prefixAllowed
+          
+          entry.prefix = string.sub(entry.prefix, 1, prefixAllowed)
+          entry.postfix = string.sub(entry.postfix, 1, postfixAllowed)
+          newNote = entry.prefix .. newTag .. entry.postfix
+        end
+      end
+      
+      -- Backup GP value to saved variable
+      GuildRoll_oldGP[entry.name] = {
+        gp = entry.gp,
+        timestamp = time(),
+        oldNote = entry.oldNote,
+        newNote = newNote
+      }
+      
+      -- Find current roster index for this member (roster may have reordered)
+      local foundIndex = nil
+      for i = 1, GetNumGuildMembers(1) do
+        local success, checkName = pcall(GetGuildRosterInfo, i)
+        if success and checkName == entry.name then
+          foundIndex = i
+          break
+        end
+      end
+      
+      if foundIndex then
+        -- Apply the note change
+        local success, err = pcall(GuildRosterSetOfficerNote, foundIndex, newNote)
+        if not success then
+          GuildRoll:defaultPrint(string.format("Failed to update %s: %s", entry.name, tostring(err)))
+        end
+      end
+      
+      currentIndex = currentIndex + 1
+      
+      -- Cleanup when done
+      if currentIndex > table.getn(toMigrate) then
+        frame:SetScript("OnUpdate", nil)
+        GuildRoll:defaultPrint(string.format("Migration complete! Converted %d member(s) to {EP} format. GP values backed up to GuildRoll_oldGP.", table.getn(toMigrate)))
+      end
+    end
+  end)
+end
 
 
 
