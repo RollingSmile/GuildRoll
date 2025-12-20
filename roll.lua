@@ -464,7 +464,7 @@ for _, option in ipairs(adminOptions) do
 end
 
 -- Toggle roll buttons on Roll button click
--- OnClick receives the mouse button as arg1 parameter
+-- OnClick receives the mouse button as the second parameter (button)
 rollButton:SetScript("OnClick", function(self, button)
     if button == "RightButton" then
         -- Right-click: hide both frames first, then show admin menu if admin, otherwise show normal menu
