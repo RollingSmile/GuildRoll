@@ -1173,13 +1173,12 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
         
         -- If expanded, show player details in a subcategory to prevent overlap
         if isExpanded and entry.raid_details.players then
-          -- Create a subcategory for player details (aligned to Action column)
+          -- Create a subcategory for player details with single column, no inheritance
           local subcat = cat:AddCategory(
-            "columns", 3,
+            "columns", 1,
             "hideBlankLine", true,
-            "child_justify", "LEFT",
-            "child_justify2", "LEFT",
-            "child_justify3", "RIGHT"
+            "noInherit", true,
+            "child_justify", "RIGHT"
           )
           
           for j = 1, table.getn(entry.raid_details.players) do
@@ -1196,9 +1195,7 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
             end
             
             subcat:AddLine(
-              "text", "",
-              "text2", "",
-              "text3", string.format("  %s — Prev: %d, New: %d %s", player, counts.old, counts.new, deltaColored)
+              "text", string.format("  %s — Prev: %d, New: %d %s", player, counts.old, counts.new, deltaColored)
             )
           end
         end
