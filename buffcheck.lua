@@ -1192,10 +1192,9 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   -- Consumables report format
   if isConsumeFormat then
     local cat = T:AddCategory(
-      "columns", 3,
+      "columns", 2,
       "text", L["Name"] or "Name",
-      "text2", L["ConsumesCheck_PlayerMissing"] or "Status",
-      "text3", "Class"
+      "text2", "Details"
     )
     for _, entry in ipairs(report) do
       local status = tostring(entry.missing or "")
@@ -1206,8 +1205,7 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
       end
       cat:AddLine(
         "text", tostring(entry.player or "<unknown>"),
-        "text2", statusColor,
-        "text3", tostring(entry.class or "")
+        "text2", statusColor
       )
     end
     return
@@ -1216,18 +1214,16 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   -- Flasks report format (fallback generic)
   if isFlaskFormat then
     local cat = T:AddCategory(
-      "columns", 3,
+      "columns", 2,
       "text", L["Name"] or "Name",
-      "text2", L["FlasksCheck_AllOk"] or "Missing",
-      "text3", "Class"
+      "text2", "Details"
     )
     for _, entry in ipairs(report) do
       local status = tostring(entry.missing or "Flask")
       local statusColor = C:Red(status)
       cat:AddLine(
         "text", tostring(entry.player or "<unknown>"),
-        "text2", statusColor,
-        "text3", tostring(entry.class or "")
+        "text2", statusColor
       )
     end
     return
