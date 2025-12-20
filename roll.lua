@@ -233,9 +233,8 @@ end
 -- Function to execute admin commands
 local function ExecuteAdminCommand(command)
     if command == "toggle_standings" then
-        if GuildRoll_standings and GuildRoll_standings.Toggle then
-            pcall(function() GuildRoll_standings:Toggle() end)
-        end
+        -- Reuse existing "show ep" logic from ExecuteCommand
+        ExecuteCommand("show ep")
     elseif command == "buff_check" then
         if GuildRoll_BuffCheck and GuildRoll_BuffCheck.CheckBuffs then
             pcall(function() GuildRoll_BuffCheck:CheckBuffs() end)
@@ -469,7 +468,13 @@ rollButton:SetScript("OnMouseUp", function(self, button)
         rollOptionsFrame:Hide()
         adminOptionsFrame:Hide()
         
-        local isAdmin = (GuildRoll and GuildRoll.IsAdmin) and GuildRoll:IsAdmin() or false
+        -- Check if player is admin with defensive programming
+        local isAdmin = false
+        if GuildRoll and GuildRoll.IsAdmin then
+            local ok, result = pcall(function() return GuildRoll:IsAdmin() end)
+            isAdmin = ok and result
+        end
+        
         if isAdmin then
             adminOptionsFrame:Show()
         else
