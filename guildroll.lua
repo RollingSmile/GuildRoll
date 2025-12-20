@@ -1999,14 +1999,14 @@ function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single charac
   local logMsg
   local adminName = UnitName("player")
   
-  -- Build compact AdminLog format: PlayerName - EP: Prev -> New (±N) by AdminName
+  -- Build compact AdminLog format: PlayerName - EP: Prev -> New (±N)
   local deltaStr
   if ep >= 0 then
     deltaStr = string.format("+%d", ep)
   else
     deltaStr = string.format("%d", ep)
   end
-  logMsg = string.format("%s - EP: %d -> %d (%s) by %s", getname, old, newep, deltaStr, adminName)
+  logMsg = string.format("%s - EP: %d -> %d (%s)", getname, old, newep, deltaStr)
   
   -- Build announcement message
   if ep < 0 then
