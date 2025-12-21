@@ -36,20 +36,10 @@ local CONSUMABLE_MIN_REQUIRED = 4
 -- Configuration: Minimum required flasks per player
 local FLASK_MIN_REQUIRED = 1
 
--- Spell ID tables for buffs by provider class (Turtle WoW 1.12)
--- WARRIOR intentionally removed - Battle Shout is not checked
-local BUFF_IDS = {
-  -- Power Word: Fortitude (10933, 27681), Divine Spirit (14782, 27683), Shadow Protection (27685, 27687)
-  PRIEST = {10933, 27681, 14782, 27683, 27685, 27687},
-  -- Arcane Intellect (1459), Arcane Brilliance (23028)
-  MAGE   = {1459, 23028},
-  -- Mark of the Wild (8907), Gift of the Wild (21850)
-  DRUID  = {8907, 21850},
-  -- Blessings: Might (10442, 25780), Wisdom (10308, 25895), Kings (25782, 25899), Light (19978, 25916), Salvation (1038, 25898)
-  PALADIN= {10442, 25780, 10308, 25895, 25782, 25899, 19978, 25916, 1038, 25898},
-}
+-- Configuration: Number of distinct priest buff types required
+local PRIEST_BUFF_TYPES_REQUIRED = 3
 
--- Legacy name-based buff requirements (kept for reference only)
+-- Buff requirements by provider class (name-based matching)
 local BUFF_REQUIREMENTS = {
   PRIEST = {
     "Power Word: Fortitude",
@@ -75,70 +65,20 @@ local BUFF_REQUIREMENTS = {
     "Blessing of Kings",
     "Blessing of Light",
     "Blessing of Salvation",
+    "Blessing of Sanctuary",
   },
 }
 
--- Spell ID tables for consumables by class (Turtle WoW 1.12)
--- Mongoose=17528, Giants=17551, Firewater=18125, Juju Power=17539, Juju Might=17540, Dumplings=24045, Sunfruit=10706, Stoneshield=17565
--- Greater Agility=9188, Greater Firepower=17562, Shadow Power=17560, Arcane Elixir=17556, Greater Arcane=17557, Frost Power=17563, Cerebral=9030, Runn Tum=18141
--- NOTE: These IDs are kept for reference and as optional fallback. The primary consumable
--- matching strategy now uses CONSUMABLE_BUFF_KEYWORDS and legacy CONSUMABLES names with
--- substring matching, making the addon robust on servers with custom or localized buff names.
-local CONSUMABLE_IDS = {
-  WARRIOR = {17528, 17551, 18125, 17539, 17540, 24045, 10706, 17565},
-  ROGUE   = {17528, 9188, 18125, 17539, 17540, 10706, 24045},
-  HUNTER  = {17528, 9188, 18125, 17539, 10706, 24045},
-  MAGE    = {17562, 17560, 17556, 17557, 17563, 9030, 18141},
-  WARLOCK = {17562, 17560, 17556, 17557, 9030, 18141},
-  PRIEST  = {17562, 17560, 17556, 17557, 9030, 18141},
-  DRUID   = {17562, 17560, 17556, 17557, 9030, 18141, 17528, 9188},
-  PALADIN = {17551, 17528, 17562, 17560, 17556, 17557, 9030, 18141},
-  -- SHAMAN intentionally omitted
-}
-
--- Keyword fallback for consumables (for servers with custom buff names)
--- These keywords are used as patterns for substring matching (case-insensitive)
--- This is now the PRIMARY matching strategy for consumables, making the addon
--- robust on private servers where GetSpellInfo/GetSpellName may not resolve all IDs
-local CONSUMABLE_BUFF_KEYWORDS = {
-  "Mongoose", "Giants",      -- Elixir of the Mongoose, Elixir of Giants
-  "Firewater",               -- Winterfall Firewater
-  "Juju",                    -- Juju Power, Juju Might
-  "Stoneshield",             -- Greater Stoneshield Potion
-  "Sunfruit", "Dumplings",   -- Blessed Sunfruit Juice, Smoked Desert Dumplings
-  "Agility",                 -- Elixir of Greater Agility
-  "Firepower", "Shadow Power", -- Elixir of Greater Firepower, Elixir of Shadow Power
-  "Arcane Elixir",           -- Arcane Elixir, Greater Arcane Elixir
-  "Frost Power",             -- Elixir of Frost Power
-  "Cerebral", "Runn Tum",    -- Cerebral Cortex Compound, Runn Tum Tuber Surprise
-  "Scorpok",
-  -- New keywords / server-specific items
-  "Spirit of Zanza", "Swiftness of Zanza",
-  "Danonzo", "Tel'Abim", "Tel Abim",
-  "Gurubashi", "Gumbo", "Le Fishe", "Fishe", "Grilled Squid", "Sour Mountain",
-  "R.O.I.D.S.", "ROIDS", "ROIDS.", "ROIDS",
-  "Elemental Sharpening Stone", "Sharpening Stone",
-  "Mighty Rage", "Mighty Rage Potion",
-  "Hardened Mushroom", "Major Troll's Blood", "Troll's Blood",
-  "Rumsey", "Black Label", "Rumsey Rum",
-  "Flask of Titans", "Flask of Distilled Wisdom", "Flask of",
-  "Cerebral Cortex", "Mageblood", "Greater Arcane", "Arcane Elixir",
-  "Dreamshard", "Brilliant Wizard", "Brilliant Mana",
-  "Major Mana", "Major Mana Potion",
-  "Nightfin", "Fizzy Energy", "Fizzy",
-  "Herbal Tea", "Kreeg", "Kreeg's Stout", "Merlot",
-  "Mongoose", "Swiftness", "Spirit",
-}
-
--- Legacy name-based consumables (kept for reference only)
--- These are also used as additional pattern sources for substring matching
-local CONSUMABLES = {
-  WARRIOR = {
+-- Role-based consumable requirements (name-based matching)
+-- Consumables are organized by role rather than class to reduce duplication
+local ROLE_CONSUMABLES = {
+  TANK = {
     "Spirit of Zanza",
     "Swiftness of Zanza",
+    "Danonzo's Tel'Abim Medley",
     "Elixir of the Mongoose",
     "Juju Might",
-    "Ground Scorpok Assay",
+    "Juju Power",
     "Elixir of Giants",
     "Elixir of Fortitude",
     "Elixir of Superior Defense",
@@ -149,186 +89,74 @@ local CONSUMABLES = {
     "Sour Mountain Berry",
     "Flask of Titans",
     "Major Troll's Blood Potion",
-    "Juju Power",
     "Hardened Mushroom",
     "Winterfall Firewater",
     "Rumsey Rum Black Label",
     "R.O.I.D.S.",
     "Elemental Sharpening Stone",
     "Mighty Rage Potion",
-    "Danonzo's Tel'Abim Medley",
   },
-  DRUID = {
+  PHYSICAL = {
     "Spirit of Zanza",
     "Swiftness of Zanza",
+    "Danonzo's Tel'Abim Medley",
     "Elixir of the Mongoose",
     "Juju Might",
     "Ground Scorpok Assay",
-    "Elixir of Giants",
-    "Elixir of Fortitude",
-    "Elixir of Superior Defense",
-    "Greater Stoneshield Potion",
-    "Gurubashi Gumbo",
+    "Strike of the Scorpok",
     "Le Fishe Au Chocolat",
     "Grilled Squid",
     "Sour Mountain Berry",
-    "Flask of Titans",
-    "Major Troll's Blood Potion",
-    "Juju Power",
-    "Hardened Mushroom",
-    "Winterfall Firewater",
-    "Rumsey Rum Black Label",
-    "R.O.I.D.S.",
     "Elemental Sharpening Stone",
+    "R.O.I.D.S.",
     "Mighty Rage Potion",
+  },
+  CASTER = {
+    "Spirit of Zanza",
+    "Swiftness of Zanza",
     "Danonzo's Tel'Abim Medley",
     "Cerebral Cortex Compound",
     "Mageblood Potion",
     "Greater Arcane Elixir",
+    "Arcane Elixir",
     "Dreamshard Elixir",
     "Brilliant Wizard Oil",
-    "Major Mana Potion",
-    "Danonzo's Tel'Abim Delight",
     "Brilliant Mana Oil",
+    "Major Mana Potion",
     "Nightfin Soup",
     "Fizzy Energy Drink",
-    "Flask of Distilled Wisdom",
     "Herbal Tea",
     "Kreeg's Stout Beatdown",
     "Merlot Blue",
+    "Danonzo's Tel'Abim Delight",
   },
-  PALADIN = {
+  HEALER = {
     "Spirit of Zanza",
     "Swiftness of Zanza",
-    "Elixir of the Mongoose",
-    "Juju Might",
-    "Strike of the Scorpok",
-    "Elixir of Giants",
-    "Elixir of Fortitude",
-    "Elixir of Superior Defense",
-    "Greater Stoneshield Potion",
-    "Gurubashi Gumbo",
-    "Le Fishe Au Chocolat",
-    "Grilled Squid",
-    "Sour Mountain Berry",
-    "Flask of Titans",
-    "Major Troll's Blood Potion",
-    "Juju Power",
-    "Hardened Mushroom",
-    "Winterfall Firewater",
-    "Rumsey Rum Black Label",
-    "R.O.I.D.S.",
-    "Elemental Sharpening Stone",
-    "Mighty Rage Potion",
     "Danonzo's Tel'Abim Medley",
     "Cerebral Cortex Compound",
     "Mageblood Potion",
-    "Greater Arcane Elixir",
-    "Dreamshard Elixir",
-    "Brilliant Wizard Oil",
     "Major Mana Potion",
-    "Danonzo's Tel'Abim Delight",
-    "Brilliant Mana Oil",
-    "Nightfin Soup",
-    "Fizzy Energy Drink",
     "Flask of Distilled Wisdom",
     "Herbal Tea",
-    "Kreeg's Stout Beatdown",
-    "Merlot Blue",
-  },
-  PRIEST = {
-    "Spirit of Zanza",
-    "Swiftness of Zanza",
-    "Cerebral Cortex Compound",
-    "Mageblood Potion",
-    "Greater Arcane Elixir",
-    "Dreamshard Elixir",
-    "Brilliant Wizard Oil",
-    "Major Mana Potion",
-    "Danonzo's Tel'Abim Delight",
-    "Danonzo's Tel'Abim Medley",
-    "Brilliant Mana Oil",
     "Nightfin Soup",
-    "Fizzy Energy Drink",
-    "Major Troll's Blood Potion",
-    "Flask of Distilled Wisdom",
-    "Herbal Tea",
-    "Kreeg's Stout Beatdown",
-    "Merlot Blue",
-  },
-  MAGE = {
-    "Spirit of Zanza",
-    "Swiftness of Zanza",
-    "Cerebral Cortex Compound",
-    "Mageblood Potion",
-    "Greater Arcane Elixir",
-    "Dreamshard Elixir",
-    "Brilliant Wizard Oil",
-    "Major Mana Potion",
-    "Danonzo's Tel'Abim Delight",
-    "Danonzo's Tel'Abim Medley",
-  },
-  WARLOCK = {
-    "Spirit of Zanza",
-    "Swiftness of Zanza",
-    "Cerebral Cortex Compound",
-    "Mageblood Potion",
-    "Greater Arcane Elixir",
-    "Dreamshard Elixir",
-    "Brilliant Wizard Oil",
-    "Major Mana Potion",
-    "Danonzo's Tel'Abim Delight",
-    "Danonzo's Tel'Abim Medley",
-  },
-  ROGUE = {
-    "Spirit of Zanza",
-    "Swiftness of Zanza",
-    "Elixir of the Mongoose",
-    "Juju Might",
-    "Strike of the Scorpok",
-    "Elixir of Giants",
-    "R.O.I.D.S.",
-    "Elemental Sharpening Stone",
-    "Mighty Rage Potion",
-    "Danonzo's Tel'Abim Medley",
-    "Le Fishe Au Chocolat",
-    "Grilled Squid",
-    "Sour Mountain Berry",
-  },
-  HUNTER = {
-    "Spirit of Zanza",
-    "Swiftness of Zanza",
-    "Elixir of the Mongoose",
-    "Juju Might",
-    "Ground Scorpok Assay",
-    "Danonzo's Tel'Abim Surprise",
-    "Danonzo's Tel'Abim Medley",
-    "Le Fishe Au Chocolat",
-    "Grilled Squid",
-    "Sour Mountain Berry",
-    "Strike of the Scorpok",
-    "Mana Regeneration"
-  },
+  }
 }
 
--- Spell ID tables for flasks (Turtle WoW 1.12)
--- Flask of Distilled Wisdom (13506), Flask of Supreme Power (13508), Flask of the Titans (13507)
--- NOTE: These IDs are kept for reference and as optional fallback. The primary flask
--- matching strategy now uses FLASK_KEYWORDS and legacy FLASKS names with
--- substring matching, making the addon robust on servers with custom or localized buff names.
-local FLASK_IDS = {13506, 13508, 13507}
-
--- Keyword fallback for flasks (for servers with custom buff names)
--- These keywords are used as patterns for substring matching (case-insensitive)
--- This is now the PRIMARY matching strategy for flasks, making the addon
--- robust on private servers where GetSpellInfo/GetSpellName may not resolve all IDs
-local FLASK_KEYWORDS = {
-  "Flask of",  -- Matches standard flasks: Flask of Distilled Wisdom, Flask of Supreme Power, Flask of the Titans
+-- Class to role mapping (upper-case class tokens)
+-- Each class can have multiple roles
+local CLASS_ROLES = {
+  DRUID = { "TANK", "PHYSICAL", "CASTER", "HEALER" },
+  PALADIN = { "TANK", "PHYSICAL", "HEALER" },
+  WARRIOR = { "TANK", "PHYSICAL" },
+  HUNTER = { "PHYSICAL" },
+  ROGUE = { "PHYSICAL" },
+  MAGE = { "CASTER" },
+  PRIEST = { "CASTER", "HEALER" },
+  WARLOCK = { "CASTER" },
 }
 
--- Legacy name-based flasks (kept for reference only)
--- These are also used as additional pattern sources for substring matching
--- Common flasks (min = 1)
+-- Flask requirements (name-based matching)
 local FLASKS = {
   "Flask of Distilled Wisdom",
   "Flask of Supreme Power",
@@ -404,109 +232,47 @@ local function resolveIDLists()
   if localizedNamesResolved then
     return
   end
-  
+
   -- Clear previous maps
   localizedBuffs = {}
   localizedConsumables = {}
   localizedFlasks = {}
-  localizedBuffTextures = {}
+  localizedBuffTextures = {} -- keep empty: we drop texture-based matching
   PALADIN_BLESSING_PATTERNS = {}
-  
-  -- Resolve BUFF_IDS and populate texture map
-  for className, idList in pairs(BUFF_IDS) do
-    if not localizedBuffs[className] then
-      localizedBuffs[className] = {}
-    end
-    if not localizedBuffTextures[className] then
-      localizedBuffTextures[className] = {}
-    end
-    for _, spellID in ipairs(idList) do
-      local ok, spellName = pcall(GetSpellNameByID, spellID)
-      if ok and spellName then
-        localizedBuffs[className][spellName] = true
-      end
-      -- Try to get texture for this spell (will return nil in 1.12)
-      -- This is included for forward compatibility with TBC+ where GetSpellTexture exists
-      -- In 1.12, texture-based matching will work by scanning actual buffs on units
-      local texture = GetSpellIconByID(spellID)
-      if texture then
-        local textureName = TextureNameFromPath(texture)
-        if textureName then
-          localizedBuffTextures[className][textureName] = true
-        end
-      end
-    end
-    
-    -- Add fallback name-based patterns from BUFF_REQUIREMENTS
-    if BUFF_REQUIREMENTS[className] then
-      for _, buffName in ipairs(BUFF_REQUIREMENTS[className]) do
-        localizedBuffs[className][buffName] = true
-      end
+
+  -- Populate buffs from legacy BUFF_REQUIREMENTS only (exact-name matching)
+  for className, buffList in pairs(BUFF_REQUIREMENTS) do
+    localizedBuffs[className] = localizedBuffs[className] or {}
+    for _, buffName in ipairs(buffList) do
+      localizedBuffs[className][buffName] = true
     end
   end
-  
+
   -- Build paladin blessing patterns from BUFF_REQUIREMENTS (cached globally)
   if BUFF_REQUIREMENTS["PALADIN"] then
     for _, buffName in ipairs(BUFF_REQUIREMENTS["PALADIN"]) do
       table.insert(PALADIN_BLESSING_PATTERNS, buffName)
     end
   end
-  
-  -- Populate CONSUMABLES using pattern/keyword matching (primary path)
-  -- This makes the addon robust on servers with custom buff names
-  for className, _ in pairs(CONSUMABLE_IDS) do
-    if not localizedConsumables[className] then
-      localizedConsumables[className] = {}
-    end
-    
-    -- Add patterns from CONSUMABLE_BUFF_KEYWORDS (primary source)
-    for _, keyword in ipairs(CONSUMABLE_BUFF_KEYWORDS) do
-      localizedConsumables[className][keyword] = true
-    end
-    
-    -- Add legacy names from CONSUMABLES table as additional patterns
-    if CONSUMABLES[className] then
-      for _, consumeName in ipairs(CONSUMABLES[className]) do
-        localizedConsumables[className][consumeName] = true
-      end
-    end
-    
-    -- Optional: Try to resolve spell IDs as fallback patterns
-    -- If GetSpellNameByID returns valid names, add them as well
-    local idList = CONSUMABLE_IDS[className]
-    if idList then
-      for _, spellID in ipairs(idList) do
-        local ok, spellName = pcall(GetSpellNameByID, spellID)
-        if ok and spellName then
-          localizedConsumables[className][spellName] = true
+
+  -- Populate consumables from role-based ROLE_CONSUMABLES (exact-name matching)
+  -- Build a merged set of consumables for each class based on their roles
+  for className, roles in pairs(CLASS_ROLES) do
+    localizedConsumables[className] = localizedConsumables[className] or {}
+    for _, role in ipairs(roles) do
+      if ROLE_CONSUMABLES[role] then
+        for _, consumeName in ipairs(ROLE_CONSUMABLES[role]) do
+          localizedConsumables[className][consumeName] = true
         end
       end
     end
   end
-  
-  -- Populate FLASKS using pattern/keyword matching (primary path)
-  -- This makes the addon robust on servers with custom buff names
-  -- NOTE: Unlike consumables, flasks are universal (not class-specific)
-  
-  -- Add patterns from FLASK_KEYWORDS (primary source)
-  for _, keyword in ipairs(FLASK_KEYWORDS) do
-    localizedFlasks[keyword] = true
-  end
-  
-  -- Add legacy names from FLASKS table as additional patterns
+
+  -- Populate flasks from legacy FLASKS only (exact-name matching)
   for _, flaskName in ipairs(FLASKS) do
     localizedFlasks[flaskName] = true
   end
-  
-  -- Optional: Try to resolve spell IDs as fallback patterns
-  -- If GetSpellNameByID returns valid names, add them as well
-  for _, spellID in ipairs(FLASK_IDS) do
-    local ok, spellName = pcall(GetSpellNameByID, spellID)
-    if ok and spellName then
-      localizedFlasks[spellName] = true
-    end
-  end
-  
+
   -- Mark as resolved
   localizedNamesResolved = true
 end
@@ -687,6 +453,7 @@ local function CountPaladinBlessings(unit)
     ["Kings"] = true,
     ["Light"] = true,
     ["Salvation"] = true,
+    ["Sanctuary"] = true,
   }
   
   for i = 1, 32 do
@@ -707,7 +474,7 @@ local function CountPaladinBlessings(unit)
       if isBlessing then
         -- Extract blessing type (Might, Wisdom, etc.)
         for bType, _ in pairs(blessingTypes) do
-          if string.find(buffName, bType) then
+          if string.find(string.lower(buffName), string.lower(bType), 1, true) then
             blessings[bType] = true
             break
           end
@@ -718,6 +485,52 @@ local function CountPaladinBlessings(unit)
   
   local count = 0
   for _, _ in pairs(blessings) do
+    count = count + 1
+  end
+  return count
+end
+
+-- Helper: Count distinct priest buff types on a unit
+-- Priest has 3 buff types: Fortitude, Spirit, Shadow Protection (each in short/long version)
+local function CountPriestBuffTypes(unit)
+  local buffTypes = {}
+  local priestBuffCategories = {
+    ["Fortitude"] = true,
+    ["Spirit"] = true,
+    ["Shadow Protection"] = true,
+  }
+  
+  for i = 1, 32 do
+    local buffTexture = UnitBuff(unit, i)
+    if not buffTexture then break end
+    
+    local buffName = GetBuffName(unit, i)
+    if buffName then
+      -- Check if this is a priest buff using BUFF_REQUIREMENTS patterns
+      local isPriestBuff = false
+      if BUFF_REQUIREMENTS["PRIEST"] then
+        for _, pattern in ipairs(BUFF_REQUIREMENTS["PRIEST"]) do
+          if MatchBuff(buffName, pattern) then
+            isPriestBuff = true
+            break
+          end
+        end
+      end
+      
+      if isPriestBuff then
+        -- Extract buff type (Fortitude, Spirit, Shadow Protection)
+        for buffType, _ in pairs(priestBuffCategories) do
+          if string.find(string.lower(buffName), string.lower(buffType), 1, true) then
+            buffTypes[buffType] = true
+            break
+          end
+        end
+      end
+    end
+  end
+  
+  local count = 0
+  for _, _ in pairs(buffTypes) do
     count = count + 1
   end
   return count
@@ -778,20 +591,24 @@ function GuildRoll_BuffCheck:CheckBuffs()
   
   -- Dynamic buff requirement calculation based on raid composition
   local providers = {}
-  for class, _ in pairs(BUFF_IDS) do
-    if IsClassInRaid(class) then
-      providers[class] = true
+  for providerClass, _ in pairs(BUFF_REQUIREMENTS) do
+    if IsClassInRaid(providerClass) then
+      providers[providerClass] = true
     end
   end
   
   -- Calculate required buffs dynamically
   local numPaladins = CountClassInRaid("PALADIN")
-  local requiredBlessings = math.min(numPaladins, 5) -- Up to 5 blessing types
+  local requiredBlessings = math.min(numPaladins, 6) -- Up to 6 blessing types
   
   -- Calculate total required buffs for each player
   local totalRequired = 0
   for providerClass, _ in pairs(providers) do
-    if providerClass ~= "PALADIN" then
+    if providerClass == "PALADIN" then
+      -- Paladins handled separately
+    elseif providerClass == "PRIEST" then
+      totalRequired = totalRequired + PRIEST_BUFF_TYPES_REQUIRED
+    else
       totalRequired = totalRequired + 1
     end
   end
@@ -808,9 +625,19 @@ function GuildRoll_BuffCheck:CheckBuffs()
     local missingBuffs = {}
     local missingCount = 0
     
-    -- Check regular buffs (non-paladin) using HasAnyBuffByClass
+    -- Check priest buffs (requires all 3 buff types)
+    if providers["PRIEST"] then
+      local priestBuffCount = CountPriestBuffTypes(unit)
+      if priestBuffCount < PRIEST_BUFF_TYPES_REQUIRED then
+        local missingPriestBuffs = PRIEST_BUFF_TYPES_REQUIRED - priestBuffCount
+        table.insert(missingBuffs, string.format("Priest(%d)", missingPriestBuffs))
+        missingCount = missingCount + missingPriestBuffs
+      end
+    end
+    
+    -- Check regular buffs (non-paladin, non-priest) using HasAnyBuffByClass
     for providerClass, _ in pairs(providers) do
-      if providerClass ~= "PALADIN" then
+      if providerClass ~= "PALADIN" and providerClass ~= "PRIEST" then
         local hasBuff, matchedBuff = HasAnyBuffByClass(unit, providerClass)
         if not hasBuff then
           table.insert(missingBuffs, providerClass)
@@ -1066,53 +893,12 @@ function GuildRoll_BuffCheck:DumpBuffs(unit)
 end
 
 -- Runtime helper: Add spell IDs to the configured lists
--- Note: With the new pattern-based matching for consumables, this function
--- can be used to add spell IDs that will be resolved and added as additional
--- patterns. For consumables, the primary matching is now keyword-based.
--- Future enhancement: Could also accept pattern strings directly.
+-- NOTE: This function is no longer supported after simplifying resolveIDLists()
+-- to use only text/name-based matching. Spell ID-based matching has been removed.
 function GuildRoll_BuffCheck:AddSpellIDs(kind, idlist)
-  if not kind or not idlist then
-    GuildRoll:defaultPrint("Usage: GuildRoll_BuffCheck:AddSpellIDs(\"BUFF:PRIEST\", {12345, 67890})")
-    GuildRoll:defaultPrint("       GuildRoll_BuffCheck:AddSpellIDs(\"CONSUME:WARRIOR\", {12345})")
-    GuildRoll:defaultPrint("       GuildRoll_BuffCheck:AddSpellIDs(\"FLASK\", {12345})")
-    return
-  end
-  
-  if kind == "FLASK" then
-    -- Add to FLASK_IDS
-    for _, id in ipairs(idlist) do
-      table.insert(FLASK_IDS, id)
-    end
-    GuildRoll:defaultPrint("Added " .. table.getn(idlist) .. " spell IDs to FLASK_IDS")
-  elseif string.find(kind, "BUFF:") then
-    -- Extract class name
-    local className = string.sub(kind, 6)
-    if not BUFF_IDS[className] then
-      BUFF_IDS[className] = {}
-    end
-    for _, id in ipairs(idlist) do
-      table.insert(BUFF_IDS[className], id)
-    end
-    GuildRoll:defaultPrint("Added " .. table.getn(idlist) .. " spell IDs to BUFF_IDS." .. className)
-  elseif string.find(kind, "CONSUME:") then
-    -- Extract class name
-    local className = string.sub(kind, 9)
-    if not CONSUMABLE_IDS[className] then
-      CONSUMABLE_IDS[className] = {}
-    end
-    for _, id in ipairs(idlist) do
-      table.insert(CONSUMABLE_IDS[className], id)
-    end
-    GuildRoll:defaultPrint("Added " .. table.getn(idlist) .. " spell IDs to CONSUMABLE_IDS." .. className)
-  else
-    GuildRoll:defaultPrint("Unknown kind: " .. kind)
-    return
-  end
-  
-  -- Invalidate cache and re-resolve (will rebuild patterns for consumables)
-  localizedNamesResolved = false
-  resolveIDLists()
-  GuildRoll:defaultPrint("Spell ID lists updated and localized names refreshed.")
+  GuildRoll:defaultPrint("AddSpellIDs is no longer supported.")
+  GuildRoll:defaultPrint("The addon now uses only text/name-based matching from BUFF_REQUIREMENTS, CONSUMABLES, and FLASKS tables.")
+  GuildRoll:defaultPrint("Please modify those tables directly in buffcheck.lua if you need to add custom buffs.")
 end
 
 -- Slash command handler for /dumpbuffs
@@ -1298,10 +1084,9 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   -- Consumables report format
   if isConsumeFormat then
     local cat = T:AddCategory(
-      "columns", 3,
+      "columns", 2,
       "text", L["Name"] or "Name",
-      "text2", L["ConsumesCheck_PlayerMissing"] or "Status",
-      "text3", "Class"
+      "text2", "Details"
     )
     for _, entry in ipairs(report) do
       local status = tostring(entry.missing or "")
@@ -1312,8 +1097,7 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
       end
       cat:AddLine(
         "text", tostring(entry.player or "<unknown>"),
-        "text2", statusColor,
-        "text3", tostring(entry.class or "")
+        "text2", statusColor
       )
     end
     return
@@ -1322,18 +1106,16 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   -- Flasks report format (fallback generic)
   if isFlaskFormat then
     local cat = T:AddCategory(
-      "columns", 3,
+      "columns", 2,
       "text", L["Name"] or "Name",
-      "text2", L["FlasksCheck_AllOk"] or "Missing",
-      "text3", "Class"
+      "text2", "Details"
     )
     for _, entry in ipairs(report) do
       local status = tostring(entry.missing or "Flask")
       local statusColor = C:Red(status)
       cat:AddLine(
         "text", tostring(entry.player or "<unknown>"),
-        "text2", statusColor,
-        "text3", tostring(entry.class or "")
+        "text2", statusColor
       )
     end
     return
