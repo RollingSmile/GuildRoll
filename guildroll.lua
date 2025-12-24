@@ -100,11 +100,19 @@ local function _insertTagBeforeEP(officernote, tag)
     return officernote
   end
   
-  -- Find {EP:GP} pattern (e.g., {123:456})
-  local prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
+  -- Try to find new {EP} pattern first (e.g., {123})
+  local prefix, ep, postfix = string.match(officernote, "^(.-)({%d+})(.*)$")
+  
+  if ep then
+    -- Found new {EP} pattern; insert tag before it
+    return prefix .. tag .. ep .. postfix
+  end
+  
+  -- Try to find legacy {EP:GP} pattern (e.g., {123:456})
+  prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
   
   if epgp then
-    -- Found pattern; insert tag before it
+    -- Found legacy pattern; insert tag before it
     return prefix .. tag .. epgp .. postfix
   else
     -- No pattern found; append tag to end
