@@ -1242,12 +1242,6 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     
     if (who == self._playerName) or (for_main) then
       if what == "MainStanding" then
-        if amount < 0 then
-          msg = string.format(L["You have received a %d MainStanding penalty."],amount)
-        else
-          msg = string.format(L["You have been awarded %d MainStanding."],amount)
-        end
-        
         -- Add personal log entry for EP changes with compact colorized format
         -- Note: Due to WoW's guild roster sync timing, get_ep_v3 usually returns the pre-change
         -- value, making prevEP accurate. In rare cases where roster has already synced, prevEP
@@ -1272,6 +1266,13 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
         -- Compact format: EP: Prev -> New (±N) by AdminName[ (Raid)]
         local logMsg = string.format("EP: %d -> %d (%s) by %s%s", prevEP, newEP, deltaStr, sender, suffix)
         self:personalLogAdd(who, logMsg)
+        
+        -- User-facing message with admin name, old/new EP, and raid tag
+        if amount < 0 then
+          msg = string.format("EP penalty: %d -> %d (%d) by %s%s", prevEP, newEP, amount, sender, suffix)
+        else
+          msg = string.format("EP awarded: %d -> %d (+%d) by %s%s", prevEP, newEP, amount, sender, suffix)
+        end
       elseif what == "AuxStanding" then
         msg = string.format(L["You have gained %d AuxStanding."],amount)
       end
@@ -1379,7 +1380,6 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     end
     if msg and msg~="" then
       self:defaultPrint(msg)
-      self:my_epgp(for_main)
     end
   end
 end
@@ -1726,7 +1726,7 @@ function GuildRoll:get_gp_v3(getname,officernote) -- gets gp by name or officern
   return
 end
 
-function GuildRoll:award_raid_ep(ep) -- awards ep to raid members in zone
+function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
   -- Validate input
   if type(ep) ~= "number" then
     UIErrorsFrame:AddMessage("Invalid EP value entered.", 1.0, 0.0, 0.0, 1.0)
@@ -1806,12 +1806,25 @@ function GuildRoll:award_raid_ep(ep) -- awards ep to raid members in zone
   else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
 end
 
+-- Backward-compatible wrapper for award_raid_ep
+function GuildRoll:award_raid_ep(ep)
+  return self:give_ep_to_raid(ep)
+end
+
 
 function GuildRoll:PromptAwardRaidEP()
   if not GuildRoll:IsAdmin() then
     self:defaultPrint(L["You don't have permission to award EP."])
     return
   end
+  
+  -- Check if player is in a raid
+  local numRaid = GetNumRaidMembers()
+  if numRaid == 0 then
+    self:defaultPrint(L["BuffCheck_NotInRaid"] or "You are not in a raid.")
+    return
+  end
+  
   StaticPopup_Show("GUILDROLL_AWARD_EP_RAID_HELP")
 end
 
@@ -1954,11 +1967,7 @@ function GuildRoll:ShowGiveEPDialog(targetName)
   end
 end
 
-function GuildRoll:givename_ep(getname,ep)
-  return GuildRoll:givename_ep(getname,ep,nil)
-end
-
-function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single character
+function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single character
   if not (admin()) then return end
 
   -- Validate EP value
@@ -2023,6 +2032,11 @@ function GuildRoll:givename_ep(getname,ep,block) -- awards ep to a single charac
   return false, getname
 end
 
+-- Backward-compatible wrappers for givename_ep
+function GuildRoll:givename_ep(getname,ep,block)
+  return self:give_ep_to_member(getname,ep,block)
+end
+
 
 function GuildRoll:TFind ( t, e) 
 if not t then return nil end
@@ -2037,15 +2051,14 @@ end
 
 
 
-function GuildRoll:decay_epgp_v3()
+function GuildRoll:decay_ep_v3()
   if not (admin()) then return end
   for i = 1, GetNumGuildMembers(1) do
     local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
-    local ep,gp = self:get_ep_v3(name,officernote), self:get_gp_v3(name,officernote)
-    if (ep~=nil and gp~=nil) then
+    local ep = self:get_ep_v3(name,officernote)
+    if (ep~=nil) then
       ep = self:num_round(ep*GuildRoll_decay)
-      gp = self:num_round(gp*GuildRoll_decay)
-      self:update_epgp_v3(ep,gp,i,name,officernote,"DECAY")
+      self:update_epgp_v3(ep,nil,i,name,officernote,"DECAY")
     end
   end
   local msg = string.format(L["DecayAnnounce"], (1 - (GuildRoll_decay or GuildRoll.VARS.decay)) * 100)
@@ -2055,6 +2068,11 @@ function GuildRoll:decay_epgp_v3()
   self:addonMessage(addonMsg,"GUILD")
   self:addToLog(msg)
   self:refreshPRTablets() 
+end
+
+-- Backward-compatible wrapper for decay_epgp_v3
+function GuildRoll:decay_epgp_v3()
+  return self:decay_ep_v3()
 end
 
 
@@ -2074,7 +2092,7 @@ function GuildRoll:gp_reset_v3()
   end
 end
 
-function GuildRoll:ep_reset_v3()
+function GuildRoll:reset_ep_v3()
   if (IsGuildLeader()) then
     for i = 1, GetNumGuildMembers(1) do
       local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
@@ -2088,6 +2106,11 @@ function GuildRoll:ep_reset_v3()
     self:adminSay(msg)
     self:addToLog(msg)
   end
+end
+
+-- Backward-compatible wrapper for ep_reset_v3
+function GuildRoll:ep_reset_v3()
+  return self:reset_ep_v3()
 end
 
 -- migrateToEPOnly: Convert officer notes from {EP:GP} format to {EP} format
@@ -2538,9 +2561,15 @@ function GuildRoll:parseAlt(name,officernote)
       return nil
     end
   else
+    -- Strip realm suffix from input name for comparison
+    local nameClean = name and string.gsub(name, "%-[^%-]+$", "") or ""
+    
     for i=1,GetNumGuildMembers(1) do
       local g_name, _, _, _, g_class, _, g_note, g_officernote, _, _ = GetGuildRosterInfo(i)
-      if (name == g_name) then
+      -- Strip realm suffix from guild member name for comparison
+      local g_nameClean = g_name and string.gsub(g_name, "%-[^%-]+$", "") or ""
+      
+      if (nameClean == g_nameClean) then
         return self:parseAlt(g_name, g_officernote)
       end
     end
@@ -3092,7 +3121,7 @@ StaticPopupDialogs["CONFIRM_RESET_FINAL"] = {
   button1 = TEXT(OKAY),
   button2 = TEXT(CANCEL),
   OnAccept = function()
-    GuildRoll:ep_reset_v3()
+    GuildRoll:reset_ep_v3()
   end,
   timeout = 0,
   whileDead = 1,
@@ -3159,7 +3188,7 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
       GuildRoll:defaultPrint(L["You don't have permission to award EP."])
       return
     end
-    GuildRoll:award_raid_ep(epValue)
+    GuildRoll:give_ep_to_raid(epValue)
   end,
   EditBoxOnEnterPressed = function()
     local parent = this:GetParent()
@@ -3177,7 +3206,7 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
       UIErrorsFrame:AddMessage(L["You don't have permission to award EP."], 1.0, 0.0, 0.0, 1.0)
       return
     end
-    GuildRoll:award_raid_ep(epValue)
+    GuildRoll:give_ep_to_raid(epValue)
     parent:Hide()
   end,
   EditBoxOnEscapePressed = function()
@@ -3233,7 +3262,7 @@ StaticPopupDialogs["GUILDROLL_CONFIRM_DECAY"] = {
     
     -- Execute decay with pcall to avoid hard errors
     local success, err = pcall(function()
-      GuildRoll:decay_epgp_v3()
+      GuildRoll:decay_ep_v3()
     end)
     if not success and err then
       if GuildRoll.debugPrint then
@@ -3313,8 +3342,8 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
       return
     end
     
-    -- Call givename_ep which handles validation, alt->main conversion, scaling, logging
-    pcall(function() GuildRoll:givename_ep(targetName, epValue) end)
+    -- Call give_ep_to_member which handles validation, alt->main conversion, scaling, logging
+    pcall(function() GuildRoll:give_ep_to_member(targetName, epValue) end)
     GuildRoll:refreshPRTablets()
     
     -- Clear pending variables to prevent stale data on next dialog open
@@ -3341,8 +3370,8 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
       return
     end
     
-    -- Call givename_ep which handles validation, alt->main conversion, scaling, logging
-    pcall(function() GuildRoll:givename_ep(targetName, epValue) end)
+    -- Call give_ep_to_member which handles validation, alt->main conversion, scaling, logging
+    pcall(function() GuildRoll:give_ep_to_member(targetName, epValue) end)
     GuildRoll:refreshPRTablets()
     
     -- Clear pending variables to prevent stale data on next dialog open
