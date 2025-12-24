@@ -122,12 +122,11 @@ local ROLE_CONSUMABLES = {
     "Dreamshard Elixir",
     "Brilliant Wizard Oil",
     "Brilliant Mana Oil",
-    "Major Mana Potion",
     "Nightfin Soup",
     "Fizzy Energy Drink",
     "Herbal Tea",
     "Kreeg's Stout Beatdown",
-    "Merlot Blue",
+    "Medivh's Merlot Blue Label",
     "Danonzo's Tel'Abim Delight",
     "Well Fed";
   },
@@ -136,11 +135,10 @@ local ROLE_CONSUMABLES = {
     "Medivh's Merlot Blue Label",
     "Danonzo's Tel'Abim Medley",
     "Cerebral Cortex Compound",
-    "Mageblood Potion",
-    "Major Mana Potion",
-    "Flask of Distilled Wisdom",
+    "Mana Regeneration", --Mageblood Potion
     "Herbal Tea",
     "Nightfin Soup",
+    "Well Fed";
   }
 }
 
