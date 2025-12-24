@@ -1817,6 +1817,14 @@ function GuildRoll:PromptAwardRaidEP()
     self:defaultPrint(L["You don't have permission to award EP."])
     return
   end
+  
+  -- Check if player is in a raid
+  local numRaid = GetNumRaidMembers()
+  if numRaid == 0 then
+    self:defaultPrint(L["BuffCheck_NotInRaid"] or "You are not in a raid.")
+    return
+  end
+  
   StaticPopup_Show("GUILDROLL_AWARD_EP_RAID_HELP")
 end
 

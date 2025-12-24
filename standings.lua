@@ -416,13 +416,28 @@ end
 
 
 function GuildRoll_standings:OnTooltipUpdate()
-  -- Create category with 3 columns: Name | EP | Rank
-  local cat = T:AddCategory(
+  -- Check if player is admin to determine if Rank column should be shown
+  local isAdmin = GuildRoll and GuildRoll.IsAdmin and GuildRoll:IsAdmin()
+  
+  -- Create category with 2 or 3 columns based on admin status
+  local cat
+  if isAdmin then
+    -- Admin: Show Name | EP | Rank (3 columns)
+    cat = T:AddCategory(
       "columns", 3,
       "text",  C:Orange(L["Name"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify", "LEFT",
       "text2", C:Orange(L["Main Standing"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT",
       "text3", C:Orange(L["Rank"]),   "child_text3R",   1, "child_text3G",   1, "child_text3B",   1, "child_justify3", "RIGHT"
     )
+  else
+    -- Non-admin: Show Name | EP (2 columns)
+    cat = T:AddCategory(
+      "columns", 2,
+      "text",  C:Orange(L["Name"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify", "LEFT",
+      "text2", C:Orange(L["Main Standing"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT"
+    )
+  end
+  
   local t = self:BuildStandingsTable()
   local separator
   for i = 1, table.getn(t) do
@@ -431,21 +446,35 @@ function GuildRoll_standings:OnTooltipUpdate()
       if not (separator) then
         separator = armor_text[armor_class]
         if (separator) then
-          cat:AddLine(
-            "text", C:Green(separator),
-            "text2", "",
-            "text3", ""
-          )
+          if isAdmin then
+            cat:AddLine(
+              "text", C:Green(separator),
+              "text2", "",
+              "text3", ""
+            )
+          else
+            cat:AddLine(
+              "text", C:Green(separator),
+              "text2", ""
+            )
+          end
         end
       else
         local last_separator = separator
         separator = armor_text[armor_class]
         if (separator) and (separator ~= last_separator) then
-          cat:AddLine(
-            "text", C:Green(separator),
-            "text2", "",
-            "text3", ""
-          )          
+          if isAdmin then
+            cat:AddLine(
+              "text", C:Green(separator),
+              "text2", "",
+              "text3", ""
+            )
+          else
+            cat:AddLine(
+              "text", C:Green(separator),
+              "text2", ""
+            )
+          end
         end
       end
     end
@@ -458,16 +487,16 @@ function GuildRoll_standings:OnTooltipUpdate()
       text2 = string.format("%.4g", ep)
     end
     
-    -- Ensure rank is displayed as empty string if nil
+    -- Ensure rank is displayed as empty string if nil (only used for admins)
     local text3 = rank or ""
 
     if ((GuildRoll._playerName) and GuildRoll._playerName == originalName) or ((GuildRoll_main) and GuildRoll_main == originalName) then
       text = string.format("(*)%s",text)
     end
     
-    -- Add line - admins get click-to-award-EP functionality
-    if GuildRoll and GuildRoll.IsAdmin and GuildRoll:IsAdmin() then
-      -- Admin: clicking opens Give EP dialog
+    -- Add line - admins get click-to-award-EP functionality and Rank column
+    if isAdmin then
+      -- Admin: clicking opens Give EP dialog, show rank
       cat:AddLine(
         "text", text,
         "text2", text2,
@@ -479,11 +508,10 @@ function GuildRoll_standings:OnTooltipUpdate()
         end
       )
     else
-      -- Non-admin: just display the line
+      -- Non-admin: just display the line without rank
       cat:AddLine(
         "text", text,
-        "text2", text2,
-        "text3", text3
+        "text2", text2
       )
     end
   end
