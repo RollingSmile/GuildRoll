@@ -1080,7 +1080,7 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
     "child_text3R", 1,
     "child_text3G", 1,
     "child_text3B", 0.5,
-    "child_justify3", "LEFT"
+    "child_justify3", "RIGHT"
   )
   
   -- Helper function to colorize numeric deltas in action text
@@ -1171,8 +1171,16 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
           end
         )
         
-        -- If expanded, show player details inline (same category) to prevent overlap
+        -- If expanded, show player details in a subcategory to prevent overlap
         if isExpanded and entry.raid_details.players then
+          -- Create a subcategory for player details with single column, no inheritance
+          local subcat = cat:AddCategory(
+            "columns", 1,
+            "hideBlankLine", true,
+            "noInherit", true,
+            "child_justify", "RIGHT"
+          )
+          
           for j = 1, table.getn(entry.raid_details.players) do
             local player = entry.raid_details.players[j]
             local counts = entry.raid_details.counts[player] or {old=0, new=0}
@@ -1186,10 +1194,8 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
               deltaColored = C:Red(string.format("(%d)", delta))
             end
             
-            cat:AddLine(
-              "text", "",
-              "text2", "",
-              "text3", string.format("  %s — Prev: %d, New: %d %s", player, counts.old, counts.new, deltaColored)
+            subcat:AddLine(
+              "text", string.format("  %s — Prev: %d, New: %d %s", player, counts.old, counts.new, deltaColored)
             )
           end
         end
