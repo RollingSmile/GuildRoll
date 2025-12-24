@@ -1817,6 +1817,14 @@ function GuildRoll:PromptAwardRaidEP()
     self:defaultPrint(L["You don't have permission to award EP."])
     return
   end
+  
+  -- Check if player is in a raid
+  local numRaid = GetNumRaidMembers()
+  if numRaid == 0 then
+    self:defaultPrint(L["BuffCheck_NotInRaid"] or "You are not in a raid.")
+    return
+  end
+  
   StaticPopup_Show("GUILDROLL_AWARD_EP_RAID_HELP")
 end
 
@@ -2553,9 +2561,15 @@ function GuildRoll:parseAlt(name,officernote)
       return nil
     end
   else
+    -- Strip realm suffix from input name for comparison
+    local nameClean = name and string.gsub(name, "%-[^%-]+$", "") or ""
+    
     for i=1,GetNumGuildMembers(1) do
       local g_name, _, _, _, g_class, _, g_note, g_officernote, _, _ = GetGuildRosterInfo(i)
-      if (name == g_name) then
+      -- Strip realm suffix from guild member name for comparison
+      local g_nameClean = g_name and string.gsub(g_name, "%-[^%-]+$", "") or ""
+      
+      if (nameClean == g_nameClean) then
         return self:parseAlt(g_name, g_officernote)
       end
     end
