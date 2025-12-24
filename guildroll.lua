@@ -1579,7 +1579,7 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
       -- Convert {EP:GP} to {EP}
       -- Pattern captures: prefix, fullTag, epVal, gpVal, postfix (5 total)
       local prefix, fullTag, epVal, gpVal, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
-      if epVal and gpVal then
+      if epVal then
         -- Backup GP value to GuildRoll_oldGP before conversion
         if not GuildRoll_oldGP then
           GuildRoll_oldGP = {}
@@ -1616,8 +1616,8 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
     local hasLegacy = string.find(officernote,"{%d+:%-?%d+}")
     if hasLegacy then
       -- Backup GP before converting from legacy {EP:GP} to new {EP} format
-      local _, _, oldEP, oldGP = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
-      if oldGP then
+      local prefix, fullTag, oldEP, oldGP, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+      if oldEP then
         if not GuildRoll_oldGP then
           GuildRoll_oldGP = {}
         end
