@@ -127,6 +127,9 @@ end
 -- preserveExisting: if true, only backup if no backup exists (default: false)
 -- Returns: true if backup was created, false if skipped
 local function _backupGP(name, gpValue, officernote, preserveExisting)
+  -- Apply default for preserveExisting
+  preserveExisting = preserveExisting or false
+  
   if not GuildRoll_oldGP then
     GuildRoll_oldGP = {}
   end
@@ -1630,15 +1633,13 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
   local newnote
   if ( ep ~= nil) then 
    -- ep = math.max(0,ep)
-    -- Check if note uses new {EP} format or legacy {EP:GP} format
-    local hasLegacy = string.find(officernote,"{%d+:%-?%d+}")
-    if hasLegacy then
-      -- Backup GP before converting from legacy {EP:GP} to new {EP} format
+    -- Try to match legacy {EP:GP} format first
+    local prefix, fullTag, oldEP, oldGP, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+    if oldEP then
+      -- Has legacy format - backup GP and convert to new {EP} format
       -- Uses preserveExisting=true to keep the ORIGINAL GP value from first backup
-      local prefix, fullTag, oldEP, oldGP, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
-      if oldEP then
-        _backupGP(name, oldGP, officernote, true)
-      end
+      _backupGP(name, oldGP, officernote, true)
+      
       -- Convert to new {EP} format while updating
       newnote = string.gsub(officernote,"(.-)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
         return string.format("%s{%d}%s",prefix,ep,postfix)
