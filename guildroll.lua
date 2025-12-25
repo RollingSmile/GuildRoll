@@ -1531,8 +1531,8 @@ end
 
 
 function GuildRoll:init_notes_v3(guild_index,name,officernote)
-  local ep,gp = self:get_ep_v3(name,officernote), self:get_gp_v3(name,officernote)
-  if  (ep ==nil or gp==nil) then
+  local ep = self:get_ep_v3(name,officernote)
+  if ep == nil then
     -- Initialize with new {EP} format (EP-only, no GP)
     local initstring = string.format("{%d}",0)
     local newnote = string.format("%s%s",officernote,initstring)
