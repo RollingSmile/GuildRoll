@@ -1610,9 +1610,13 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
   
   if newnote then 
     -- Write officer note with pcall for defensiveness
-    pcall(function()
+    local success, err = pcall(function()
       GuildRosterSetOfficerNote(guild_index,newnote,true)
     end)
+    
+    if not success then
+      self:debugPrint(string.format("Error updating officer note for %s: %s", name or "unknown", tostring(err)))
+    end
     
     -- Add personal logging for EP changes only with compact colorized format
     if ep ~= nil then
@@ -3367,15 +3371,9 @@ function GuildRoll:EasyMenu(menuList, menuFrame, anchor, x, y, displayMode, leve
   UIDropDownMenu_Initialize(menuFrame, function() GuildRoll:EasyMenu_Initialize(level, menuList) end, displayMode, level)
   ToggleDropDownMenu(1, nil, menuFrame, anchor, x, y)
 end
--- NOTE: This function is kept for compatibility but is no longer used in roll calculations.
--- Rolls now use only EP (MainStanding) + CSR bonus.
-function GuildRoll:GetRollingGP(gp)
-
-    return math.max(-1 * GuildRoll.VARS.AERollCap , math.min(GuildRoll.VARS.AERollCap,gp) )
-end
 -- Returns the base roll value for the player.
--- Now returns only EP (MainStanding). GP (AuxStanding) is no longer included in roll calculations.
-function GuildRoll:GetBaseRollValue(ep,gp)
+-- Now returns only EP (MainStanding). GP (AuxStanding) is no longer used.
+function GuildRoll:GetBaseRollValue(ep)
     return ep
 end
 
@@ -3403,7 +3401,7 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
   
   -- Calculate the roll range based on whether it's an SR roll or not
   local minRoll, maxRoll
-  local baseRoll = GuildRoll:GetBaseRollValue(ep,0)
+  local baseRoll = GuildRoll:GetBaseRollValue(ep)
   -- New EP-aware roll ranges
   if isSRRoll then
     -- SR: 100 + baseRoll to 200 + baseRoll
