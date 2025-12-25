@@ -338,6 +338,18 @@ adminOptionsFrame:SetHeight(140)
 adminOptionsFrame:Hide()
 adminOptionsFrame:SetFrameLevel(rollButton:GetFrameLevel() - 1)
 
+-- Tooltip text mapping for roll buttons
+local rollButtonTooltips = {
+    ["CSR"] = "Input # of the SR and roll",
+    ["SR"] = "Roll SR with EP",
+    ["EP"] = "Roll with EP",
+    ["101"] = "Roll SR with no EP",
+    ["100"] = "Classic roll",
+    ["99"] = "For OS and Alts",
+    ["98"] = "Roll for Tmog",
+    ["Standings"] = "Show standings"
+}
+
 -- Function to create roll option buttons
 local function CreateRollButton(name, parent, command, anchor, width, font, isAdminCommand)
     local buttonFrame = CreateFrame("Frame", nil, parent)
@@ -370,6 +382,19 @@ local function CreateRollButton(name, parent, command, anchor, width, font, isAd
             rollOptionsFrame:Hide()
         end
     end)
+    
+    -- Add tooltip handlers for roll buttons (not admin buttons)
+    if not isAdminCommand and rollButtonTooltips[name] then
+        button:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            GameTooltip:SetText(rollButtonTooltips[name], 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        
+        button:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+    end
 
     return buttonFrame
 end
@@ -383,12 +408,12 @@ local function BuildRollOptions()
     local showAll = GuildRoll_showAllRollButtons == true
     
     if isAdmin or showAll then
-        -- show full set: CSR (always when showAll, or if permitted), SR, EP(MS), 101/100/99/98, Standings
+        -- show full set: CSR (always when showAll, or if permitted), SR, EP, 101/100/99/98, Standings
         if showAll or PlayerHasCSRPermission() then
             table.insert(opts, { "CSR", "roll csr" })
         end
         table.insert(opts, { "SR", "roll sr" })
-        table.insert(opts, { "EP(MS)", "roll ep" })
+        table.insert(opts, { "EP", "roll ep" })
         table.insert(opts, { "101", "roll 101" })
         table.insert(opts, { "100", "roll 100" })
         table.insert(opts, { "99", "roll 99" })
@@ -410,12 +435,12 @@ local function BuildRollOptions()
         local isEPZone = IsEPZone()
         
         if isEPZone then
-            -- EP zone: show CSR (if permitted), SR, EP(MS), 99, 98, Standings
+            -- EP zone: show CSR (if permitted), SR, EP, 99, 98, Standings
             if PlayerHasCSRPermission() then
                 table.insert(opts, { "CSR", "roll csr" })
             end
             table.insert(opts, { "SR", "roll sr" })
-            table.insert(opts, { "EP(MS)", "roll ep" })
+            table.insert(opts, { "EP", "roll ep" })
             table.insert(opts, { "99", "roll 99" })
             table.insert(opts, { "98", "roll 98" })
             table.insert(opts, { "Standings", "show ep" })
