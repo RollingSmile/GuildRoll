@@ -9,7 +9,9 @@ local MAX_DETACHED_FRAMES = 100
 local _guildroll_tablet_owner = nil
 
 -- Get local reference to Dewdrop library (required for SafeDewdropAddLine)
-local D = AceLibrary("Dewdrop-2.0")
+-- Use pcall to safely get library reference
+local D
+pcall(function() D = AceLibrary("Dewdrop-2.0") end)
 
 -- Centralized function to ensure Tablet tooltips have a valid owner
 -- This prevents Tablet-2.0 from asserting when detaching tooltips without an owner
@@ -52,7 +54,9 @@ end
 -- Note: In Lua 5.0 (WoW 1.12), varargs (...) cannot be passed directly to pcall.
 -- We must use unpack(arg) to forward the arguments.
 function GuildRoll:SafeDewdropAddLine(...)
-  pcall(D.AddLine, D, unpack(arg))
+  if D and D.AddLine then
+    pcall(D.AddLine, D, unpack(arg))
+  end
 end
 
 -- Make frame escapable: Add or remove frame from UISpecialFrames table

@@ -186,15 +186,19 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
       local actor = UnitName("player")
       local changeEP = ep - prevEP
       
-      -- Get Crayon library for coloring
-      local C = AceLibrary("Crayon-2.0")
+      -- Get Crayon library for coloring (with fallback if not available)
+      local C
+      pcall(function() C = AceLibrary("Crayon-2.0") end)
       
       -- Colorize delta: green for positive, red for negative
       local deltaStr
-      if changeEP >= 0 then
+      if C and changeEP >= 0 then
         deltaStr = C:Green(string.format("+%d", changeEP))
-      else
+      elseif C then
         deltaStr = C:Red(string.format("%d", changeEP))
+      else
+        -- Fallback if Crayon not available
+        deltaStr = string.format("%+d", changeEP)
       end
       
       -- Build suffix based on special_action
