@@ -20,14 +20,7 @@ GuildRoll.VARS = {
   timeout = 60,
   minlevel = 1,
   maxloglines = 500,
-  prefix = "RRG_",
-  inRaid = false,
-  bop = C:Red("BoP"),
-  boe = C:Yellow("BoE"),
-  nobind = C:White("NoBind"), 
-  reminder = C:Red("Unassigned"), 
-  HostGuildName = "!",
-  HostLeadName = "!" 
+  prefix = "RRG_"
 }
 
 GuildRollMSG = {
@@ -3560,8 +3553,7 @@ local lastHostInfoDispatch = 0
 local HostInfoRequestsSinceLastDispatch = 0
 
 function GuildRoll:Status()
-DEFAULT_CHAT_FRAME:AddMessage("Host LeadName " .. GuildRoll.VARS.HostLeadName )
-DEFAULT_CHAT_FRAME:AddMessage("Host GuildName " .. GuildRoll.VARS.HostGuildName ) 
+  self:defaultPrint("GuildRoll: running")
 end
 
 function GuildRoll:SendMessage(subject, msg , prio)
