@@ -9,8 +9,8 @@ world of warcraft addon data
 ## X-Alpha: Test
 ## OptionalDeps: Ace2
 ## Notes: EP rolls - Basic Effort Points manager for TurtleWoW
-## SavedVariables: GuildRoll_saychannel, GuildRoll_groupbyclass, GuildRoll_groupbyarmor, GuildRoll_groupbyrole, GuildRoll_dbver, GuildRoll_debug, GuildRoll_fubar, GuildRoll_VARS, GuildRoll_adminLogSaved, GuildRoll_adminLogOrder, GuildRoll_debugAdminLog, GuildRoll_oldGP
-## SavedVariablesPerCharacter: GuildRoll_main, GuildRoll_decay, GuildRoll_minPE, GuildRoll_progress, GuildRoll_discount, GuildRollAltspool, GuildRoll_altpercent, GuildRoll_RollPos, GuildRoll_showRollWindow, GuildRoll_personalLogSaved, GuildRoll_CSRThreshold, GuildRoll_showAllRollButtons
+## SavedVariables: GuildRoll_saychannel, GuildRoll_groupbyclass, GuildRoll_groupbyarmor, GuildRoll_groupbyrole, GuildRoll_dbver, GuildRoll_debug, GuildRoll_fubar, GuildRoll_VARS, GuildRoll_adminLogSaved, GuildRoll_adminLogOrder, GuildRoll_debugAdminLog, GuildRoll_oldGP, GuildRoll_showAllRollButtons
+## SavedVariablesPerCharacter: GuildRoll_main, GuildRoll_decay, GuildRoll_minPE, GuildRoll_progress, GuildRoll_discount, GuildRollAltspool, GuildRoll_altpercent, GuildRoll_RollPos, GuildRoll_showRollWindow, GuildRoll_personalLogSaved, GuildRoll_CSRThreshold
 
 Libs\AceLibrary\AceLibrary.lua
 Libs\AceOO-2.0\AceOO-2.0.lua

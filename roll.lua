@@ -360,6 +360,22 @@ local function CreateRollButton(name, parent, command, anchor, width, font, isAd
     if font then
         pcall(function() button:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 10) end)
     end
+    
+    -- Add blue background for special buttons: CSR, SR, EP(MS)
+    if name == "CSR" or name == "SR" or name == "EP(MS)" then
+        pcall(function()
+            local bgTexture = button:CreateTexture(nil, "BACKGROUND")
+            bgTexture:SetTexture("Interface\\Buttons\\WHITE8X8")
+            bgTexture:SetAllPoints(button)
+            bgTexture:SetVertexColor(0.2, 0.6, 1.0, 1.0)
+            -- Set text color to white for readability
+            local fontString = button:GetFontString()
+            if fontString then
+                fontString:SetTextColor(1.0, 1.0, 1.0, 1.0)
+            end
+        end)
+    end
+    
     button:SetScript("OnClick", function()
         if isAdminCommand then
             ExecuteAdminCommand(command)
