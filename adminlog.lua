@@ -123,8 +123,11 @@ local function processPendingMessages()
   pending_retry_scheduled = false
   
   if table.getn(pending_messages) == 0 then
+    debugPrint("processPendingMessages: no pending messages")
     return
   end
+  
+  debugPrint(string.format("processPendingMessages: processing %d pending message(s)", table.getn(pending_messages)))
   
   local remaining = {}
   local now = time()
@@ -145,7 +148,8 @@ local function processPendingMessages()
     
     if name_g then
       -- Success! Process the message now by recursively calling handleAdminLogMessage
-      debugPrint(string.format("Queued message from %s now verified, processing", sender_norm))
+      debugPrint(string.format("Pending message from %s now verified, processing (queued at %d, waited %ds)", 
+        sender_norm, pending.queued_at or 0, now - (pending.queued_at or now)))
       
       pcall(function()
         handleAdminLogMessage(pending.prefix, pending.message, pending.channel, pending.sender)
@@ -158,10 +162,10 @@ local function processPendingMessages()
       
       if pending.attempts >= MAX_RETRIES then
         -- Max retries reached, drop message
-        debugPrint(string.format("Dropped message from %s after %d retries (sender not verified)", sender_norm, pending.attempts))
+        debugPrint(string.format("Dropped pending message from %s after %d retries (sender not verified)", sender_norm, pending.attempts))
       else
         -- Keep in queue for next retry
-        debugPrint(string.format("Retry %d/%d for message from %s (sender not verified yet)", pending.attempts, MAX_RETRIES, sender_norm))
+        debugPrint(string.format("Retry %d/%d for pending message from %s (sender not verified yet)", pending.attempts, MAX_RETRIES, sender_norm))
         table.insert(remaining, pending)
       end
     end
@@ -171,12 +175,19 @@ local function processPendingMessages()
   
   -- Schedule next retry if there are still pending messages
   if table.getn(pending_messages) > 0 then
+    debugPrint(string.format("Scheduling retry for %d pending message(s) in %ds", table.getn(pending_messages), RETRY_INTERVAL_SEC))
     if GuildRoll and GuildRoll.ScheduleEvent then
-      pcall(function()
+      local success = pcall(function()
         GuildRoll:ScheduleEvent("GuildRoll_AdminLog_RetryPending", processPendingMessages, RETRY_INTERVAL_SEC)
         pending_retry_scheduled = true
       end)
+      if not success then
+        debugPrint("Failed to schedule retry for pending messages")
+        pending_retry_scheduled = false
+      end
     end
+  else
+    debugPrint("No more pending messages to process")
   end
 end
 
@@ -512,7 +523,8 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
   
   if not name_g then
     -- Queue message for retry if verifyGuildMember fails
-    debugPrint(string.format("Sender %s not verified as guild member, queueing for retry", sender_norm))
+    debugPrint(string.format("Sender %s not verified as guild member, queueing for retry (prefix=%s, msg_start=%s)", 
+      sender_norm, prefix or "nil", string.sub(message or "", 1, 50)))
     
     table.insert(pending_messages, {
       prefix = prefix,
@@ -523,13 +535,21 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
       queued_at = time()
     })
     
+    debugPrint(string.format("Queued message count now: %d", table.getn(pending_messages)))
+    
     -- Schedule retry processor if not already scheduled
     if not pending_retry_scheduled then
       if GuildRoll and GuildRoll.ScheduleEvent then
-        pcall(function()
+        local success = pcall(function()
           GuildRoll:ScheduleEvent("GuildRoll_AdminLog_RetryPending", processPendingMessages, RETRY_INTERVAL_SEC)
           pending_retry_scheduled = true
         end)
+        if not success then
+          debugPrint("Failed to schedule pending message retry")
+          pending_retry_scheduled = false
+        else
+          debugPrint(string.format("Scheduled pending message retry in %ds", RETRY_INTERVAL_SEC))
+        end
       end
     end
     
@@ -574,20 +594,23 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
       return
     end
     local entryData = parts[4]
+    debugPrint(string.format("Received ADD from %s, entry_start=%s", sender_norm, string.sub(entryData or "", 1, 60)))
     local entry = deserializeEntry(entryData)
     if entry then
-      debugPrint(string.format("Applying ADD entry: id=%s, author=%s", entry.id or "nil", entry.author or "nil"))
+      debugPrint(string.format("Applying ADD entry: id=%s, author=%s, ts=%d, action=%s", 
+        entry.id or "nil", entry.author or "nil", entry.ts or 0, string.sub(entry.action or "", 1, 40)))
       applyAdminLogEntry(entry)
       -- Update latestRemoteTS if this entry is newer
       if entry.ts and entry.ts > latestRemoteTS then
         latestRemoteTS = entry.ts
+        debugPrint(string.format("Updated latestRemoteTS to %d", latestRemoteTS))
       end
       -- Refresh UI if open
       if T and T:IsRegistered("GuildRoll_AdminLog") then
         pcall(function() T:Refresh("GuildRoll_AdminLog") end)
       end
     else
-      debugPrint("Dropped ADD: failed to deserialize entry")
+      debugPrint(string.format("Dropped ADD: failed to deserialize entry (data_start=%s)", string.sub(entryData or "", 1, 80)))
     end
     
   elseif msgType == "REQ" then
@@ -602,11 +625,13 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
       return
     end
     local since_ts = tonumber(parts[4]) or 0
+    local localTS = getLocalLatestTS()
     
-    debugPrint(string.format("Received REQ from %s, since_ts=%d", sender_norm, since_ts))
+    debugPrint(string.format("Received REQ from %s, since_ts=%d, localLatestTS=%d", sender_norm, since_ts, localTS))
     
     -- Send snapshot to requester
     sendSnapshot(sender, since_ts)
+    debugPrint(string.format("Sent snapshot to %s", sender or "unknown"))
     
   elseif msgType == "SNAP" then
     -- ADMINLOG;SNAP;version;chunk_data
@@ -616,7 +641,8 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     end
     local chunkData = parts[4]
     
-    debugPrint(string.format("Received SNAP chunk (length %d bytes)", string.len(chunkData)))
+    debugPrint(string.format("Received SNAP chunk from %s (length %d bytes, buffer_size=%d)", 
+      sender_norm, string.len(chunkData), table.getn(snapshotBuffer)))
     
     -- Split by ;;
     local entries = {}
@@ -663,7 +689,8 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     end
     local totalCount = tonumber(parts[4]) or 0
     
-    debugPrint(string.format("Received SNAP_END, total=%d, buffered=%d", totalCount, table.getn(snapshotBuffer)))
+    debugPrint(string.format("Received SNAP_END from %s, total=%d, buffered=%d, snapshotMaxTS=%d", 
+      sender_norm, totalCount, table.getn(snapshotBuffer), snapshotMaxTS))
     
     -- Apply buffered entries
     for i = 1, table.getn(snapshotBuffer) do
@@ -674,10 +701,12 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     
     -- Update latestRemoteTS with snapshotMaxTS
     if snapshotMaxTS > latestRemoteTS then
+      debugPrint(string.format("Updating latestRemoteTS from %d to %d", latestRemoteTS, snapshotMaxTS))
       latestRemoteTS = snapshotMaxTS
     end
     
     -- Reset snapshot state
+    debugPrint("Clearing snapshotInProgress flag and snapshot buffer")
     snapshotInProgress = false
     snapshotMaxTS = 0
     snapshotBuffer = {}
@@ -793,8 +822,8 @@ function GuildRoll_AdminLog:OnEnable()
   
   -- Register CHAT_MSG_ADDON handler
   if not self.addonHandlerRegistered then
-    self:RegisterEvent("CHAT_MSG_ADDON", function()
-      handleAdminLogMessage(arg1, arg2, arg3, arg4)
+    self:RegisterEvent("CHAT_MSG_ADDON", function(self, prefix, message, channel, sender)
+      handleAdminLogMessage(prefix, message, channel, sender)
     end)
     self.addonHandlerRegistered = true
   end
@@ -850,9 +879,10 @@ function GuildRoll_AdminLog:OnEnable()
             -- Request snapshot
             requestAdminLogSnapshot(since_ts)
             -- Schedule timeout to clear snapshot flag after reasonable time
-            pcall(function()
+            local scheduleSuccess = pcall(function()
               if GuildRoll and GuildRoll.ScheduleEvent then
                 GuildRoll:ScheduleEvent("GuildRoll_AdminLog_ClearSnapshotFlag", function()
+                  debugPrint(string.format("Snapshot timeout (%ds elapsed), clearing snapshotInProgress flag", SNAPSHOT_TIMEOUT_SEC))
                   snapshotInProgress = false
                   if T and T:IsRegistered("GuildRoll_AdminLog") then
                     pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -860,6 +890,9 @@ function GuildRoll_AdminLog:OnEnable()
                 end, SNAPSHOT_TIMEOUT_SEC)
               end
             end)
+            if not scheduleSuccess then
+              debugPrint("Failed to schedule snapshot timeout; flag may remain set")
+            end
             -- Refresh UI to show "in progress" state
             if T and T:IsRegistered("GuildRoll_AdminLog") then
               pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -868,11 +901,18 @@ function GuildRoll_AdminLog:OnEnable()
           "disabled", function()
             -- Throttle sync requests
             local now = time()
-            if (now - lastSyncRequest) < SYNC_THROTTLE_SEC then
+            local timeUntilNextSync = SYNC_THROTTLE_SEC - (now - lastSyncRequest)
+            if timeUntilNextSync > 0 then
+              debugPrint(string.format("Request full sync disabled: throttled (wait %ds)", timeUntilNextSync))
               return true
             end
             -- Disable if snapshot already in progress
-            return snapshotInProgress
+            if snapshotInProgress then
+              debugPrint("Request full sync disabled: snapshot already in progress")
+              return true
+            end
+            debugPrint("Request full sync enabled")
+            return false
           end
         )
         
@@ -895,15 +935,22 @@ function GuildRoll_AdminLog:OnEnable()
           "disabled", function()
             -- Disable if snapshot in progress
             if snapshotInProgress then
+              debugPrint("Sync disabled: snapshot already in progress")
               return true
             end
             -- If we haven't seen any remote timestamps yet, allow sync
             if latestRemoteTS == 0 then
+              debugPrint("Sync enabled: no remote timestamp seen yet")
               return false
             end
             -- Disable if already up-to-date (remote <= local)
             local localTS = getLocalLatestTS()
-            return latestRemoteTS <= localTS
+            if latestRemoteTS <= localTS then
+              debugPrint(string.format("Sync disabled: already up-to-date (latestRemoteTS=%d <= localTS=%d)", latestRemoteTS, localTS))
+              return true
+            end
+            debugPrint(string.format("Sync enabled: remote is newer (latestRemoteTS=%d > localTS=%d)", latestRemoteTS, localTS))
+            return false
           end
         )
         
