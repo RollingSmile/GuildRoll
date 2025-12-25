@@ -2783,8 +2783,16 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
     if not success then
       UIErrorsFrame:AddMessage("Error awarding EP: " .. tostring(err), 1.0, 0.0, 0.0, 1.0)
       DEFAULT_CHAT_FRAME:AddMessage("|cffff0000Error awarding EP to " .. tostring(targetName) .. ": " .. tostring(err) .. "|r")
+    else
+      -- Request guild roster update from server
+      pcall(function() GuildRoster() end)
+      -- Schedule a delayed refresh to allow roster data to update (2 seconds delay)
+      pcall(function()
+        GuildRoll:ScheduleEvent("GuildRoll_RefreshAfterEPAward", function()
+          GuildRoll:refreshPRTablets()
+        end, 2)
+      end)
     end
-    GuildRoll:refreshPRTablets()
     
     -- Clear pending variables to prevent stale data on next dialog open
     pcall(function()
