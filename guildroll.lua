@@ -1507,11 +1507,6 @@ function GuildRoll:refreshAllEPUI()
         T:Refresh("GuildRoll_personal_logs")
       end
     end)
-    pcall(function()
-      if T.IsRegistered and T:IsRegistered("GuildRoll_standings") then
-        T:Refresh("GuildRoll_standings")
-      end
-    end)
   end
   -- Call GuildRoster() to request roster update from server
   pcall(function() GuildRoster() end)
@@ -1874,9 +1869,6 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
         self:personalLogAdd(alt, altLogText)
       end)
     end
-  else
-    -- No alt-pooling: keep existing AdminLogAdd behavior (already handled by addToLog)
-    -- addToLog calls AdminLogAdd internally for admins
   end
   
   -- Immediate UI refresh
