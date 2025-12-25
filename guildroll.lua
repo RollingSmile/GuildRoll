@@ -1569,6 +1569,17 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
       end
     end
     
+    -- Build players_display array with alt tags for AdminLog UI
+    raid_data.players_display = {}
+    for i = 1, table.getn(raid_data.players) do
+      local playerName = raid_data.players[i]
+      local displayName = playerName
+      if raid_data.alt_sources[playerName] then
+        displayName = string.format("%s (%s)", playerName, raid_data.alt_sources[playerName])
+      end
+      table.insert(raid_data.players_display, displayName)
+    end
+    
     -- Create a single consolidated raid entry in AdminLog
     if self:IsAdmin() and table.getn(raid_data.players) > 0 then
       if GuildRoll.AdminLogAddRaid then
@@ -1580,7 +1591,29 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
     
     -- Send single public message about raid award
     self:simpleSay(string.format(L["Giving %d MainStanding to all raidmembers"],ep))
-    self:refreshPRTablets() 
+    
+    -- Immediate UI refresh after raid award
+    pcall(function() self:refreshPRTablets() end)
+    if T then
+      pcall(function()
+        if T.IsRegistered and T:IsRegistered("GuildRoll_AdminLog") then
+          T:Refresh("GuildRoll_AdminLog")
+        end
+      end)
+      pcall(function()
+        if T.IsRegistered and T:IsRegistered("GuildRoll_personal_logs") then
+          T:Refresh("GuildRoll_personal_logs")
+        end
+      end)
+      pcall(function()
+        if T.IsRegistered and T:IsRegistered("GuildRoll_standings") then
+          T:Refresh("GuildRoll_standings")
+        end
+      end)
+    end
+    
+    -- Call GuildRoster() to request roster update from server (existing behavior)
+    pcall(function() GuildRoster() end) 
   else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
 end
 
@@ -1807,6 +1840,63 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
   local addonMsg = string.format("%s;%s;%s",getname,"MainStanding",ep)
   self:addonMessage(addonMsg,"GUILD")
   
+  -- Add AdminLog and personal log entries with alt tag if alt-pooling was applied
+  if alt then
+    -- Alt-pooling was applied: add tagged AdminLog and personal logs
+    local altStripped = string.gsub(alt, "%-.*$", "")
+    local mainStripped = string.gsub(getname, "%-.*$", "")
+    
+    -- AdminLog entry: "[GIVE] %d EP given to %s (%s) by %s"
+    if self.AdminLogAdd then
+      pcall(function()
+        local adminLogText = string.format("[GIVE] %d EP given to %s (%s) by %s", ep, mainStripped, altStripped, adminName or "Unknown")
+        self:AdminLogAdd(adminLogText)
+      end)
+    end
+    
+    -- Personal log for main: "EP received via alt AltName: +%d EP (Prev: %d, New: %d)"
+    if self.personalLogAdd then
+      pcall(function()
+        local mainLogText = string.format("EP received via alt %s: %s EP (Prev: %d, New: %d)", altStripped, deltaStr, old, newep)
+        self:personalLogAdd(getname, mainLogText)
+      end)
+    end
+    
+    -- Personal log for alt: "EP awarded to main MainName (redirect): +%d EP (Prev: %d, New: %d)"
+    if self.personalLogAdd then
+      pcall(function()
+        local altLogText = string.format("EP awarded to main %s (redirect): %s EP (Prev: %d, New: %d)", mainStripped, deltaStr, old, newep)
+        self:personalLogAdd(alt, altLogText)
+      end)
+    end
+  else
+    -- No alt-pooling: keep existing AdminLogAdd behavior (already handled by addToLog)
+    -- addToLog calls AdminLogAdd internally for admins
+  end
+  
+  -- Immediate UI refresh
+  pcall(function() self:refreshPRTablets() end)
+  if T then
+    pcall(function()
+      if T.IsRegistered and T:IsRegistered("GuildRoll_AdminLog") then
+        T:Refresh("GuildRoll_AdminLog")
+      end
+    end)
+    pcall(function()
+      if T.IsRegistered and T:IsRegistered("GuildRoll_personal_logs") then
+        T:Refresh("GuildRoll_personal_logs")
+      end
+    end)
+    pcall(function()
+      if T.IsRegistered and T:IsRegistered("GuildRoll_standings") then
+        T:Refresh("GuildRoll_standings")
+      end
+    end)
+  end
+  
+  -- Call GuildRoster() to request roster update from server (existing behavior)
+  pcall(function() GuildRoster() end)
+  
   return false, getname
 end
 
@@ -1823,21 +1913,50 @@ end
 
 function GuildRoll:decay_ep_v3()
   if not (admin()) then return end
+  local memberCount = 0
   for i = 1, GetNumGuildMembers(1) do
     local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
     local ep = self:get_ep_v3(name,officernote)
     if (ep~=nil) then
       ep = self:num_round(ep*GuildRoll_decay)
       self:update_epgp_v3(ep,nil,i,name,officernote,"DECAY")
+      memberCount = memberCount + 1
     end
   end
-  local msg = string.format(L["DecayAnnounce"], (1 - (GuildRoll_decay or GuildRoll.VARS.decay)) * 100)
+  local decayPercent = (1 - (GuildRoll_decay or GuildRoll.VARS.decay)) * 100
+  local msg = string.format(L["DecayAnnounce"], decayPercent)
   self:simpleSay(msg)
   if not (GuildRoll_saychannel=="OFFICER") then self:adminSay(msg) end
-  local addonMsg = string.format("ALL;DECAY;%s",(1-(GuildRoll_decay or GuildRoll.VARS.decay))*100)
+  local addonMsg = string.format("ALL;DECAY;%s",decayPercent)
   self:addonMessage(addonMsg,"GUILD")
   self:addToLog(msg)
-  self:refreshPRTablets() 
+  
+  -- Add single AdminLog summary entry for decay
+  local adminName = UnitName("player") or "Unknown"
+  if self.AdminLogAdd then
+    pcall(function()
+      local adminLogText = string.format("[DECAY] Applied %.0f%% decay to %d members by %s", decayPercent, memberCount, adminName)
+      self:AdminLogAdd(adminLogText)
+    end)
+  end
+  
+  -- Immediate UI refresh after decay
+  pcall(function() self:refreshPRTablets() end)
+  if T then
+    pcall(function()
+      if T.IsRegistered and T:IsRegistered("GuildRoll_AdminLog") then
+        T:Refresh("GuildRoll_AdminLog")
+      end
+    end)
+    pcall(function()
+      if T.IsRegistered and T:IsRegistered("GuildRoll_standings") then
+        T:Refresh("GuildRoll_standings")
+      end
+    end)
+  end
+  
+  -- Call GuildRoster() to request roster update from server (existing behavior)
+  pcall(function() GuildRoster() end)
 end
 
 -- Backward-compatible wrapper for decay_epgp_v3
@@ -1860,6 +1979,33 @@ function GuildRoll:reset_ep_v3()
     self:debugPrint(msg)
     self:adminSay(msg)
     self:addToLog(msg)
+    
+    -- Add single AdminLog summary entry for reset
+    local adminName = UnitName("player") or "Unknown"
+    if self.AdminLogAdd then
+      pcall(function()
+        local adminLogText = string.format("[RESET] Standing reset by %s", adminName)
+        self:AdminLogAdd(adminLogText)
+      end)
+    end
+    
+    -- Immediate UI refresh after reset
+    pcall(function() self:refreshPRTablets() end)
+    if T then
+      pcall(function()
+        if T.IsRegistered and T:IsRegistered("GuildRoll_AdminLog") then
+          T:Refresh("GuildRoll_AdminLog")
+        end
+      end)
+      pcall(function()
+        if T.IsRegistered and T:IsRegistered("GuildRoll_standings") then
+          T:Refresh("GuildRoll_standings")
+        end
+      end)
+    end
+    
+    -- Call GuildRoster() to request roster update from server (existing behavior)
+    pcall(function() GuildRoster() end)
   end
 end
 
@@ -2509,8 +2655,8 @@ function GuildRoll:CanManageRolls()
       isRaidLeader = true
     end
   else
-    -- Solo, can manage
-    return true
+    -- Solo, NOT allowed (requirement: only active when ML or RL in group/raid)
+    return false, "Solo player cannot use RollWithEP"
   end
   
   if isRaidLeader then
