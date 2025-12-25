@@ -1581,24 +1581,12 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
           table.insert(raid_data.players, actualName)
           raid_data.counts[actualName] = {old = old, new = newep}
           if sourceAlt then
-            raid_data.alt_sources[actualName] = sourceAlt
+            raid_data.alt_sources[actualName] = self:StripRealm(sourceAlt)
           end
           
           table.insert(award, actualName)
         end
       end
-    end
-    
-    -- Build players_display array with alt tags for AdminLog UI
-    raid_data.players_display = {}
-    for i = 1, table.getn(raid_data.players) do
-      local playerName = raid_data.players[i]
-      local displayName = playerName
-      if raid_data.alt_sources[playerName] then
-        local altNameClean = self:StripRealm(raid_data.alt_sources[playerName])
-        displayName = string.format("%s (%s)", playerName, altNameClean)
-      end
-      table.insert(raid_data.players_display, displayName)
     end
     
     -- Create a single consolidated raid entry in AdminLog
@@ -1818,7 +1806,6 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
   -- Always announce, log, and send addon message for both positive and negative EP
   local msg
   local logMsg
-  local adminName = UnitName("player")
   
   -- Build compact AdminLog format: PlayerName - EP: Prev -> New (±N)
   local deltaStr
@@ -1850,7 +1837,7 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
     -- AdminLog entry: "[GIVE] %d EP given to %s (%s) by %s"
     if self.AdminLogAdd then
       pcall(function()
-        local adminLogText = string.format("[GIVE] %d EP given to %s (%s) by %s", ep, mainNameClean, altNameClean, adminName)
+        local adminLogText = string.format("[GIVE] %d EP given to %s (%s) by %s", ep, mainNameClean, altNameClean, self:GetAdminName())
         self:AdminLogAdd(adminLogText)
       end)
     end
@@ -1912,7 +1899,7 @@ function GuildRoll:decay_ep_v3()
   -- Add single AdminLog summary entry for decay
   if self.AdminLogAdd then
     pcall(function()
-      local adminLogText = string.format("[DECAY] Applied %d%% decay to %d members by %s", math.floor(decayPercent), memberCount, self:GetAdminName())
+      local adminLogText = string.format("[DECAY] Applied %.0f%% decay to %d members by %s", decayPercent, memberCount, self:GetAdminName())
       self:AdminLogAdd(adminLogText)
     end)
   end
