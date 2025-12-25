@@ -58,13 +58,6 @@ end
 
 function GuildRoll_logs:OnEnable()
   if not T:IsRegistered("GuildRoll_logs") then
-    -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
-    -- Note: In Lua 5.0 (WoW 1.12), varargs (...) cannot be passed directly to pcall.
-    -- We must use unpack(arg) to forward the arguments.
-    local function safeAddLine(...)
-      pcall(D.AddLine, D, unpack(arg))
-    end
-    
     T:Register("GuildRoll_logs",
       "children", function()
         T:SetTitle(L["guildroll logs"])
@@ -74,7 +67,7 @@ function GuildRoll_logs:OnEnable()
       "showHintWhenDetached", true,
       "cantAttach", true,
       "menu", function()
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
           "func", function() GuildRoll_logs:Refresh() end
@@ -259,14 +252,9 @@ function GuildRoll_logs:registerPersonalTablet()
     "showHintWhenDetached", true,
     "cantAttach", true,
     "menu", function()
-      -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
-      local function safeAddLine(...)
-        pcall(D.AddLine, D, unpack(arg))
-      end
-      
       -- Only show "Clear personal log" if viewing own log
       if currentPersonalName and currentPersonalName == GuildRoll._playerName then
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", L["Clear personal log"],
           "tooltipText", L["Clear your personal log"],
           "func", function() 
@@ -275,7 +263,7 @@ function GuildRoll_logs:registerPersonalTablet()
         )
       end
       
-      safeAddLine(
+      GuildRoll:SafeDewdropAddLine(
         "text", L["Refresh"],
         "tooltipText", L["Refresh window"],
         "func", function() GuildRoll_logs:RefreshPersonal() end
@@ -512,5 +500,5 @@ function GuildRoll:SavePersonalLog(name)
   end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_discount
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs,GuildRoll_personalLogSaved,GuildRoll_personalLogs

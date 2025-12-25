@@ -28,13 +28,6 @@ GuildRollAlts = GuildRoll:NewModule("GuildRollAlts", "AceDB-2.0")
 
 function GuildRollAlts:OnEnable()
   if not T:IsRegistered("GuildRollAlts") then
-    -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
-    -- Note: In Lua 5.0 (WoW 1.12), varargs (...) cannot be passed directly to pcall.
-    -- We must use unpack(arg) to forward the arguments.
-    local function safeAddLine(...)
-      pcall(D.AddLine, D, unpack(arg))
-    end
-    
     T:Register("GuildRollAlts",
       "children", function()
         T:SetTitle(L["Alts"])
@@ -44,7 +37,7 @@ function GuildRollAlts:OnEnable()
       "showHintWhenDetached", true,
       "cantAttach", true,
       "menu", function()
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
           "func", function() GuildRollAlts:Refresh() end
@@ -155,5 +148,5 @@ function GuildRollAlts:OnTooltipUpdate()
   end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_discount,GuildRoll_log,GuildRoll_dbver
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_log,GuildRoll_dbver
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs

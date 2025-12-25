@@ -802,11 +802,6 @@ function GuildRoll_AdminLog:OnEnable()
   -- Register Tablet UI
   if not T:IsRegistered("GuildRoll_AdminLog") then
 
-    -- Safe wrapper for D:AddLine to prevent Dewdrop crashes (same pattern as other modules)
-    local function safeAddLine(...)
-      pcall(D.AddLine, D, unpack(arg))
-    end
-
     T:Register("GuildRoll_AdminLog",
       "children", function()
         T:SetTitle("Admin Log")
@@ -818,7 +813,7 @@ function GuildRoll_AdminLog:OnEnable()
       "menu", function()
         -- Display snapshot state (informational, admin-only)
         if snapshotInProgress then
-          safeAddLine(
+          GuildRoll:SafeDewdropAddLine(
             "text", L["Snapshot in progress..."],
             "isTitle", true
           )
@@ -831,13 +826,13 @@ function GuildRoll_AdminLog:OnEnable()
         else
           tsText = string.format(L["Last remote TS: %s"], L["Never synced"])
         end
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", tsText,
           "isTitle", true
         )
         
         -- Request full sync option
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", L["Request full sync"],
           "tooltipText", L["Request snapshot from peers"],
           "func", function()
@@ -882,7 +877,7 @@ function GuildRoll_AdminLog:OnEnable()
         )
         
         -- Sync option (renamed from "Sync" to avoid confusion)
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", "Sync",
           "tooltipText", "Request admin log sync from other admins",
           "func", function()
@@ -913,12 +908,12 @@ function GuildRoll_AdminLog:OnEnable()
         )
         
         -- Filter by author
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", "Filter by Author",
           "hasArrow", true,
           "hasSlider", false
         )
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", "All Authors",
           "tooltipText", "Show all admin log entries",
           "func", function()
@@ -939,7 +934,7 @@ function GuildRoll_AdminLog:OnEnable()
         end
         
         for author, _ in pairs(authors) do
-          safeAddLine(
+          GuildRoll:SafeDewdropAddLine(
             "text", author,
             "tooltipText", string.format("Show only entries by %s", author),
             "func", function()
@@ -951,7 +946,7 @@ function GuildRoll_AdminLog:OnEnable()
         end
         
         -- Search
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", "Search",
           "tooltipText", "Search admin log entries",
           "func", function()
@@ -961,7 +956,7 @@ function GuildRoll_AdminLog:OnEnable()
         
         -- Clear search
         if searchText then
-          safeAddLine(
+          GuildRoll:SafeDewdropAddLine(
             "text", "Clear Search",
             "tooltipText", "Clear search filter",
             "func", function()
@@ -972,7 +967,7 @@ function GuildRoll_AdminLog:OnEnable()
         end
         
         -- Refresh
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", "Refresh",
           "tooltipText", "Refresh admin log display",
           "func", function()
@@ -981,7 +976,7 @@ function GuildRoll_AdminLog:OnEnable()
         )
         
         -- Clear Local (admins only)
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", "Clear Local",
           "tooltipText", "Clear local admin log data (does not affect other clients)",
           "func", function()
@@ -999,7 +994,7 @@ function GuildRoll_AdminLog:OnEnable()
         )
         
         -- Clear (GuildMaster only)
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", "Clear",
           "tooltipText", "Clear all admin log entries globally (GuildMaster only)",
           "func", function()
@@ -1054,6 +1049,9 @@ function GuildRoll_AdminLog:setHideScript()
       frame:SetScript("OnHide", nil)
       frame:SetScript("OnHide", function(f)
           pcall(function()
+            if T and T.IsAttached and not T:IsAttached("GuildRoll_AdminLog") then
+              T:Attach("GuildRoll_AdminLog")
+            end
             if f and f.SetScript then
               f:SetScript("OnHide", nil)
             end
@@ -1238,6 +1236,7 @@ function GuildRoll_AdminLog:Toggle()
     if T.IsLocked and T:IsLocked("GuildRoll_AdminLog") then
       pcall(function() T:ToggleLocked("GuildRoll_AdminLog") end)
     end
+    self:setHideScript()
   else
     pcall(function() T:Attach("GuildRoll_AdminLog") end)
   end

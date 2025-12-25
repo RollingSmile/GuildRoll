@@ -205,13 +205,6 @@ end
 
 function GuildRoll_standings:OnEnable()
   if not T:IsRegistered("GuildRoll_standings") then
-    -- Safe wrapper for D:AddLine to prevent Dewdrop crashes
-    -- Note: In Lua 5.0 (WoW 1.12), varargs (...) cannot be passed directly to pcall.
-    -- We must use unpack(arg) to forward the arguments.
-    local function safeAddLine(...)
-      pcall(D.AddLine, D, unpack(arg))
-    end
-    
     T:Register("GuildRoll_standings",
       "children", function()
         T:SetTitle(L["Standings"])
@@ -221,38 +214,38 @@ function GuildRoll_standings:OnEnable()
        	"showHintWhenDetached", true,
        	"cantAttach", true,
        	"menu", function()
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", L["Raid Only"],
           "tooltipText", L["Only show members in raid."],
           "checked", GuildRoll_standings_raidonly,
           "func", function() GuildRoll_standings:ToggleRaidOnly() end
         )      
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", L["Group by class"],
           "tooltipText", L["Group members by class."],
           "checked", GuildRoll_groupbyclass,
           "func", function() GuildRoll_standings:ToggleGroupBy("GuildRoll_groupbyclass") end
         )
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", L["Group by armor"],
           "tooltipText", L["Group members by armor."],
           "checked", GuildRoll_groupbyarmor,
           "func", function() GuildRoll_standings:ToggleGroupBy("GuildRoll_groupbyarmor") end
         )
-        safeAddLine(
+        GuildRoll:SafeDewdropAddLine(
           "text", L["Refresh"],
           "tooltipText", L["Refresh window"],
           "func", function() GuildRoll_standings:Refresh() end
         )
         if GuildRoll:IsAdmin() then
-          safeAddLine(
+          GuildRoll:SafeDewdropAddLine(
             "text", L["Export"],
             "tooltipText", L["Export standings to csv."],
             "func", function() GuildRoll_standings:Export() end
           )
         end
         if IsGuildLeader() then
-          safeAddLine(
+          GuildRoll:SafeDewdropAddLine(
           "text", L["Import"],
           "tooltipText", L["Import standings from csv."],
           "func", function() GuildRoll_standings:Import() end
@@ -517,5 +510,5 @@ function GuildRoll_standings:OnTooltipUpdate()
   end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs

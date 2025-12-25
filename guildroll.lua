@@ -861,24 +861,19 @@ function GuildRoll:OnInitialize() -- ADDON_LOADED (1) unless LoD
   if GuildRoll_saychannel == nil then GuildRoll_saychannel = "GUILD" end
   if GuildRoll_decay == nil then GuildRoll_decay = GuildRoll.VARS.decay end
   if GuildRoll_minPE == nil then GuildRoll_minPE = GuildRoll.VARS.minPE end
- -- if GuildRoll_progress == nil then GuildRoll_progress = "T1" end
- -- if GuildRoll_discount == nil then GuildRoll_discount = 0.25 end
   if GuildRollAltspool == nil then GuildRollAltspool = true end
   if GuildRoll_altpercent == nil then GuildRoll_altpercent = 1.0 end
   if GuildRoll_debug == nil then GuildRoll_debug = {} end
   if GuildRoll_showAllRollButtons == nil then GuildRoll_showAllRollButtons = false end
   if GuildRoll_debugAdminLog == nil then GuildRoll_debugAdminLog = false end
-  --if GuildRoll_showRollWindow == nil then GuildRoll_showRollWindow = true end
   -- Initialize runtime-only raid filter flags (not saved to SavedVariables)
   GuildRoll_memberlist_raidonly = false
   GuildRoll_standings_raidonly = false
   self:RegisterDB("GuildRoll_fubar")
   self:RegisterDefaults("char",{})
-  --table.insert(GuildRoll_debug,{[date("%b/%d %H:%M:%S")]="OnInitialize"})
 end
 
 function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
-  --table.insert(GuildRoll_debug,{[date("%b/%d %H:%M:%S")]="OnEnable"})
   GuildRoll._playerLevel = UnitLevel("player")
   --GuildRoll.extratip = (GuildRoll.extratip) or CreateFrame("GameTooltip","guildroll_tooltip",UIParent,"GameTooltipTemplate")
   GuildRoll._versionString = GetAddOnMetadata("guildroll","Version")
@@ -901,15 +896,12 @@ function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
     end)
   self:RegisterEvent("RAID_ROSTER_UPDATE",function()
       GuildRoll:SetRefresh(true)
-     -- GuildRoll:testLootPrompt()
     end)
   self:RegisterEvent("PARTY_MEMBERS_CHANGED",function()
       GuildRoll:SetRefresh(true)
-     -- GuildRoll:testLootPrompt()
     end)
   self:RegisterEvent("PLAYER_ENTERING_WORLD",function()
       GuildRoll:SetRefresh(true)
-     -- GuildRoll:testLootPrompt()
     end)
   if GuildRoll._playerLevel and GuildRoll._playerLevel < MAX_PLAYER_LEVEL then
     self:RegisterEvent("PLAYER_LEVEL_UP", function()
@@ -924,13 +916,6 @@ function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
         end
       end)
   end
- -- self:RegisterEvent("CHAT_MSG_RAID","captureLootCall")
- -- self:RegisterEvent("CHAT_MSG_RAID_LEADER","captureLootCall")
- -- self:RegisterEvent("CHAT_MSG_RAID_WARNING","captureLootCall")
- -- self:RegisterEvent("CHAT_MSG_WHISPER","captureBid")
- -- self:RegisterEvent("CHAT_MSG_LOOT","captureLoot")
- -- self:RegisterEvent("TRADE_PLAYER_ITEM_CHANGED","tradeLoot")
- -- self:RegisterEvent("TRADE_ACCEPT_UPDATE","tradeLoot")
 
   if AceLibrary("AceEvent-2.0"):IsFullyInitialized() then
     self:AceEvent_FullyInitialized()
@@ -940,14 +925,10 @@ function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
 end
 
 function GuildRoll:OnDisable()
-
---DEFAULT_CHAT_FRAME:AddMessage("GuildRoll:OnDisable()") 
-  --table.insert(GuildRoll_debug,{[date("%b/%d %H:%M:%S")]="OnDisable"})
   self:UnregisterAllEvents()
 end
 
 function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PLAYER_LOGIN, PLAYER_ENTERING_WORLD (3)
-  --table.insert(GuildRoll_debug,{[date("%b/%d %H:%M:%S")]="AceEvent_FullyInitialized"})
   if self._hasInitFull then return end
   
   for i=1,NUM_CHAT_WINDOWS do
@@ -980,13 +961,6 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
     self:ScheduleEvent("guildrollChannelInit",self.delayedInit,delay,self)
   end
 
-  -- if pfUI loaded, skin the extra tooltip
- --if not IsAddOnLoaded("pfUI-addonskins") then
- --  if (pfUI) and pfUI.api and pfUI.api.CreateBackdrop and pfUI_config and pfUI_config.tooltip and pfUI_config.tooltip.alpha then
- --    pfUI.api.CreateBackdrop(GuildRoll.extratip,nil,nil,tonumber(pfUI_config.tooltip.alpha))
- --  end
- --end
-
   self._hasInitFull = true
 end
 
@@ -1002,9 +976,8 @@ function GuildRoll:OnMenuRequest()
   D:FeedAceOptionsTable(self._options)
 end
 
- 
+
 function GuildRoll:delayedInit()
-  --table.insert(GuildRoll_debug,{[date("%b/%d %H:%M:%S")]="delayedInit"})
   GuildRoll.VARS.GuildName  =""
   if (IsInGuild()) then
     GuildRoll.VARS.GuildName  = (GetGuildInfo("player"))
@@ -1031,11 +1004,6 @@ function GuildRoll:delayedInit()
     _G["GuildEpRollButton"] = _G["ShootyRollButton"]
   end
    
-  local major_ver = 0 --self._version.major or 0
- -- if IsGuildLeader() and ( (GuildRoll_dbver == nil) or (major_ver > GuildRoll_dbver) ) then
- --   GuildRoll[string.format("v%dtov%d",(GuildRoll_dbver or 2),major_ver)](GuildRoll)
- -- end
- 
   -- init options and comms
   self._options = self:buildMenu()
   self:RegisterChatCommand({"/groll"},self.cmdtable())
@@ -1300,24 +1268,6 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
         alts = (alts == "true") and true or false
         altspct = tonumber(altspct)
         local settings_notice
-        --if progress and progress ~= GuildRoll_progress then
-        --  GuildRoll_progress = progress
-        --  settings_notice = L["New raid progress"]
-        --end
-        --if discount and discount ~= GuildRoll_discount then
-        --  GuildRoll_discount = discount
-        --  if (settings_notice) then
-        --    settings_notice = settings_notice..L[", offspec price %"]
-        --  else
-        --    settings_notice = L["New offspec price %"]
-        --  end
-        --end
-        -- Minimum EP removed: now local to each admin and not shared
-        --if minPE and minPE ~= GuildRoll_minPE then
-        --  GuildRoll_minPE = minPE
-        --  settings_notice = L["New Minimum MainStanding"]
-        --  GuildRoll:refreshPRTablets()
-        --end
         if decay and decay ~= GuildRoll_decay then
           GuildRoll_decay = decay
           if (admin()) then
@@ -2319,6 +2269,14 @@ function GuildRoll:EnsureTabletOwner()
     owner = _guildroll_tablet_owner
   end)
   return owner or UIParent
+end
+
+-- SafeDewdropAddLine: Centralized safe wrapper for Dewdrop:AddLine usage
+-- Prevents Dewdrop crashes by wrapping D:AddLine with pcall + unpack(arg)
+-- Note: In Lua 5.0 (WoW 1.12), varargs (...) cannot be passed directly to pcall.
+-- We must use unpack(arg) to forward the arguments.
+function GuildRoll:SafeDewdropAddLine(...)
+  pcall(D.AddLine, D, unpack(arg))
 end
 
 function GuildRoll:ResetFrames()
@@ -3671,5 +3629,5 @@ function GuildRollMSG:OnCHAT_MSG_ADDON( prefix, text, channel, sender)
 		end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_progress,GuildRoll_discount,GuildRollAltspool,GuildRoll_altpercent,GuildRoll_log,GuildRoll_dbver,GuildRoll_debug,GuildRoll_fubar,GuildRoll_showRollWindow
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRollAltspool,GuildRoll_altpercent,GuildRoll_log,GuildRoll_dbver,GuildRoll_debug,GuildRoll_fubar,GuildRoll_showRollWindow
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs
