@@ -205,6 +205,7 @@ end
 
 -- LOOT_OPENED event handler
 -- Announces loot when permitted player opens a corpse/container
+-- Integration: Also opens RollWithEP UI if available (new module)
 local function OnLootOpened()
   -- Check permission
   if not IsAdminAndMLOrRLWhenNoML() then
@@ -233,7 +234,8 @@ local function OnLootOpened()
     return
   end
   
-  -- Announce each loot slot
+  -- Announce each loot slot and collect loot data for RollWithEP
+  local lootItems = {}
   for slot = 1, numSlots do
     local ok, lootIcon, lootName, lootQuantity, rarity = pcall(GetLootSlotInfo, slot)
     if ok and lootName then
@@ -246,6 +248,14 @@ local function OnLootOpened()
         if idMatch then
           itemID = tonumber(idMatch)
         end
+        
+        -- Store loot item for RollWithEP
+        table.insert(lootItems, {
+          slot = slot,
+          itemLink = itemLink,
+          itemID = itemID,
+          itemName = lootName
+        })
         
         -- Get SR list for this item
         local srlist = GetSRListForItem(itemID, lootName)
@@ -283,6 +293,14 @@ local function OnLootOpened()
         end)
       end
     end
+  end
+  
+  -- Integration point: Open RollWithEP UI if module is loaded
+  -- The RollWithEP module provides interactive roll management UI
+  if GuildRoll and GuildRoll.RollWithEP_ShowLootUI then
+    pcall(function()
+      GuildRoll.RollWithEP_ShowLootUI(lootItems)
+    end)
   end
 end
 

@@ -49,3 +49,4 @@ buffcheck.lua
 announce_loot.lua
 rollingtables.lua
 RollForEP.lua
+RollWithEP.lua
