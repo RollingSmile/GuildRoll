@@ -91,10 +91,11 @@ local ROLE_CONSUMABLES = {
     "Le Fishe Au Chocolat",
     "Grilled Squid",
     "Sour Mountain Berry",
-    "Flask of Titans",
     "Rage of Ages", --R.O.I.D.S.
     "Elemental Sharpening Stone",
-    "Strike of the Scorpok",
+    "Strike of the Scorpok",--Ground Scorpok Assay
+    "Smoked Desert Dumpling",
+    "Danonzo's Tel'Abim Medley",
     "Well Fed";
   },
   PHYSICAL = {
@@ -104,13 +105,16 @@ local ROLE_CONSUMABLES = {
     "Winterfall Firewater",
     "Juju Might",
     "Rage of Ages",
-    "Strike of the Scorpok",
+    "Strike of the Scorpok",--Ground Scorpok Assay
     "Le Fishe Au Chocolat",
     "Grilled Squid",
     "Elemental Sharpening Stone",
     "Mana Regeneration", --Mageblood Potion
-    "Well Fed";
     "Increased Agility", --Sour Mountain Berry
+    "Smoked Desert Dumpling",
+    "Danonzo's Tel'Abim Medley",
+    "Danonzo's Tel'Abim Surprise",
+    "Well Fed";
   },
   CASTER = {
     "Spirit of Zanza",
@@ -124,21 +128,24 @@ local ROLE_CONSUMABLES = {
     "Brilliant Mana Oil",
     "Nightfin Soup",
     "Fizzy Energy Drink",
-    "Herbal Tea",
     "Kreeg's Stout Beatdown",
-    "Medivh's Merlot Blue Label",
     "Danonzo's Tel'Abim Delight",
+    "Danonzo's Tel'Abim Medley",
     "Well Fed";
   },
   HEALER = {
     "Spirit of Zanza",
     "Medivh's Merlot Blue Label",
-    "Danonzo's Tel'Abim Medley",
     "Cerebral Cortex Compound",
     "Mana Regeneration", --Mageblood Potion
-    "Herbal Tea",
+    "Dreamshard Elixir",
+    "Brilliant Wizard Oil",
+    "Brilliant Mana Oil",
     "Nightfin Soup",
+    "Fizzy Energy Drink",
+    "Kreeg's Stout Beatdown",
     "Well Fed";
+    "Danonzo's Tel'Abim Medley",
   }
 }
 
