@@ -361,13 +361,14 @@ local function CreateRollButton(name, parent, command, anchor, width, font, isAd
         pcall(function() button:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 10) end)
     end
     
-    -- Add blue background for special buttons: CSR, SR, EP(MS)
+    -- Add blue color for special buttons: CSR, SR, EP(MS)
     if name == "CSR" or name == "SR" or name == "EP(MS)" then
         pcall(function()
-            local bgTexture = button:CreateTexture(nil, "BACKGROUND")
-            bgTexture:SetTexture("Interface\\Buttons\\WHITE8X8")
-            bgTexture:SetAllPoints(button)
-            bgTexture:SetVertexColor(0.2, 0.6, 1.0, 1.0)
+            -- Set the normal texture to blue
+            local normalTexture = button:GetNormalTexture()
+            if normalTexture then
+                normalTexture:SetVertexColor(0.2, 0.6, 1.0, 1.0)
+            end
             -- Set text color to white for readability
             local fontString = button:GetFontString()
             if fontString then
@@ -395,7 +396,9 @@ local function BuildRollOptions()
     
     -- Check if player is an admin or showAllRollButtons is enabled
     local isAdmin = (GuildRoll and GuildRoll.IsAdmin) and GuildRoll:IsAdmin() or false
-    if isAdmin or (GuildRoll_showAllRollButtons == true) then
+    local showAll = GuildRoll_showAllRollButtons == true
+    
+    if isAdmin or showAll then
         -- show full set: CSR if permitted, SR, EP(MS), 101/100/99/98, Standings
         if PlayerHasCSRPermission() then
             table.insert(opts, { "CSR", "roll csr" })
