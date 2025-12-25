@@ -1,5 +1,8 @@
 GuildRoll = AceLibrary("AceAddon-2.0"):new("AceConsole-2.0", "AceHook-2.1", "AceDB-2.0", "AceDebug-2.0", "AceEvent-2.0", "AceModuleCore-2.0", "FuBarPlugin-2.0")
 GuildRoll:SetModuleMixins("AceDebug-2.0")
+
+-- Global debug flag: set to true to enable debug output
+GuildRoll.DEBUG = false
 local D = AceLibrary("Dewdrop-2.0")-- Standings table
 local BZ = AceLibrary("Babble-Zone-2.2")
 local C = AceLibrary("Crayon-2.0") -- chat color
@@ -1511,7 +1514,8 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
     local adminName = UnitName("player")
     local raid_data = {
       players = {},
-      counts = {}
+      counts = {},
+      alt_sources = {}  -- Track which alt triggered each main's award (main_name -> alt_name mapping)
     }
     
     for i = 1, GetNumRaidMembers(true) do
@@ -1520,6 +1524,7 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
         local actualName = name
         local actualEP = ep
         local postfix = ""
+        local sourceAlt = nil  -- Track if this award came from an alt
         
         -- Handle alt -> main mapping if Altspool enabled
         if (GuildRollAltspool) then
@@ -1529,6 +1534,7 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
             actualName = main
             actualEP = self:num_round(GuildRoll_altpercent*ep)
             postfix = string.format(L[", %s\'s Main."],alt)
+            sourceAlt = alt  -- Remember the alt that triggered this award
           end
         end
         
@@ -1554,6 +1560,9 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
           -- Add player to raid_data for consolidated log entry
           table.insert(raid_data.players, actualName)
           raid_data.counts[actualName] = {old = old, new = newep}
+          if sourceAlt then
+            raid_data.alt_sources[actualName] = sourceAlt
+          end
           
           table.insert(award, actualName)
         end
@@ -2441,6 +2450,74 @@ function GuildRoll:IsAdmin()
 
   -- No local forced override present anymore — only real permissions count
   return false
+end
+
+-- Consolidate permission checks for roll management
+-- Returns true if current player can manage rolls, false otherwise
+-- Also returns a reason string for logging if false
+function GuildRoll:CanManageRolls()
+  -- Must be admin first
+  if not self:IsAdmin() then
+    return false, "Not an admin"
+  end
+  
+  -- Get master looter and raid leader info
+  local mlIndex = GetLootMethod()
+  local mlPartyIndex, mlRaidIndex
+  
+  if mlIndex and mlIndex > 0 then
+    if mlIndex <= 4 then
+      mlPartyIndex = mlIndex
+    else
+      mlRaidIndex = mlIndex
+    end
+  end
+  
+  local playerName = UnitName("player")
+  local masterLooterName = nil
+  
+  if mlPartyIndex then
+    masterLooterName = UnitName("party"..mlPartyIndex)
+  elseif mlRaidIndex then
+    masterLooterName = UnitName("raid"..mlRaidIndex)
+  end
+  
+  -- If there's a master looter set
+  if masterLooterName and masterLooterName ~= "" then
+    -- If ML is not the current player, only ML can manage rolls
+    if masterLooterName ~= playerName then
+      return false, "Master Looter is set and it's not you"
+    end
+    -- If ML is the current player, they can manage (and they're already admin)
+    return true
+  end
+  
+  -- No master looter set, check if player is raid leader
+  local isRaidLeader = false
+  if GetNumRaidMembers() > 0 then
+    -- In a raid
+    for i = 1, GetNumRaidMembers() do
+      local name, rank = GetRaidRosterInfo(i)
+      if name == playerName and rank == 2 then
+        isRaidLeader = true
+        break
+      end
+    end
+  elseif GetNumPartyMembers() > 0 then
+    -- In a party, check if leader
+    if UnitIsPartyLeader("player") then
+      isRaidLeader = true
+    end
+  else
+    -- Solo, can manage
+    return true
+  end
+  
+  if isRaidLeader then
+    return true
+  end
+  
+  return false, "Not Master Looter or Raid Leader"
 end
 
 -- admin: Local wrapper for backward compatibility

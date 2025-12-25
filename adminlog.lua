@@ -2,6 +2,21 @@
 AdminLog Module for GuildRoll
 Provides persistent, guild-wide synchronized admin log with delta broadcast and snapshot sync.
 
+SERIALIZATION FORMAT (v3):
+- Each log entry is serialized for storage and network transmission
+- Basic format: timestamp|author|action|note|[RAID data]
+- RAID entries include additional raid_details:
+  Format: RAID|ep|player_count|player1:old:new:alt,player2:old:new:alt,...
+  - player: character name
+  - old: previous EP value
+  - new: new EP value
+  - alt: (optional) alt character name that triggered the main's award
+         Empty string for direct awards or legacy entries
+- The alt_sources field enables displaying tooltips like:
+  "MainName (AltName's main) — Prev: X, New: Y (+Z)"
+- Backward compatible: legacy 3-field format (player:old:new) is still supported
+  during deserialization (alt field is optional)
+
 TESTING INSTRUCTIONS:
 1. After adding this file, update guildroll.toc:
    - Add GuildRoll_adminLogSaved, GuildRoll_adminLogOrder to SavedVariables line
@@ -107,7 +122,7 @@ end
 
 -- Helper: Debug print (protected by GuildRoll_debugAdminLog)
 local function debugPrint(msg)
-  if GuildRoll_debugAdminLog and msg then
+  if GuildRoll and GuildRoll.DEBUG and msg then
     pcall(function()
       if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
         DEFAULT_CHAT_FRAME:AddMessage("[AdminLog Debug] " .. tostring(msg))
@@ -145,7 +160,8 @@ local function processPendingMessages()
     
     if name_g then
       -- Success! Process the message now by recursively calling handleAdminLogMessage
-      debugPrint(string.format("Queued message from %s now verified, processing", sender_norm))
+      debugPrint(string.format("Pending message from %s now verified, processing (waited %ds)", 
+        sender_norm, now - (pending.queued_at or now)))
       
       pcall(function()
         handleAdminLogMessage(pending.prefix, pending.message, pending.channel, pending.sender)
@@ -158,10 +174,9 @@ local function processPendingMessages()
       
       if pending.attempts >= MAX_RETRIES then
         -- Max retries reached, drop message
-        debugPrint(string.format("Dropped message from %s after %d retries (sender not verified)", sender_norm, pending.attempts))
+        debugPrint(string.format("Dropped pending message from %s after %d retries (sender not verified)", sender_norm, pending.attempts))
       else
         -- Keep in queue for next retry
-        debugPrint(string.format("Retry %d/%d for message from %s (sender not verified yet)", pending.attempts, MAX_RETRIES, sender_norm))
         table.insert(remaining, pending)
       end
     end
@@ -172,10 +187,14 @@ local function processPendingMessages()
   -- Schedule next retry if there are still pending messages
   if table.getn(pending_messages) > 0 then
     if GuildRoll and GuildRoll.ScheduleEvent then
-      pcall(function()
+      local success = pcall(function()
         GuildRoll:ScheduleEvent("GuildRoll_AdminLog_RetryPending", processPendingMessages, RETRY_INTERVAL_SEC)
         pending_retry_scheduled = true
       end)
+      if not success then
+        debugPrint("Failed to schedule retry for pending messages")
+        pending_retry_scheduled = false
+      end
     end
   end
 end
@@ -203,12 +222,18 @@ local function serializeEntry(entry)
   -- If this is a raid entry, append raid_details
   if entry.raid_details then
     local rd = entry.raid_details
-    -- Format: RAID|ep|player_count|player1:old:new,player2:old:new,...
+    -- Format: RAID|ep|player_count|player1:old:new:alt,player2:old:new:alt,...
+    -- alt field contains the alt character name that triggered this main's award (may be empty string for direct awards or legacy entries)
     local playerList = {}
     for i = 1, table.getn(rd.players or {}) do
       local player = rd.players[i]
       local counts = rd.counts[player] or {old=0, new=0}
-      table.insert(playerList, string.format("%s:%d:%d", player, counts.old, counts.new))
+      -- Extract alt source if it exists, otherwise use empty string
+      local alt_source = ""
+      if rd.alt_sources and rd.alt_sources[player] then
+        alt_source = rd.alt_sources[player]
+      end
+      table.insert(playerList, string.format("%s:%d:%d:%s", player, counts.old, counts.new, alt_source))
     end
     local playersStr = table.concat(playerList, ",")
     -- Escape pipes in player data
@@ -268,8 +293,10 @@ local function deserializeEntry(data)
     
     local players = {}
     local counts = {}
+    local alt_sources = {}
     
-    -- Parse player list: player1:old:new,player2:old:new,...
+    -- Parse player list: player1:old:new:alt,player2:old:new:alt,...
+    -- alt field contains the alt character name that triggered this main's award (may be empty string for direct awards or legacy entries)
     if playersStr ~= "" then
       local playerEntries = {}
       local currentEntry = ""
@@ -310,6 +337,10 @@ local function deserializeEntry(data)
           local newEP = tonumber(pParts[3]) or 0
           table.insert(players, playerName)
           counts[playerName] = {old = oldEP, new = newEP}
+          -- Store alt source if present (4th field)
+          if pParts[4] and pParts[4] ~= "" then
+            alt_sources[playerName] = pParts[4]
+          end
         end
       end
     end
@@ -317,7 +348,8 @@ local function deserializeEntry(data)
     entry.raid_details = {
       ep = ep,
       players = players,
-      counts = counts
+      counts = counts,
+      alt_sources = alt_sources
     }
   end
   
@@ -512,7 +544,7 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
   
   if not name_g then
     -- Queue message for retry if verifyGuildMember fails
-    debugPrint(string.format("Sender %s not verified as guild member, queueing for retry", sender_norm))
+    debugPrint(string.format("Sender %s not verified, queueing for retry", sender_norm))
     
     table.insert(pending_messages, {
       prefix = prefix,
@@ -526,17 +558,19 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     -- Schedule retry processor if not already scheduled
     if not pending_retry_scheduled then
       if GuildRoll and GuildRoll.ScheduleEvent then
-        pcall(function()
+        local success = pcall(function()
           GuildRoll:ScheduleEvent("GuildRoll_AdminLog_RetryPending", processPendingMessages, RETRY_INTERVAL_SEC)
           pending_retry_scheduled = true
         end)
+        if not success then
+          debugPrint("Failed to schedule pending message retry")
+          pending_retry_scheduled = false
+        end
       end
     end
     
     return
   end
-  
-  debugPrint(string.format("Sender %s verified as guild member", sender_norm))
   
   -- Parse message
   local parts = {}
@@ -576,7 +610,8 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     local entryData = parts[4]
     local entry = deserializeEntry(entryData)
     if entry then
-      debugPrint(string.format("Applying ADD entry: id=%s, author=%s", entry.id or "nil", entry.author or "nil"))
+      debugPrint(string.format("Applying ADD entry: id=%s, author=%s", 
+        entry.id or "nil", entry.author or "nil"))
       applyAdminLogEntry(entry)
       -- Update latestRemoteTS if this entry is newer
       if entry.ts and entry.ts > latestRemoteTS then
@@ -603,8 +638,6 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     end
     local since_ts = tonumber(parts[4]) or 0
     
-    debugPrint(string.format("Received REQ from %s, since_ts=%d", sender_norm, since_ts))
-    
     -- Send snapshot to requester
     sendSnapshot(sender, since_ts)
     
@@ -615,8 +648,6 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
       return
     end
     local chunkData = parts[4]
-    
-    debugPrint(string.format("Received SNAP chunk (length %d bytes)", string.len(chunkData)))
     
     -- Split by ;;
     local entries = {}
@@ -663,7 +694,8 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     end
     local totalCount = tonumber(parts[4]) or 0
     
-    debugPrint(string.format("Received SNAP_END, total=%d, buffered=%d", totalCount, table.getn(snapshotBuffer)))
+    debugPrint(string.format("Received SNAP_END from %s, total=%d, buffered=%d, snapshotMaxTS=%d", 
+      sender_norm, totalCount, table.getn(snapshotBuffer), snapshotMaxTS))
     
     -- Apply buffered entries
     for i = 1, table.getn(snapshotBuffer) do
@@ -674,10 +706,12 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     
     -- Update latestRemoteTS with snapshotMaxTS
     if snapshotMaxTS > latestRemoteTS then
+      debugPrint(string.format("Updating latestRemoteTS from %d to %d", latestRemoteTS, snapshotMaxTS))
       latestRemoteTS = snapshotMaxTS
     end
     
     -- Reset snapshot state
+    debugPrint("Clearing snapshotInProgress flag and snapshot buffer")
     snapshotInProgress = false
     snapshotMaxTS = 0
     snapshotBuffer = {}
@@ -765,7 +799,8 @@ function GuildRoll:AdminLogAddRaid(ep, raid_data)
     raid_details = {
       ep = ep,
       players = raid_data.players,
-      counts = raid_data.counts
+      counts = raid_data.counts,
+      alt_sources = raid_data.alt_sources
     }
   }
   
@@ -793,8 +828,8 @@ function GuildRoll_AdminLog:OnEnable()
   
   -- Register CHAT_MSG_ADDON handler
   if not self.addonHandlerRegistered then
-    self:RegisterEvent("CHAT_MSG_ADDON", function()
-      handleAdminLogMessage(arg1, arg2, arg3, arg4)
+    self:RegisterEvent("CHAT_MSG_ADDON", function(self, prefix, message, channel, sender)
+      handleAdminLogMessage(prefix, message, channel, sender)
     end)
     self.addonHandlerRegistered = true
   end
@@ -850,9 +885,10 @@ function GuildRoll_AdminLog:OnEnable()
             -- Request snapshot
             requestAdminLogSnapshot(since_ts)
             -- Schedule timeout to clear snapshot flag after reasonable time
-            pcall(function()
+            local scheduleSuccess = pcall(function()
               if GuildRoll and GuildRoll.ScheduleEvent then
                 GuildRoll:ScheduleEvent("GuildRoll_AdminLog_ClearSnapshotFlag", function()
+                  debugPrint(string.format("Snapshot timeout (%ds elapsed), clearing snapshotInProgress flag", SNAPSHOT_TIMEOUT_SEC))
                   snapshotInProgress = false
                   if T and T:IsRegistered("GuildRoll_AdminLog") then
                     pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -860,6 +896,9 @@ function GuildRoll_AdminLog:OnEnable()
                 end, SNAPSHOT_TIMEOUT_SEC)
               end
             end)
+            if not scheduleSuccess then
+              debugPrint("Failed to schedule snapshot timeout; flag may remain set")
+            end
             -- Refresh UI to show "in progress" state
             if T and T:IsRegistered("GuildRoll_AdminLog") then
               pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -868,11 +907,18 @@ function GuildRoll_AdminLog:OnEnable()
           "disabled", function()
             -- Throttle sync requests
             local now = time()
-            if (now - lastSyncRequest) < SYNC_THROTTLE_SEC then
+            local timeUntilNextSync = SYNC_THROTTLE_SEC - (now - lastSyncRequest)
+            if timeUntilNextSync > 0 then
+              debugPrint(string.format("Request full sync disabled: throttled (wait %ds)", timeUntilNextSync))
               return true
             end
             -- Disable if snapshot already in progress
-            return snapshotInProgress
+            if snapshotInProgress then
+              debugPrint("Request full sync disabled: snapshot already in progress")
+              return true
+            end
+            debugPrint("Request full sync enabled")
+            return false
           end
         )
         
@@ -895,15 +941,22 @@ function GuildRoll_AdminLog:OnEnable()
           "disabled", function()
             -- Disable if snapshot in progress
             if snapshotInProgress then
+              debugPrint("Sync disabled: snapshot already in progress")
               return true
             end
             -- If we haven't seen any remote timestamps yet, allow sync
             if latestRemoteTS == 0 then
+              debugPrint("Sync enabled: no remote timestamp seen yet")
               return false
             end
             -- Disable if already up-to-date (remote <= local)
             local localTS = getLocalLatestTS()
-            return latestRemoteTS <= localTS
+            if latestRemoteTS <= localTS then
+              debugPrint(string.format("Sync disabled: already up-to-date (latestRemoteTS=%d <= localTS=%d)", latestRemoteTS, localTS))
+              return true
+            end
+            debugPrint(string.format("Sync enabled: remote is newer (latestRemoteTS=%d > localTS=%d)", latestRemoteTS, localTS))
+            return false
           end
         )
         
@@ -1183,6 +1236,7 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
             local player = entry.raid_details.players[j]
             local counts = entry.raid_details.counts[player] or {old=0, new=0}
             local delta = counts.new - counts.old
+            local alt_source = entry.raid_details.alt_sources and entry.raid_details.alt_sources[player]
             
             -- Colorize delta: green for positive/zero, red for negative
             local deltaColored
@@ -1192,8 +1246,20 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
               deltaColored = C:Red(string.format("(%d)", delta))
             end
             
+            -- Build display string based on whether this was alt-pooled
+            local displayText
+            if alt_source and alt_source ~= "" then
+              -- Alt-pooled: show "MainName (AltName's main) — Prev: X, New: Y (+Z)"
+              displayText = string.format("  %s (%s's main) — Prev: %d, New: %d %s", 
+                player, alt_source, counts.old, counts.new, deltaColored)
+            else
+              -- Normal: show "PlayerName — Prev: X, New: Y (+Z)"
+              displayText = string.format("  %s — Prev: %d, New: %d %s", 
+                player, counts.old, counts.new, deltaColored)
+            end
+            
             subcat:AddLine(
-              "text", string.format("  %s — Prev: %d, New: %d %s", player, counts.old, counts.new, deltaColored)
+              "text", displayText
             )
           end
         end

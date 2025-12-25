@@ -524,7 +524,7 @@ function ShowPlayerPicker()
     end
   end
   
-  if #raidMembers == 0 then
+  if table.getn(raidMembers) == 0 then
     if GuildRoll and GuildRoll.defaultPrint then
       GuildRoll:defaultPrint("No raid members found.")
     end
