@@ -1049,6 +1049,9 @@ function GuildRoll_AdminLog:setHideScript()
       frame:SetScript("OnHide", nil)
       frame:SetScript("OnHide", function(f)
           pcall(function()
+            if T and T.IsAttached and not T:IsAttached("GuildRoll_AdminLog") then
+              T:Attach("GuildRoll_AdminLog")
+            end
             if f and f.SetScript then
               f:SetScript("OnHide", nil)
             end
@@ -1233,6 +1236,7 @@ function GuildRoll_AdminLog:Toggle()
     if T.IsLocked and T:IsLocked("GuildRoll_AdminLog") then
       pcall(function() T:ToggleLocked("GuildRoll_AdminLog") end)
     end
+    self:setHideScript()
   else
     pcall(function() T:Attach("GuildRoll_AdminLog") end)
   end
