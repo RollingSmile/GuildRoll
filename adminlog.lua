@@ -209,8 +209,12 @@ local function serializeEntry(entry)
     for i = 1, table.getn(rd.players or {}) do
       local player = rd.players[i]
       local counts = rd.counts[player] or {old=0, new=0}
-      local alt = (rd.alt_sources and rd.alt_sources[player]) or ""
-      table.insert(playerList, string.format("%s:%d:%d:%s", player, counts.old, counts.new, alt))
+      -- Extract alt source if it exists, otherwise use empty string
+      local alt_source = ""
+      if rd.alt_sources and rd.alt_sources[player] then
+        alt_source = rd.alt_sources[player]
+      end
+      table.insert(playerList, string.format("%s:%d:%d:%s", player, counts.old, counts.new, alt_source))
     end
     local playersStr = table.concat(playerList, ",")
     -- Escape pipes in player data
@@ -313,11 +317,11 @@ local function deserializeEntry(data)
           local playerName = pParts[1]
           local oldEP = tonumber(pParts[2]) or 0
           local newEP = tonumber(pParts[3]) or 0
-          local altName = pParts[4] or ""  -- Optional alt field
           table.insert(players, playerName)
           counts[playerName] = {old = oldEP, new = newEP}
-          if altName ~= "" then
-            alt_sources[playerName] = altName
+          -- Store alt source if present (4th field)
+          if pParts[4] and pParts[4] ~= "" then
+            alt_sources[playerName] = pParts[4]
           end
         end
       end
