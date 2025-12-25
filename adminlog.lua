@@ -802,11 +802,6 @@ function GuildRoll_AdminLog:OnEnable()
   -- Register Tablet UI
   if not T:IsRegistered("GuildRoll_AdminLog") then
 
-    -- Safe wrapper for D:AddLine to prevent Dewdrop crashes (same pattern as other modules)
-    local function GuildRoll:SafeDewdropAddLine(...)
-      pcall(D.AddLine, D, unpack(arg))
-    end
-
     T:Register("GuildRoll_AdminLog",
       "children", function()
         T:SetTitle("Admin Log")
