@@ -286,35 +286,34 @@ local function MatchRollMessages()
         rollType = InferRollType(rollMin, rollMax)
       end
       
-      -- If still no type, skip
-      if not rollType then
-        sysRoll.matched = true
-        break
+      -- If we can determine type, create and add entry
+      if rollType then
+        -- Create entry
+        local entry = {
+          playerName = playerName,
+          value = rollValue,
+          min = rollMin,
+          max = rollMax,
+          rollType = rollType,
+          announcedEP = announcedEP,
+          srWeeks = srWeeks,
+          timestamp = rollTime
+        }
+        
+        -- Validate
+        local isValid, validatedType, flags = ValidateRoll(entry)
+        if not isValid then
+          entry.rollType = "INVALID"
+        else
+          entry.rollType = validatedType
+        end
+        entry.flags = flags
+        
+        -- Add to rolls
+        table.insert(session.rolls, entry)
       end
       
-      -- Create entry
-      local entry = {
-        playerName = playerName,
-        value = rollValue,
-        min = rollMin,
-        max = rollMax,
-        rollType = rollType,
-        announcedEP = announcedEP,
-        srWeeks = srWeeks,
-        timestamp = rollTime
-      }
-      
-      -- Validate
-      local isValid, validatedType, flags = ValidateRoll(entry)
-      if not isValid then
-        entry.rollType = "INVALID"
-      else
-        entry.rollType = validatedType
-      end
-      entry.flags = flags
-      
-      -- Add to rolls
-      table.insert(session.rolls, entry)
+      -- Mark as matched regardless of whether we could determine type
       sysRoll.matched = true
     end
   end
