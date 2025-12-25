@@ -133,6 +133,8 @@ end
 -- String utility: Strip realm/server suffix from player name
 -- Example: "PlayerName-RealmName" -> "PlayerName"
 -- Pattern %-[^%-]+$ matches a dash followed by any non-dash characters until end of string
+-- @param name string|nil The player name to process
+-- @return string|nil The name without realm suffix, or nil if input is nil
 function GuildRoll:StripRealm(name)
   if not name then return nil end
   return string.gsub(name, "%-[^%-]+$", "")
