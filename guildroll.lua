@@ -9,7 +9,6 @@ local BC = AceLibrary("Babble-Class-2.2")
 local T = AceLibrary("Tablet-2.0") -- tooltips
 local L = AceLibrary("AceLocale-2.2"):new("guildroll")
 GuildRoll.VARS = {
-  AERollCap = 50,
   CSRWeekBonus = 10,  -- Bonus per week for CSR (weeks 2-15: (weeks-1)*10)
   minPE = 0,
   baseawardpoints = 10,
@@ -3551,10 +3550,6 @@ end
 
 local lastHostInfoDispatch = 0
 local HostInfoRequestsSinceLastDispatch = 0
-
-function GuildRoll:Status()
-  self:defaultPrint("GuildRoll: running")
-end
 
 function GuildRoll:SendMessage(subject, msg , prio)
 	prio = prio or "BULK"
