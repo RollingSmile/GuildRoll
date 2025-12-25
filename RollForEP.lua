@@ -380,20 +380,29 @@ local function RefreshTablet()
       "showHintWhenDetached", true,
       "cantAttach", true,
       "menu", function()
-        D:AddLine(
-          "text", "Close",
-          "func", function() T:Close("RollForEP") end
-        )
+        if GuildRoll and GuildRoll.SafeDewdropAddLine then
+          GuildRoll:SafeDewdropAddLine(
+            "text", "Close",
+            "func", function() 
+              pcall(function() T:Close("RollForEP") end)
+            end
+          )
+        else
+          D:AddLine(
+            "text", "Close",
+            "func", function() 
+              pcall(function() T:Close("RollForEP") end)
+            end
+          )
+        end
       end
     )
   end
   
-  if T:IsAttached("RollForEP") then
-    T:Detach("RollForEP")
+  if not T:IsAttached("RollForEP") then
+    pcall(function() T:Open("RollForEP") end)
   end
-  
-  T:Open("RollForEP")
-  T:Refresh("RollForEP")
+  pcall(function() T:Refresh("RollForEP") end)
 end
 
 -- UI: Build Tablet content
@@ -517,30 +526,46 @@ function ShowPlayerPicker()
   end
   
   if #raidMembers == 0 then
-    GuildRoll:defaultPrint("No raid members found.")
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("No raid members found.")
+    end
     return
   end
   
   -- Show picker using Dewdrop
-  D:Open("RollForEP_PlayerPicker",
-    "children", function()
-      for _, name in ipairs(raidMembers) do
-        D:AddLine(
-          "text", name,
-          "func", function()
-            RollForEP_GiveToPlayer(name)
-            D:Close()
+  pcall(function()
+    D:Open("RollForEP_PlayerPicker",
+      "children", function()
+        for _, name in ipairs(raidMembers) do
+          if GuildRoll and GuildRoll.SafeDewdropAddLine then
+            GuildRoll:SafeDewdropAddLine(
+              "text", name,
+              "func", function()
+                RollForEP_GiveToPlayer(name)
+                pcall(function() D:Close() end)
+              end
+            )
+          else
+            D:AddLine(
+              "text", name,
+              "func", function()
+                RollForEP_GiveToPlayer(name)
+                pcall(function() D:Close() end)
+              end
+            )
           end
-        )
+        end
       end
-    end
-  )
+    )
+  end)
 end
 
 -- API: Import SR data from text
 function GuildRoll.RollForEP_ImportFromText(text)
   if not text or text == "" then
-    GuildRoll:defaultPrint("No SR data provided.")
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("No SR data provided.")
+    end
     return
   end
   
@@ -569,10 +594,12 @@ function GuildRoll.RollForEP_ImportFromText(text)
     count = count + 1
   end
   
-  GuildRoll:defaultPrint(string.format("Imported SR data for %d players.", count))
+  if GuildRoll and GuildRoll.defaultPrint then
+    GuildRoll:defaultPrint(string.format("Imported SR data for %d players.", count))
+  end
   
   -- If admin and not master looter, send to master looter
-  if not IsMasterLooter() and GuildRoll:IsAdmin() then
+  if not IsMasterLooter() and GuildRoll and GuildRoll.IsAdmin and GuildRoll:IsAdmin() then
     -- Find master looter
     local method, partyIndex, raidIndex = GetLootMethod()
     if method == "master" then
@@ -583,7 +610,7 @@ function GuildRoll.RollForEP_ImportFromText(text)
         mlName = StripRealm(UnitName("party" .. partyIndex))
       end
       
-      if mlName then
+      if mlName and GuildRoll and GuildRoll.VARS and GuildRoll.VARS.prefix then
         -- Send import command via whisper
         local payload = "IMPORT:" .. text
         SendAddonMessage(GuildRoll.VARS.prefix, payload, "WHISPER", mlName)
@@ -595,12 +622,16 @@ end
 -- API: Set DE/Bank for current item
 function RollForEP_SetDE()
   if not CanUseRollForEP() then
-    GuildRoll:defaultPrint("Only master looter admin can use this feature.")
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("Only master looter admin can use this feature.")
+    end
     return
   end
   
   if not RollForEP.currentLoot then
-    GuildRoll:defaultPrint("No active loot session.")
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("No active loot session.")
+    end
     return
   end
   
@@ -612,19 +643,23 @@ function RollForEP_SetDE()
   -- Try to give loot (would need slot info - simplified here)
   -- GiveMasterLoot(slotIndex, candidateIndex)
   
-  GuildRoll:defaultPrint("Item marked for DE/Bank: " .. itemLink)
+  if GuildRoll and GuildRoll.defaultPrint then
+    GuildRoll:defaultPrint("Item marked for DE/Bank: " .. itemLink)
+  end
   
   -- Close session
   RollForEP.currentLoot = nil
-  if T:IsAttached("RollForEP") then
-    T:Close("RollForEP")
+  if T and T.IsAttached and T:IsAttached("RollForEP") then
+    pcall(function() T:Close("RollForEP") end)
   end
 end
 
 -- API: Start roll for item
 function RollForEP_StartRollForItem(itemLink)
   if not CanUseRollForEP() then
-    GuildRoll:defaultPrint("Only master looter admin can start rolls.")
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("Only master looter admin can start rolls.")
+    end
     return
   end
   
@@ -651,40 +686,52 @@ function RollForEP_StartRollForItem(itemLink)
   -- Open Tablet
   RefreshTablet()
   
-  GuildRoll:defaultPrint("Started roll session for: " .. itemLink)
+  if GuildRoll and GuildRoll.defaultPrint then
+    GuildRoll:defaultPrint("Started roll session for: " .. itemLink)
+  end
 end
 
 -- API: Close roll request
 function RollForEP_CloseRollRequest()
   if not CanUseRollForEP() then
-    GuildRoll:defaultPrint("Only master looter admin can close rolls.")
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("Only master looter admin can close rolls.")
+    end
     return
   end
   
   if not RollForEP.currentLoot then
-    GuildRoll:defaultPrint("No active loot session.")
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("No active loot session.")
+    end
     return
   end
   
   RollForEP.currentLoot.closed = true
   
   -- Refresh Tablet
-  if T:IsAttached("RollForEP") then
+  if T and T.IsAttached and T:IsAttached("RollForEP") then
     RefreshTablet()
   end
   
-  GuildRoll:defaultPrint("Roll session closed.")
+  if GuildRoll and GuildRoll.defaultPrint then
+    GuildRoll:defaultPrint("Roll session closed.")
+  end
 end
 
 -- API: Give to player
 function RollForEP_GiveToPlayer(playerName)
   if not CanUseRollForEP() then
-    GuildRoll:defaultPrint("Only master looter admin can give loot.")
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("Only master looter admin can give loot.")
+    end
     return
   end
   
   if not RollForEP.currentLoot then
-    GuildRoll:defaultPrint("No active loot session.")
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("No active loot session.")
+    end
     return
   end
   
@@ -696,12 +743,14 @@ function RollForEP_GiveToPlayer(playerName)
   -- Try to give loot (would need slot info - simplified here)
   -- GiveMasterLoot(slotIndex, candidateIndex)
   
-  GuildRoll:defaultPrint("Item given to: " .. playerName)
+  if GuildRoll and GuildRoll.defaultPrint then
+    GuildRoll:defaultPrint("Item given to: " .. playerName)
+  end
   
   -- Close session
   RollForEP.currentLoot = nil
-  if T:IsAttached("RollForEP") then
-    T:Close("RollForEP")
+  if T and T.IsAttached and T:IsAttached("RollForEP") then
+    pcall(function() T:Close("RollForEP") end)
   end
 end
 
@@ -713,8 +762,9 @@ end
 
 -- Addon message handler
 local function OnAddonMessage(prefix, message, channel, sender)
-  if prefix ~= GuildRoll.VARS.prefix then return end
-  if not IsMasterLooter() or not GuildRoll:IsAdmin() then return end
+  if not GuildRoll or not GuildRoll.VARS or prefix ~= GuildRoll.VARS.prefix then return end
+  if not IsMasterLooter() then return end
+  if not GuildRoll.IsAdmin or not GuildRoll:IsAdmin() then return end
   
   sender = StripRealm(sender)
   
