@@ -46,3 +46,5 @@ alts.lua
 logs.lua
 adminlog.lua
 buffcheck.lua
+announce_loot.lua
+rollingtables.lua
