@@ -364,10 +364,18 @@ local function CreateRollButton(name, parent, command, anchor, width, font, isAd
     -- Add turquoise/cyan color for special buttons: CSR, SR, EP(MS)
     if name == "CSR" or name == "SR" or name == "EP(MS)" then
         pcall(function()
-            -- Set the normal texture to turquoise/cyan
+            -- Set all button textures to turquoise/cyan for consistent color
             local normalTexture = button:GetNormalTexture()
             if normalTexture then
                 normalTexture:SetVertexColor(0.2, 0.9, 0.9, 1.0)
+            end
+            local highlightTexture = button:GetHighlightTexture()
+            if highlightTexture then
+                highlightTexture:SetVertexColor(0.3, 1.0, 1.0, 1.0)
+            end
+            local pushedTexture = button:GetPushedTexture()
+            if pushedTexture then
+                pushedTexture:SetVertexColor(0.1, 0.7, 0.7, 1.0)
             end
         end)
     end
@@ -394,8 +402,8 @@ local function BuildRollOptions()
     local showAll = GuildRoll_showAllRollButtons == true
     
     if isAdmin or showAll then
-        -- show full set: CSR if permitted, SR, EP(MS), 101/100/99/98, Standings
-        if PlayerHasCSRPermission() then
+        -- show full set: CSR (always when showAll, or if permitted), SR, EP(MS), 101/100/99/98, Standings
+        if showAll or PlayerHasCSRPermission() then
             table.insert(opts, { "CSR", "roll csr" })
         end
         table.insert(opts, { "SR", "roll sr" })
