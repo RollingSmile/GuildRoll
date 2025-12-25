@@ -1512,7 +1512,7 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
     local raid_data = {
       players = {},
       counts = {},
-      alt_sources = {}  -- Track which alt triggered the award (if any)
+      alt_sources = {}  -- Track which alt triggered each main's award (main_name -> alt_name mapping)
     }
     
     for i = 1, GetNumRaidMembers(true) do

@@ -204,7 +204,7 @@ local function serializeEntry(entry)
   if entry.raid_details then
     local rd = entry.raid_details
     -- Format: RAID|ep|player_count|player1:old:new:alt,player2:old:new:alt,...
-    -- alt is optional (empty string if no alt)
+    -- alt field contains the alt character name that triggered this main's award (empty if direct award)
     local playerList = {}
     for i = 1, table.getn(rd.players or {}) do
       local player = rd.players[i]
@@ -273,7 +273,8 @@ local function deserializeEntry(data)
     local alt_sources = {}
     
     -- Parse player list: player1:old:new:alt,player2:old:new:alt,...
-    -- The alt field is optional for backward compatibility
+    -- alt field contains the alt character name that triggered this main's award (empty/missing if direct award)
+    -- Backward compatible: entries without alt field are supported
     if playersStr ~= "" then
       local playerEntries = {}
       local currentEntry = ""
