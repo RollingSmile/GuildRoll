@@ -1595,7 +1595,8 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
       local playerName = raid_data.players[i]
       local displayName = playerName
       if raid_data.alt_sources[playerName] then
-        displayName = string.format("%s (%s)", playerName, raid_data.alt_sources[playerName])
+        local altNameClean = self:StripRealm(raid_data.alt_sources[playerName])
+        displayName = string.format("%s (%s)", playerName, altNameClean)
       end
       table.insert(raid_data.players_display, displayName)
     end
@@ -1843,13 +1844,13 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
   -- Add AdminLog and personal log entries with alt tag if alt-pooling was applied
   if alt then
     -- Alt-pooling was applied: add tagged AdminLog and personal logs
-    local altStripped = self:StripRealm(alt)
-    local mainStripped = self:StripRealm(getname)
+    local altNameClean = self:StripRealm(alt)
+    local mainNameClean = self:StripRealm(getname)
     
     -- AdminLog entry: "[GIVE] %d EP given to %s (%s) by %s"
     if self.AdminLogAdd then
       pcall(function()
-        local adminLogText = string.format("[GIVE] %d EP given to %s (%s) by %s", ep, mainStripped, altStripped, adminName)
+        local adminLogText = string.format("[GIVE] %d EP given to %s (%s) by %s", ep, mainNameClean, altNameClean, adminName)
         self:AdminLogAdd(adminLogText)
       end)
     end
@@ -1857,7 +1858,7 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
     -- Personal log for main: "EP received via alt AltName: +%d EP (Prev: %d, New: %d)"
     if self.personalLogAdd then
       pcall(function()
-        local mainLogText = string.format("EP received via alt %s: %s EP (Prev: %d, New: %d)", altStripped, deltaStr, old, newep)
+        local mainLogText = string.format("EP received via alt %s: %s EP (Prev: %d, New: %d)", altNameClean, deltaStr, old, newep)
         self:personalLogAdd(getname, mainLogText)
       end)
     end
@@ -1865,7 +1866,7 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
     -- Personal log for alt: "EP awarded to main MainName (redirect): +%d EP (Prev: %d, New: %d)"
     if self.personalLogAdd then
       pcall(function()
-        local altLogText = string.format("EP awarded to main %s (redirect): %s EP (Prev: %d, New: %d)", mainStripped, deltaStr, old, newep)
+        local altLogText = string.format("EP awarded to main %s (redirect): %s EP (Prev: %d, New: %d)", mainNameClean, deltaStr, old, newep)
         self:personalLogAdd(alt, altLogText)
       end)
     end
@@ -1911,7 +1912,7 @@ function GuildRoll:decay_ep_v3()
   -- Add single AdminLog summary entry for decay
   if self.AdminLogAdd then
     pcall(function()
-      local adminLogText = string.format("[DECAY] Applied %.0f%% decay to %d members by %s", decayPercent, memberCount, self:GetAdminName())
+      local adminLogText = string.format("[DECAY] Applied %d%% decay to %d members by %s", math.floor(decayPercent), memberCount, self:GetAdminName())
       self:AdminLogAdd(adminLogText)
     end)
   end
