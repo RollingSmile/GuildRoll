@@ -896,21 +896,6 @@ function GuildRoll:OnInitialize() -- ADDON_LOADED (1) unless LoD
   -- Initialize runtime-only raid filter flags (not saved to SavedVariables)
   GuildRoll_memberlist_raidonly = false
   GuildRoll_standings_raidonly = false
-  
-  -- Cleanup legacy keys from SavedVariables (silent and defensive)
-  pcall(function()
-    if type(GuildRoll_VARS) == "table" then
-      GuildRoll_VARS.AERollCap = nil
-      GuildRoll_VARS.inRaid = nil
-      GuildRoll_VARS.bop = nil
-      GuildRoll_VARS.boe = nil
-      GuildRoll_VARS.nobind = nil
-      GuildRoll_VARS.reminder = nil
-      GuildRoll_VARS.HostGuildName = nil
-      GuildRoll_VARS.HostLeadName = nil
-    end
-  end)
-  
   self:RegisterDB("GuildRoll_fubar")
   self:RegisterDefaults("char",{})
 end
