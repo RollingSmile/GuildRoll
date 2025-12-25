@@ -439,8 +439,8 @@ function GuildRoll_standings:BuildStandingsTable()
               alt_suffix = " (alts online: " .. table.concat(first_three, ", ") .. " +" .. (alt_count - 3) .. " more)"
             end
             
-            -- Color the main name, then append suffix
-            displayName = C:Colorize(BC:GetHexColor(class), name) .. alt_suffix
+            -- Append suffix to name (coloring will be done in OnTooltipUpdate)
+            displayName = name .. alt_suffix
           end
           
           table.insert(t,{displayName,class,armor_class,ep,ep,name,g_rank})
