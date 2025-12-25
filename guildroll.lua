@@ -9,7 +9,6 @@ local BC = AceLibrary("Babble-Class-2.2")
 local T = AceLibrary("Tablet-2.0") -- tooltips
 local L = AceLibrary("AceLocale-2.2"):new("guildroll")
 GuildRoll.VARS = {
-  AERollCap = 50,
   CSRWeekBonus = 10,  -- Bonus per week for CSR (weeks 2-15: (weeks-1)*10)
   minPE = 0,
   baseawardpoints = 10,
@@ -897,6 +896,21 @@ function GuildRoll:OnInitialize() -- ADDON_LOADED (1) unless LoD
   -- Initialize runtime-only raid filter flags (not saved to SavedVariables)
   GuildRoll_memberlist_raidonly = false
   GuildRoll_standings_raidonly = false
+  
+  -- Cleanup legacy keys from SavedVariables (silent and defensive)
+  pcall(function()
+    if type(GuildRoll_VARS) == "table" then
+      GuildRoll_VARS.AERollCap = nil
+      GuildRoll_VARS.inRaid = nil
+      GuildRoll_VARS.bop = nil
+      GuildRoll_VARS.boe = nil
+      GuildRoll_VARS.nobind = nil
+      GuildRoll_VARS.reminder = nil
+      GuildRoll_VARS.HostGuildName = nil
+      GuildRoll_VARS.HostLeadName = nil
+    end
+  end)
+  
   self:RegisterDB("GuildRoll_fubar")
   self:RegisterDefaults("char",{})
 end
@@ -3551,10 +3565,6 @@ end
 
 local lastHostInfoDispatch = 0
 local HostInfoRequestsSinceLastDispatch = 0
-
-function GuildRoll:Status()
-  self:defaultPrint("GuildRoll: running")
-end
 
 function GuildRoll:SendMessage(subject, msg , prio)
 	prio = prio or "BULK"
