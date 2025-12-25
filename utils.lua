@@ -121,6 +121,7 @@ end
 
 -- Table utility: Find element in table
 function GuildRoll:TFind(tbl, item)
+  if not tbl then return nil end
   for i, v in ipairs(tbl) do
     if v == item then
       return i
