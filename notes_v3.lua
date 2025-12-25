@@ -47,6 +47,11 @@ local function _insertTagBeforeEP(officernote, tag)
     return officernote
   end
   
+  -- Remove any existing occurrences of this tag from the officer note
+  -- Escape pattern characters in the tag for safe pattern matching
+  local escapedTag = string.gsub(tag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+  officernote = string.gsub(officernote, escapedTag, "")
+  
   -- Try to find new {EP} pattern first (e.g., {123})
   local prefix, ep, postfix = string.match(officernote, "^(.-)({%d+})(.*)$")
   
@@ -427,6 +432,14 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
               local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
               -- Remove only first occurrence of the main tag from public note
               local newPublic = string.gsub(publicNote, escapedTag, "", 1)
+              
+              -- Trim leading and trailing whitespace
+              newPublic = string.gsub(newPublic, "^%s*(.-)%s*$", "%1")
+              
+              -- If empty, use a single space to ensure server accepts it
+              if newPublic == "" then
+                newPublic = " "
+              end
               
               -- Attempt to write public note (removal is best-effort)
               pcall(function()
