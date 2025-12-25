@@ -100,16 +100,52 @@ local function _insertTagBeforeEP(officernote, tag)
     return officernote
   end
   
-  -- Find {EP:GP} pattern (e.g., {123:456})
-  local prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
+  -- Try to find new {EP} pattern first (e.g., {123})
+  local prefix, ep, postfix = string.match(officernote, "^(.-)({%d+})(.*)$")
+  
+  if ep then
+    -- Found new {EP} pattern; insert tag before it
+    return prefix .. tag .. ep .. postfix
+  end
+  
+  -- Try to find legacy {EP:GP} pattern (e.g., {123:456})
+  prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
   
   if epgp then
-    -- Found pattern; insert tag before it
+    -- Found legacy pattern; insert tag before it
     return prefix .. tag .. epgp .. postfix
   else
     -- No pattern found; append tag to end
     return officernote .. tag
   end
+end
+
+-- Helper: backup GP value before converting {EP:GP} to {EP}
+-- name: player name
+-- gpValue: GP value to backup
+-- officernote: original officer note
+-- preserveExisting: if true, only backup if no backup exists (default: false)
+-- Returns: true if backup was created, false if skipped
+local function _backupGP(name, gpValue, officernote, preserveExisting)
+  -- Apply default for preserveExisting
+  preserveExisting = preserveExisting or false
+  
+  if not GuildRoll_oldGP then
+    GuildRoll_oldGP = {}
+  end
+  
+  -- Check if we should preserve existing backup
+  if preserveExisting and GuildRoll_oldGP[name] then
+    return false  -- Skip backup, preserve original
+  end
+  
+  GuildRoll_oldGP[name] = {
+    gp = tonumber(gpValue),
+    timestamp = time(),
+    oldNote = officernote
+  }
+  
+  return true
 end
 
 -- Helper: attempt to run main tag migration with throttle check
@@ -1522,6 +1558,9 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
       -- Pattern captures: prefix, fullTag, epVal, gpVal, postfix (5 total)
       local prefix, fullTag, epVal, gpVal, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
       if epVal then
+        -- Backup GP value before conversion (always overwrite on init)
+        _backupGP(name, gpVal, officernote, false)
+        
         local newTag = string.format("{%d}", tonumber(epVal))
         local newNote = (prefix or "") .. newTag .. (postfix or "")
         if string.len(newNote) <= MAX_NOTE_LEN then
@@ -1544,10 +1583,13 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
   local newnote
   if ( ep ~= nil) then 
    -- ep = math.max(0,ep)
-    -- Check if note uses new {EP} format or legacy {EP:GP} format
-    local hasLegacy = string.find(officernote,"{%d+:%-?%d+}")
-    if hasLegacy then
-      -- Update legacy format (but prefer converting to new format)
+    -- Try to match legacy {EP:GP} format first
+    local prefix, fullTag, oldEP, oldGP, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+    if oldEP then
+      -- Has legacy format - backup GP and convert to new {EP} format
+      -- Uses preserveExisting=true to keep the ORIGINAL GP value from first backup
+      _backupGP(name, oldGP, officernote, true)
+      
       -- Convert to new {EP} format while updating
       newnote = string.gsub(officernote,"(.-)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
         return string.format("%s{%d}%s",prefix,ep,postfix)
