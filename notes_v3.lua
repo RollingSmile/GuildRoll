@@ -11,24 +11,32 @@ local string_format = string and string.format
 local string_len = string and string.len
 local string_sub = string and string.sub
 
--- Emergency validation: If string functions are nil at load time, create error messages
-if not string_match then
-  string_match = function() error("GuildRoll: string.match was corrupted before notes_v3.lua loaded. Please disable other addons to find the conflict.") end
-end
-if not string_gsub then
-  string_gsub = function() error("GuildRoll: string.gsub was corrupted before notes_v3.lua loaded. Please disable other addons to find the conflict.") end
-end
-if not string_format then
-  string_format = function() error("GuildRoll: string.format was corrupted before notes_v3.lua loaded. Please disable other addons to find the conflict.") end
-end
-if not string_find then
-  string_find = function() error("GuildRoll: string.find was corrupted before notes_v3.lua loaded. Please disable other addons to find the conflict.") end
-end
-if not string_len then
-  string_len = function() error("GuildRoll: string.len was corrupted before notes_v3.lua loaded. Please disable other addons to find the conflict.") end
-end
-if not string_sub then
-  string_sub = function() error("GuildRoll: string.sub was corrupted before notes_v3.lua loaded. Please disable other addons to find the conflict.") end
+-- Track if we've shown the corruption warning
+local _corruption_warning_shown = false
+
+-- Emergency validation: If string functions are nil at load time, log once and use globals
+-- The global protection in guildroll.lua should restore these functions at runtime
+if not string_match or not string_gsub or not string_format or not string_find or not string_len or not string_sub then
+  -- Show warning only once
+  if not _corruption_warning_shown then
+    _corruption_warning_shown = true
+    -- Schedule warning to show after UI is ready
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("PLAYER_LOGIN")
+    f:SetScript("OnEvent", function()
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff9900GuildRoll Warning: String functions were corrupted at load time. Another addon may be interfering. If you experience issues, disable other addons.|r")
+      f:UnregisterEvent("PLAYER_LOGIN")
+    end)
+  end
+  
+  -- Use global references as fallback (they should be restored by guildroll.lua protection)
+  string_match = string_match or function(...) return string.match(...) end
+  string_gmatch = string_gmatch or function(...) return string.gmatch(...) end
+  string_gsub = string_gsub or function(...) return string.gsub(...) end
+  string_find = string_find or function(...) return string.find(...) end
+  string_format = string_format or function(...) return string.format(...) end
+  string_len = string_len or function(...) return string.len(...) end
+  string_sub = string_sub or function(...) return string.sub(...) end
 end
 
 -- Constants for note length and migration timing
