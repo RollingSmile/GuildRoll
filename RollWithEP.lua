@@ -1248,6 +1248,11 @@ if GuildRoll then
   end)
 end
 
+-- Ensure GuildRoll table exists (since we load before guildroll.lua)
+if not GuildRoll then
+  GuildRoll = {}
+end
+
 -- Public API for integration
 GuildRoll.RollWithEP_StartRollForItem = RollWithEP_StartRollForItem
 
