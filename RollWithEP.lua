@@ -1350,3 +1350,133 @@ function ShowItemContextMenu(itemLink, itemID, itemName, slotIndex)
     )
   end)
 end
+
+-- ============================================================================
+-- Public API Exposure
+-- ============================================================================
+
+-- Expose CanUseRollWithEP for menu permission gating
+function GuildRoll.RollWithEP_CanUse()
+  return CanUseRollWithEP()
+end
+
+-- Expose CSV import function
+function GuildRoll.RollWithEP_ImportCSV(csvData)
+  if not CanUseRollWithEP() then
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("You don't have permission to import CSV.")
+    end
+    return false
+  end
+  
+  if not csvData or csvData == "" then
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("No CSV data provided.")
+    end
+    return false
+  end
+  
+  -- Initialize cache if needed
+  if not GuildRoll_rollForEPCache then
+    GuildRoll_rollForEPCache = {}
+  end
+  
+  -- Parse CSV data
+  local ok, result = pcall(function()
+    local srData = {}
+    local playerCount = 0
+    
+    -- Parse CSV line by line
+    for line in string.gmatch(csvData .. "\n", "(.-)\n") do
+      -- Skip empty lines and header
+      if line and line ~= "" and not string.find(line, "^Player,") then
+        -- Parse CSV line: Player,ItemID,ItemName,Week
+        local player, itemID, itemName, week = string.match(line, "^([^,]+),([^,]*),([^,]*),([^,]*)$")
+        
+        if player and player ~= "" then
+          -- Strip realm suffix
+          player = StripRealm(player)
+          
+          -- Initialize player if needed
+          if not srData[player] then
+            srData[player] = {
+              sr = 0,
+              weeks = {},
+              items = {}
+            }
+            playerCount = playerCount + 1
+          end
+          
+          -- Add item to player's SR list
+          local item = {
+            itemID = itemID and itemID ~= "" and tonumber(itemID) or nil,
+            itemName = itemName and itemName ~= "" and itemName or nil,
+            week = week and week ~= "" and tonumber(week) or nil
+          }
+          
+          table.insert(srData[player].items, item)
+          srData[player].sr = srData[player].sr + 1
+          
+          -- Track week if provided
+          if item.week and not srData[player].weeks[item.week] then
+            srData[player].weeks[item.week] = true
+          end
+        end
+      end
+    end
+    
+    -- Store in cache
+    GuildRoll_rollForEPCache.lastImport = {
+      srData = srData,
+      timestamp = time(),
+      playerCount = playerCount
+    }
+    
+    -- Also expose in RollForEP module if available
+    if RollForEP then
+      RollForEP.srData = srData
+    end
+    
+    return playerCount
+  end)
+  
+  if ok and result then
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint(string.format(L["CSV imported successfully! %d players with soft reserves."], result))
+    end
+    return true
+  else
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint(L["Failed to parse CSV. Please check format."])
+    end
+    return false
+  end
+end
+
+-- Expose Set DE/Bank function
+function GuildRoll.RollWithEP_SetDEBank(playerName)
+  if not CanUseRollWithEP() then
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("You don't have permission to set DE/Bank player.")
+    end
+    return
+  end
+  
+  if not GuildRoll.VARS then
+    GuildRoll.VARS = {}
+  end
+  
+  if playerName and playerName ~= "" then
+    GuildRoll.VARS.lootDE = StripRealm(playerName)
+    GuildRoll.VARS.lootDE_ML = StripRealm(UnitName("player"))
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint(string.format(L["DE/Bank player set to: %s"], GuildRoll.VARS.lootDE))
+    end
+  else
+    GuildRoll.VARS.lootDE = nil
+    GuildRoll.VARS.lootDE_ML = nil
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint(L["DE/Bank player cleared."])
+    end
+  end
+end
