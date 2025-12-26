@@ -1204,7 +1204,6 @@ end
 
 -- Public API for integration
 GuildRoll.RollWithEP_StartRollForItem = RollWithEP_StartRollForItem
-GuildRoll.RollWithEP_CanUse = CanUseRollWithEP
 
 -- API: Show loot UI with item list
 -- Called by announce_loot.lua when loot window opens
