@@ -1,6 +1,15 @@
 -- notes_v3.lua: Note management and EP system for GuildRoll
 -- Contains functions for managing officer notes in {EP} format and migration utilities
 
+-- Defensive: Store local references to string functions to protect against corruption
+local string_match = string.match
+local string_gmatch = string.gmatch
+local string_gsub = string.gsub
+local string_find = string.find
+local string_format = string.format
+local string_len = string.len
+local string_sub = string.sub
+
 -- Constants for note length and migration timing
 local MAX_NOTE_LEN = 31
 local MIGRATION_THROTTLE_SECONDS = 30
@@ -16,20 +25,20 @@ local function _trim_public_with_tag(existing, tag, maxlen)
   existing = existing or ""
   tag = tag or ""
   
-  local tagLen = string.len(tag)
+  local tagLen = string_len(tag)
   local availableLen = maxlen - tagLen
   
   if availableLen < 0 then
     -- Tag itself is too long; return just the tag truncated
-    return string.sub(tag, 1, maxlen)
+    return string_sub(tag, 1, maxlen)
   end
   
-  if string.len(existing) <= availableLen then
+  if string_len(existing) <= availableLen then
     -- Existing note fits; append tag
     return existing .. tag
   else
     -- Trim existing to fit
-    return string.sub(existing, 1, availableLen) .. tag
+    return string_sub(existing, 1, availableLen) .. tag
   end
 end
 
@@ -49,11 +58,11 @@ local function _insertTagBeforeEP(officernote, tag)
   
   -- Remove any existing occurrences of this tag from the officer note
   -- Escape pattern characters in the tag for safe pattern matching
-  local escapedTag = string.gsub(tag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-  officernote = string.gsub(officernote, escapedTag, "")
+  local escapedTag = string_gsub(tag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+  officernote = string_gsub(officernote, escapedTag, "")
   
   -- Try to find new {EP} pattern first (e.g., {123})
-  local prefix, ep, postfix = string.match(officernote, "^(.-)({%d+})(.*)$")
+  local prefix, ep, postfix = string_match(officernote, "^(.-)({%d+})(.*)$")
   
   if ep then
     -- Found new {EP} pattern; insert tag before it
@@ -61,7 +70,7 @@ local function _insertTagBeforeEP(officernote, tag)
   end
   
   -- Try to find legacy {EP:GP} pattern (e.g., {123:456})
-  prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
+  prefix, epgp, postfix = string_match(officernote, "^(.-)({%d+:%d+})(.*)$")
   
   if epgp then
     -- Found legacy pattern; insert tag before it
@@ -107,33 +116,33 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
   local ep = self:get_ep_v3(name,officernote)
   if ep == nil then
     -- Initialize with new {EP} format (EP-only, no GP)
-    local initstring = string.format("{%d}",0)
-    local newnote = string.format("%s%s",officernote,initstring)
+    local initstring = string_format("{%d}",0)
+    local newnote = string_format("%s%s",officernote,initstring)
     -- Remove any legacy {EP:GP} patterns
-    newnote = string.gsub(newnote,"(.*)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
-      return string.format("%s%s",prefix,postfix)
+    newnote = string_gsub(newnote,"(.*)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
+      return string_format("%s%s",prefix,postfix)
     end)
     -- Ensure new tag fits within note length
-    if string.len(newnote) > MAX_NOTE_LEN then
-      local tagLen = string.len(initstring)
+    if string_len(newnote) > MAX_NOTE_LEN then
+      local tagLen = string_len(initstring)
       local availableLen = MAX_NOTE_LEN - tagLen
-      local trimmed = string.sub(officernote, 1, availableLen)
+      local trimmed = string_sub(officernote, 1, availableLen)
       newnote = trimmed .. initstring
     end
     officernote = newnote
   else
     -- Note already has EP value, ensure proper format
     -- If it has legacy {EP:GP}, convert to {EP}
-    local hasLegacy = string.find(officernote,"{%d+:%-?%d+}")
+    local hasLegacy = string_find(officernote,"{%d+:%-?%d+}")
     if hasLegacy then
       -- Convert {EP:GP} to {EP}
       -- Pattern captures: prefix, fullTag, epVal, gpVal, postfix (5 total)
-      local prefix, fullTag, epVal, gpVal, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+      local prefix, fullTag, epVal, gpVal, postfix = string_match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
       if epVal then
         -- NO backup of GP value - just convert to new format
-        local newTag = string.format("{%d}", tonumber(epVal))
+        local newTag = string_format("{%d}", tonumber(epVal))
         local newNote = (prefix or "") .. newTag .. (postfix or "")
-        if string.len(newNote) <= MAX_NOTE_LEN then
+        if string_len(newNote) <= MAX_NOTE_LEN then
           officernote = newNote
         end
       end
@@ -157,16 +166,16 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
   local newnote
   if ep ~= nil then 
     -- Try to match legacy {EP:GP} format first
-    local prefix, fullTag, oldEP, oldGP, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+    local prefix, fullTag, oldEP, oldGP, postfix = string_match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
     if oldEP then
       -- Has legacy format - NO backup, just convert to new {EP} format
-      newnote = string.gsub(officernote,"(.-)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
-        return string.format("%s{%d}%s",prefix,ep,postfix)
+      newnote = string_gsub(officernote,"(.-)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
+        return string_format("%s{%d}%s",prefix,ep,postfix)
       end)
     else
       -- Update new {EP} format
-      newnote = string.gsub(officernote,"(.-)({%d+})(.*)",function(prefix,tag,postfix)
-        return string.format("%s{%d}%s",prefix,ep,postfix)
+      newnote = string_gsub(officernote,"(.-)({%d+})(.*)",function(prefix,tag,postfix)
+        return string_format("%s{%d}%s",prefix,ep,postfix)
       end)
     end
   end
@@ -183,7 +192,7 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
     end)
     
     if not success then
-      self:debugPrint(string.format("Error updating officer note for %s: %s", name or "unknown", tostring(err)))
+      self:debugPrint(string_format("Error updating officer note for %s: %s", name or "unknown", tostring(err)))
     end
     
     -- Add personal logging for EP changes only with compact colorized format
@@ -198,12 +207,12 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
       -- Colorize delta: green for positive, red for negative
       local deltaStr
       if C and changeEP >= 0 then
-        deltaStr = C:Green(string.format("+%d", changeEP))
+        deltaStr = C:Green(string_format("+%d", changeEP))
       elseif C then
-        deltaStr = C:Red(string.format("%d", changeEP))
+        deltaStr = C:Red(string_format("%d", changeEP))
       else
         -- Fallback if Crayon not available
-        deltaStr = string.format("%+d", changeEP)
+        deltaStr = string_format("%+d", changeEP)
       end
       
       -- Build suffix based on special_action
@@ -215,7 +224,7 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
       end
       
       -- Compact format: EP: Prev -> New (±N) by AdminName[ (Raid)|(Decay)]
-      local logMsg = string.format("EP: %d -> %d (%s) by %s%s", prevEP, ep, deltaStr, actor, suffix)
+      local logMsg = string_format("EP: %d -> %d (%s) by %s%s", prevEP, ep, deltaStr, actor, suffix)
       self:personalLogAdd(name, logMsg)
     end
   end
@@ -235,23 +244,23 @@ end
 function GuildRoll:get_ep_v3(getname,officernote)
   if (officernote) then
     -- Try new {EP} format first
-    local _,_,ep = string.find(officernote,".*{(%d+)}.*")
+    local _,_,ep = string_find(officernote,".*{(%d+)}.*")
     if ep then
       return tonumber(ep)
     end
     -- Fall back to legacy {EP:GP} format
-    local _,_,ep_legacy = string.find(officernote,".*{(%d+):%-?%d+}.*")
+    local _,_,ep_legacy = string_find(officernote,".*{(%d+):%-?%d+}.*")
     return tonumber(ep_legacy)
   end
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
     -- Try new {EP} format first
-    local _,_,ep = string.find(officernote,".*{(%d+)}.*")
+    local _,_,ep = string_find(officernote,".*{(%d+)}.*")
     if ep and (name==getname) then
       return tonumber(ep)
     end
     -- Fall back to legacy {EP:GP} format
-    local _,_,ep_legacy = string.find(officernote,".*{(%d+):%-?%d+}.*")
+    local _,_,ep_legacy = string_find(officernote,".*{(%d+):%-?%d+}.*")
     if (name==getname) then return tonumber(ep_legacy) end
   end
   return
@@ -290,7 +299,7 @@ function GuildRoll:migrateToEPOnly(throttleDelay)
     if success and name and officernote then
       -- Match {EP:GP} pattern (support optional negative GP)
       -- Pattern captures: prefix, fullTag, ep, gp, postfix (5 total)
-      local prefix, fullTag, ep, gp, postfix = string.match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+      local prefix, fullTag, ep, gp, postfix = string_match(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
       if ep and gp then
         table.insert(toMigrate, {
           name = name,
@@ -309,7 +318,7 @@ function GuildRoll:migrateToEPOnly(throttleDelay)
     return
   end
   
-  self:defaultPrint(string.format("Starting migration of %d member(s) from {EP:GP} to {EP} format...", table.getn(toMigrate)))
+  self:defaultPrint(string_format("Starting migration of %d member(s) from {EP:GP} to {EP} format...", table.getn(toMigrate)))
   
   -- Create frame for throttled updates
   local frame = CreateFrame("Frame")
@@ -326,16 +335,16 @@ function GuildRoll:migrateToEPOnly(throttleDelay)
       local entry = toMigrate[currentIndex]
       
       -- Build new note with {EP} format
-      local newTag = string.format("{%d}", entry.ep)
+      local newTag = string_format("{%d}", entry.ep)
       local newNote = entry.prefix .. newTag .. entry.postfix
       
       -- Ensure note doesn't exceed MAX_NOTE_LEN (31 chars)
-      if string.len(newNote) > MAX_NOTE_LEN then
+      if string_len(newNote) > MAX_NOTE_LEN then
         -- Trim prefix and postfix evenly to fit
-        local tagLen = string.len(newTag)
+        local tagLen = string_len(newTag)
         local availableLen = MAX_NOTE_LEN - tagLen
-        local prefixLen = string.len(entry.prefix)
-        local postfixLen = string.len(entry.postfix)
+        local prefixLen = string_len(entry.prefix)
+        local postfixLen = string_len(entry.postfix)
         local totalExtra = prefixLen + postfixLen
         
         if totalExtra > availableLen then
@@ -343,8 +352,8 @@ function GuildRoll:migrateToEPOnly(throttleDelay)
           local prefixAllowed = math.floor((prefixLen / totalExtra) * availableLen)
           local postfixAllowed = availableLen - prefixAllowed
           
-          entry.prefix = string.sub(entry.prefix, 1, prefixAllowed)
-          entry.postfix = string.sub(entry.postfix, 1, postfixAllowed)
+          entry.prefix = string_sub(entry.prefix, 1, prefixAllowed)
+          entry.postfix = string_sub(entry.postfix, 1, postfixAllowed)
           newNote = entry.prefix .. newTag .. entry.postfix
         end
       end
@@ -365,7 +374,7 @@ function GuildRoll:migrateToEPOnly(throttleDelay)
         -- Apply the note change
         local success, err = pcall(GuildRosterSetOfficerNote, foundIndex, newNote)
         if not success then
-          GuildRoll:defaultPrint(string.format("Failed to update %s: %s", entry.name, tostring(err)))
+          GuildRoll:defaultPrint(string_format("Failed to update %s: %s", entry.name, tostring(err)))
         end
       end
       
@@ -374,7 +383,7 @@ function GuildRoll:migrateToEPOnly(throttleDelay)
       -- Cleanup when done
       if currentIndex > table.getn(toMigrate) then
         frame:SetScript("OnUpdate", nil)
-        GuildRoll:defaultPrint(string.format("Migration complete! Converted %d member(s) to {EP} format.", table.getn(toMigrate)))
+        GuildRoll:defaultPrint(string_format("Migration complete! Converted %d member(s) to {EP} format.", table.getn(toMigrate)))
       end
     end
   end)
@@ -412,8 +421,8 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
       -- Ensure publicNote and officerNote are strings
       if type(publicNote) == "string" and type(officerNote) == "string" then
         -- Check if public note contains a main tag pattern {name} (min 2 chars)
-        local mainTag = string.match(publicNote, "({%a%a%a*})")
-        if mainTag and type(mainTag) == "string" and string.len(mainTag) > 2 then
+        local mainTag = string_match(publicNote, "({%a%a%a*})")
+        if mainTag and type(mainTag) == "string" and string_len(mainTag) > 2 then
           -- Insert main tag before {EP:GP} in officer note first (to avoid data loss)
           local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
           
@@ -429,12 +438,12 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
               movedCount = movedCount + 1
               
               -- Escape pattern characters for safe replacement
-              local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+              local escapedTag = string_gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
               -- Remove only first occurrence of the main tag from public note
-              local newPublic = string.gsub(publicNote, escapedTag, "", 1)
+              local newPublic = string_gsub(publicNote, escapedTag, "", 1)
               
               -- Trim leading and trailing whitespace
-              newPublic = string.gsub(newPublic, "^%s*(.-)%s*$", "%1")
+              newPublic = string_gsub(newPublic, "^%s*(.-)%s*$", "%1")
               
               -- If empty, use a single space to ensure server accepts it
               if newPublic == "" then
@@ -454,7 +463,7 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
   
   -- Only print summary if at least one tag was moved
   if movedCount > 0 then
-    self:defaultPrint(string.format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
+    self:defaultPrint(string_format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
   end
   
   return movedCount

@@ -7,27 +7,37 @@ GuildRoll.DEBUG = false
 -- Defensive: Protect string table functions from being overwritten by other addons
 -- Store local references to critical string functions before any addon can corrupt them
 do
-  local _string_match = string.match
-  local _string_gmatch = string.gmatch
-  local _string_gsub = string.gsub
-  local _string_find = string.find
-  local _string_format = string.format
+  -- Store references only if they're valid functions
+  local _string_match = (type(string.match) == "function") and string.match or nil
+  local _string_gmatch = (type(string.gmatch) == "function") and string.gmatch or nil
+  local _string_gsub = (type(string.gsub) == "function") and string.gsub or nil
+  local _string_find = (type(string.find) == "function") and string.find or nil
+  local _string_format = (type(string.format) == "function") and string.format or nil
+  
+  -- If we couldn't capture valid references, something is very wrong - try to get from raw Lua
+  if not _string_match then
+    -- Emergency fallback: these functions should exist in base Lua
+    -- If they don't, we log an error but continue
+    if GuildRoll_debug then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000GuildRoll: CRITICAL - string.match not found at load time!|r")
+    end
+  end
   
   -- If string functions are corrupted, restore them from our local copies
   local function _protect_string_table()
-    if not string.match or type(string.match) ~= "function" then
+    if _string_match and (not string.match or type(string.match) ~= "function") then
       string.match = _string_match
     end
-    if not string.gmatch or type(string.gmatch) ~= "function" then
+    if _string_gmatch and (not string.gmatch or type(string.gmatch) ~= "function") then
       string.gmatch = _string_gmatch
     end
-    if not string.gsub or type(string.gsub) ~= "function" then
+    if _string_gsub and (not string.gsub or type(string.gsub) ~= "function") then
       string.gsub = _string_gsub
     end
-    if not string.find or type(string.find) ~= "function" then
+    if _string_find and (not string.find or type(string.find) ~= "function") then
       string.find = _string_find
     end
-    if not string.format or type(string.format) ~= "function" then
+    if _string_format and (not string.format or type(string.format) ~= "function") then
       string.format = _string_format
     end
   end
