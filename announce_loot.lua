@@ -247,11 +247,11 @@ local function OnLootOpened()
         -- Get item link
         local success, itemLink = pcall(GetLootSlotLink, slot)
         if success and itemLink then
-          -- Extract itemID from link
+          -- Extract itemID from link using string operations to avoid string.match issues
           local itemID = nil
-          local idMatch = string.match(itemLink, "item:(%d+)")
-          if idMatch then
-            itemID = tonumber(idMatch)
+          local _, _, id = string.find(itemLink or "", "item:(%d+)")
+          if id then
+            itemID = tonumber(id)
           end
           
           -- Store loot item for RollWithEP
