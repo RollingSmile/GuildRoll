@@ -304,7 +304,4 @@ Results will print here when done.]],
   ["Award cancelled"] = true,
   ["Loot found:"] = true,
   ["Start rolling for %s"] = true,
-  -- CSV Import and DE/Bank
-  ["Import CSV"] = true,
-  ["Set DE/Bank"] = true,
 } end)
