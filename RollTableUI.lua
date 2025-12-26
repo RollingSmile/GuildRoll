@@ -1,10 +1,10 @@
 -- RollTableUI.lua
 -- Simple RollTable frame showing Player | SR | Roll | Type
 
-local RollTableUI = {}
-RollTableUI.__index = RollTableUI
+GuildRoll_RollTableUI = {}
+GuildRoll_RollTableUI.__index = GuildRoll_RollTableUI
 
-function RollTableUI:create()
+function GuildRoll_RollTableUI:create()
   if self.frame then return self.frame end
   local f = CreateFrame("Frame", "GuildRoll_RollTable", UIParent)
   f:SetWidth(520)
@@ -31,16 +31,16 @@ function RollTableUI:create()
   return f
 end
 
-function RollTableUI:show()
+function GuildRoll_RollTableUI:show()
   self:create()
   self.frame:Show()
 end
 
-function RollTableUI:hide()
+function GuildRoll_RollTableUI:hide()
   if self.frame then self.frame:Hide() end
 end
 
-function RollTableUI:refresh(rolls, srLookup)
+function GuildRoll_RollTableUI:refresh(rolls, srLookup)
   self:create()
   -- clear previous rows
   for _,r in ipairs(self.rows) do r:Hide() end
@@ -54,5 +54,3 @@ function RollTableUI:refresh(rolls, srLookup)
     self.rows[#self.rows+1] = row
   end
 end
-
-return RollTableUI

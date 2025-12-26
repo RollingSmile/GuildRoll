@@ -1,8 +1,8 @@
 -- ChatParser.lua
 -- Parse /roll messages and addon button messages, return normalized roll entry
 
-local ChatParser = {}
-ChatParser.__index = ChatParser
+GuildRoll_ChatParser = {}
+GuildRoll_ChatParser.__index = GuildRoll_ChatParser
 
 -- WoW built-in roll: "Player rolls 42 (1-100)"
 local rollPattern = "(.+) rolls (%d+) %(%d+%-%d+%)"
@@ -16,7 +16,7 @@ local addonPatterns = {
   -- Add patterns for EP, CSR, numeric button labels 101..98 as needed
 }
 
-function ChatParser:parse(msg)
+function GuildRoll_ChatParser:parse(msg)
   -- builtin /roll
   local player, value = string.match(msg, rollPattern)
   if player and value then
@@ -33,5 +33,3 @@ function ChatParser:parse(msg)
 
   return nil
 end
-
-return ChatParser

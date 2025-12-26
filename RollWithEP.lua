@@ -56,6 +56,49 @@ local RollWithEP = {
   lootSlots = {}  -- Cached loot slots from current loot window
 }
 
+-- Integration: Initialize new roll tracking system
+-- Tracker instance for storing and sorting rolls
+RollWithEP.tracker = nil
+-- Chat parser for normalizing roll messages
+RollWithEP.parser = GuildRoll_ChatParser
+
+-- Initialize tracker (lazy init to avoid errors if module not loaded)
+local function InitTracker()
+  if not RollWithEP.tracker and GuildRoll_RollTracker then
+    RollWithEP.tracker = GuildRoll_RollTracker:new()
+  end
+  return RollWithEP.tracker
+end
+
+-- Public API: Show new RollTable UI
+function GuildRoll.RollWithEP_ShowRollTable()
+  if not GuildRoll_RollTableUI then
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("RollTableUI module not loaded")
+    end
+    return
+  end
+  
+  -- Initialize tracker if needed
+  local tracker = InitTracker()
+  if not tracker then
+    if GuildRoll and GuildRoll.defaultPrint then
+      GuildRoll:defaultPrint("RollTracker module not loaded")
+    end
+    return
+  end
+  
+  -- Get rolls from tracker
+  local rolls = tracker:getAll()
+  
+  -- TODO: Get SR lookup from current session or cache
+  local srLookup = {}
+  
+  -- Show and refresh UI
+  GuildRoll_RollTableUI:show()
+  GuildRoll_RollTableUI:refresh(rolls, srLookup)
+end
+
 -- Helper: Strip realm suffix from player name
 local function StripRealm(name)
   if not name then return nil end
@@ -670,13 +713,21 @@ function BuildTablet()
   -- Actions
   if not session.closed then
     if session.tieState then
+      -- TODO: Migrate to new RollTable UI - temporarily disabled
       -- Show Ask Tie Roll button
+      --[[
       T:AddLine(
         "text", "[" .. L["Ask Tie Roll"] .. "]",
         "textR", 1, "textG", 0.5, "textB", 0,
         "func", function()
           RollWithEP_AskTieRoll()
         end
+      )
+      ]]--
+      -- For now, show a placeholder message
+      T:AddLine(
+        "text", "[Tie detected - New UI coming soon]",
+        "textR", 1, "textG", 0.5, "textB", 0
       )
     else
       -- Show Stop Rolls button
@@ -1557,5 +1608,15 @@ function GuildRoll.RollWithEP_SetDEBank(playerName)
     if GuildRoll and GuildRoll.defaultPrint then
       GuildRoll:defaultPrint(L["DE/Bank player cleared."])
     end
+  end
+end
+
+-- Expose new RollTableUI integration point for announce_loot.lua
+-- This is a placeholder that will be expanded in future iterations
+function GuildRoll.RollTableUI_ShowLootUI(lootItems)
+  -- For now, just delegate to the existing ShowRollTable function
+  -- In future iterations, this will handle loot items and populate the tracker
+  if GuildRoll.RollWithEP_ShowRollTable then
+    GuildRoll.RollWithEP_ShowRollTable()
   end
 end

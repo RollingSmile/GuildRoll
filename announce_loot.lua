@@ -337,10 +337,18 @@ local function OnLootOpened()
   -- Integration point: Open RollWithEP UI if module is loaded
   -- The RollWithEP module provides interactive roll management UI
   -- Only call if there are qualifying items
-  if table.getn(lootItems) > 0 and GuildRoll and GuildRoll.RollWithEP_ShowLootUI then
-    pcall(function()
-      GuildRoll.RollWithEP_ShowLootUI(lootItems)
-    end)
+  if table.getn(lootItems) > 0 then
+    -- Try new RollTableUI first
+    if GuildRoll and GuildRoll.RollTableUI_ShowLootUI then
+      pcall(function()
+        GuildRoll.RollTableUI_ShowLootUI(lootItems)
+      end)
+    -- Fallback to existing RollWithEP UI
+    elseif GuildRoll and GuildRoll.RollWithEP_ShowLootUI then
+      pcall(function()
+        GuildRoll.RollWithEP_ShowLootUI(lootItems)
+      end)
+    end
   end
 end
 

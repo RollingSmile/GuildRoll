@@ -1,12 +1,12 @@
 -- RollTracker.lua
 -- Central storage for rolls and sorting by priority
 
-local RollTracker = {}
-RollTracker.__index = RollTracker
+GuildRoll_RollTracker = {}
+GuildRoll_RollTracker.__index = GuildRoll_RollTracker
 
 local defaultPriority = { SR = 1, MS = 2, OS = 3, Tmog = 4, Unknown = 5 }
 
-function RollTracker:new(priority)
+function GuildRoll_RollTracker:new(priority)
   local o = {
     rolls = {}, -- list of {player, value, type, timestamp, flags}
     priority = priority or defaultPriority
@@ -15,21 +15,21 @@ function RollTracker:new(priority)
   return o
 end
 
-function RollTracker:add(roll)
+function GuildRoll_RollTracker:add(roll)
   roll.timestamp = roll.timestamp or time()
   table.insert(self.rolls, roll)
   self:sort()
 end
 
-function RollTracker:clear()
+function GuildRoll_RollTracker:clear()
   self.rolls = {}
 end
 
-function RollTracker:getAll()
+function GuildRoll_RollTracker:getAll()
   return self.rolls
 end
 
-function RollTracker:sort()
+function GuildRoll_RollTracker:sort()
   table.sort(self.rolls, function(a,b)
     local pa = self.priority[a.type] or self.priority.Unknown
     local pb = self.priority[b.type] or self.priority.Unknown
@@ -42,5 +42,3 @@ function RollTracker:sort()
     return a.timestamp < b.timestamp
   end)
 end
-
-return RollTracker
