@@ -473,11 +473,19 @@ function GuildRoll:buildMenu()
       order = 6,
       hidden = function()
         -- Only visible to loot manager (admin + ML/RL)
-        if not GuildRoll or not GuildRoll.RollWithEP_CanUse then
+        if not GuildRoll then
+          return true
+        end
+        if not GuildRoll.RollWithEP_CanUse then
+          -- RollWithEP module not loaded yet
           return true
         end
         local ok, canUse = pcall(function() return GuildRoll.RollWithEP_CanUse() end)
-        return not (ok and canUse)
+        if not ok then
+          -- Error calling function
+          return true
+        end
+        return not canUse
       end,
       func = function()
         -- Show StaticPopup for CSV paste
@@ -526,11 +534,19 @@ function GuildRoll:buildMenu()
       order = 7,
       hidden = function()
         -- Only visible to loot manager (admin + ML/RL)
-        if not GuildRoll or not GuildRoll.RollWithEP_CanUse then
+        if not GuildRoll then
+          return true
+        end
+        if not GuildRoll.RollWithEP_CanUse then
+          -- RollWithEP module not loaded yet
           return true
         end
         local ok, canUse = pcall(function() return GuildRoll.RollWithEP_CanUse() end)
-        return not (ok and canUse)
+        if not ok then
+          -- Error calling function
+          return true
+        end
+        return not canUse
       end,
       func = function()
         -- Show Dewdrop menu with raid members
