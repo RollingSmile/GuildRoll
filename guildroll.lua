@@ -3,6 +3,47 @@ GuildRoll:SetModuleMixins("AceDebug-2.0")
 
 -- Global debug flag: set to true to enable debug output
 GuildRoll.DEBUG = false
+
+-- Defensive: Protect string table functions from being overwritten by other addons
+-- Store local references to critical string functions before any addon can corrupt them
+do
+  local _string_match = string.match
+  local _string_gmatch = string.gmatch
+  local _string_gsub = string.gsub
+  local _string_find = string.find
+  local _string_format = string.format
+  
+  -- If string functions are corrupted, restore them from our local copies
+  local function _protect_string_table()
+    if not string.match or type(string.match) ~= "function" then
+      string.match = _string_match
+    end
+    if not string.gmatch or type(string.gmatch) ~= "function" then
+      string.gmatch = _string_gmatch
+    end
+    if not string.gsub or type(string.gsub) ~= "function" then
+      string.gsub = _string_gsub
+    end
+    if not string.find or type(string.find) ~= "function" then
+      string.find = _string_find
+    end
+    if not string.format or type(string.format) ~= "function" then
+      string.format = _string_format
+    end
+  end
+  
+  -- Call protection immediately
+  _protect_string_table()
+  
+  -- Also protect on events (in case corruption happens later)
+  local f = CreateFrame("Frame")
+  f:RegisterEvent("PLAYER_LOGIN")
+  f:RegisterEvent("PLAYER_ENTERING_WORLD")
+  f:SetScript("OnEvent", function()
+    _protect_string_table()
+  end)
+end
+
 local D = AceLibrary("Dewdrop-2.0")-- Standings table
 local BZ = AceLibrary("Babble-Zone-2.2")
 local C = AceLibrary("Crayon-2.0") -- chat color
