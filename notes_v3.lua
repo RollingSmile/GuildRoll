@@ -37,10 +37,10 @@ if not string_match or not string_gsub or not string_format then
     return string.find and string.find(s, pattern, init, plain) or nil
   end
   string_format = string_format or function(formatstring, ...)
-    if string.format then
+    if string and string.format and type(string.format) == "function" then
       return string.format(formatstring, ...)
     end
-    return ""
+    return formatstring or ""
   end
   string_len = string_len or function(s)
     return string.len and string.len(s) or 0
