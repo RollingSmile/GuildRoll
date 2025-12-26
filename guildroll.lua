@@ -414,19 +414,20 @@ function GuildRoll:buildMenu()
       end
     }
     
-    -- RollWithEP Quick Actions (permission-gated: Admin + InRaid + MasterLoot + ML/RL)
-    options.args["quick_actions"].args["import_csv"] = {
+    -- Loot Settings Group (NO permission checks - always visible for testing)
+    options.args["loot_settings"] = {
+      type = "group",
+      name = "Loot Settings",
+      desc = "Configure loot management settings",
+      order = 2,
+      args = {}
+    }
+    
+    options.args["loot_settings"].args["import_csv"] = {
       type = "execute",
       name = L["Import SR CSV"],
       desc = L["Import soft reserves from RaidRes CSV format"],
-      order = 6,
-      hidden = function()
-        if not GuildRoll or not GuildRoll.RollWithEP_CanUse then
-          return true
-        end
-        local ok, canUse = pcall(function() return GuildRoll.RollWithEP_CanUse() end)
-        return not (ok and canUse)
-      end,
+      order = 1,
       func = function()
         -- Show CSV import dialog
         StaticPopupDialogs["ROLLWITHEP_IMPORT_CSV"] = {
@@ -454,18 +455,11 @@ function GuildRoll:buildMenu()
       end
     }
     
-    options.args["quick_actions"].args["set_de_bank"] = {
+    options.args["loot_settings"].args["set_de_bank"] = {
       type = "execute",
       name = L["Set DE/Bank"],
       desc = L["Select player to receive DE/Bank items"],
-      order = 7,
-      hidden = function()
-        if not GuildRoll or not GuildRoll.RollWithEP_CanUse then
-          return true
-        end
-        local ok, canUse = pcall(function() return GuildRoll.RollWithEP_CanUse() end)
-        return not (ok and canUse)
-      end,
+      order = 2,
       func = function()
         -- Build list of raid members
         local raidMembers = {}

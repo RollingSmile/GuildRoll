@@ -245,11 +245,24 @@ local function OnLootOpened()
         -- Get item link
         local success, itemLink = pcall(GetLootSlotLink, slot)
         if success and itemLink then
-          -- Extract itemID from link using string operations to avoid string.match issues
+          -- Extract itemID from link - simple approach without pattern matching
           local itemID = nil
-          local _, _, id = string.find(itemLink or "", "item:(%d+)")
-          if id then
-            itemID = tonumber(id)
+          -- itemLink format: |cffXXXXXX|Hitem:ID:...|h[Name]|h|r
+          -- Find "item:" and extract the number after it
+          local startPos = strfind(itemLink or "", "item:")
+          if startPos then
+            local numStr = ""
+            for i = startPos + 5, strlen(itemLink) do
+              local char = strsub(itemLink, i, i)
+              if char >= "0" and char <= "9" then
+                numStr = numStr .. char
+              else
+                break
+              end
+            end
+            if numStr ~= "" then
+              itemID = tonumber(numStr)
+            end
           end
           
           -- Store loot item for RollWithEP
