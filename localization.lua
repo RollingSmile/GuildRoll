@@ -246,7 +246,7 @@ Results will print here when done.]],
   ["Migrate Main Tags"] = true,
   ["Reset Standing"] = true,
   -- RollWithEP module
-  ["Import CSV"] = true,
+  ["Import SR CSV"] = true,
   ["Import soft reserves from RaidRes CSV format"] = true,
   ["Set DE/Bank"] = true,
   ["Select player to receive DE/Bank items"] = true,

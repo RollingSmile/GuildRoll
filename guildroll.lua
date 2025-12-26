@@ -417,7 +417,7 @@ function GuildRoll:buildMenu()
     -- RollWithEP Quick Actions (permission-gated: Admin + InRaid + MasterLoot + ML/RL)
     options.args["quick_actions"].args["import_csv"] = {
       type = "execute",
-      name = L["Import CSV"],
+      name = L["Import SR CSV"],
       desc = L["Import soft reserves from RaidRes CSV format"],
       order = 6,
       hidden = function()

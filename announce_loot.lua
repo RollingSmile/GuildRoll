@@ -14,7 +14,8 @@ local function StripRealm(name)
 end
 
 -- Helper: Check if player has permission to announce loot
--- Permission: RAID + Admin AND (Master Looter OR (RaidLeader when not master loot))
+-- Permission: RAID + Admin + Master Loot + Master Looter
+-- This ensures loot announcements only happen when managing loot with master loot enabled
 local function IsAdminAndMLOrRLWhenNoML()
   if not GuildRoll or not GuildRoll.IsAdmin then
     return false
@@ -31,19 +32,16 @@ local function IsAdminAndMLOrRLWhenNoML()
     return false
   end
   
+  -- Must be master loot method
+  local ok, method = pcall(GetLootMethod)
+  if not ok or method ~= "master" then
+    return false
+  end
+  
   -- Check if player is master looter
   if GuildRoll.lootMaster then
     local ok, isMasterLooter = pcall(function() return GuildRoll:lootMaster() end)
     if ok and isMasterLooter then
-      return true
-    end
-  end
-  
-  -- Check if raid leader when loot method is not master
-  local ok, method = pcall(GetLootMethod)
-  if ok and method ~= "master" then
-    local success, isRL = pcall(IsRaidLeader)
-    if success and isRL then
       return true
     end
   end
