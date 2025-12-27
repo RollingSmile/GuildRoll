@@ -51,6 +51,6 @@ function GuildRoll_RollTableUI:refresh(rolls, srLookup)
     row:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 10, -30 - (i-1)*16)
     local srFlag = srLookup and srLookup[roll.player] and "SR" or ""
     row:SetText(string.format("%s\t%s\t%d\t%s", roll.player, srFlag, roll.value or 0, roll.type or ""))
-    self.rows[#self.rows+1] = row
+    table.insert(self.rows, row)
   end
 end

@@ -70,6 +70,11 @@ local function InitTracker()
   return RollWithEP.tracker
 end
 
+-- Ensure GuildRoll table exists for early function definitions
+if not GuildRoll then
+  GuildRoll = {}
+end
+
 -- Public API: Show new RollTable UI
 function GuildRoll.RollWithEP_ShowRollTable()
   if not GuildRoll_RollTableUI then
