@@ -363,16 +363,36 @@ local function OnLootOpened()
   -- The RollWithEP module provides interactive roll management UI
   -- Only call if there are qualifying items
   if table.getn(lootItems) > 0 then
+    -- Debug: Check which UI functions are available
+    if GuildRoll and GuildRoll.defaultPrint then
+      pcall(function()
+        local hasRollTableUI = (GuildRoll.RollTableUI_ShowLootUI ~= nil)
+        local hasRollWithEPUI = (GuildRoll.RollWithEP_ShowLootUI ~= nil)
+        GuildRoll:defaultPrint(string.format("UI check: RollTableUI=%s, RollWithEPUI=%s, items=%d", 
+          tostring(hasRollTableUI), tostring(hasRollWithEPUI), table.getn(lootItems)))
+      end)
+    end
+    
     -- Try new RollTableUI first
     if GuildRoll and GuildRoll.RollTableUI_ShowLootUI then
+      if GuildRoll and GuildRoll.defaultPrint then
+        pcall(function() GuildRoll:defaultPrint("Calling RollTableUI_ShowLootUI...") end)
+      end
       pcall(function()
         GuildRoll.RollTableUI_ShowLootUI(lootItems)
       end)
     -- Fallback to existing RollWithEP UI
     elseif GuildRoll and GuildRoll.RollWithEP_ShowLootUI then
+      if GuildRoll and GuildRoll.defaultPrint then
+        pcall(function() GuildRoll:defaultPrint("Calling RollWithEP_ShowLootUI...") end)
+      end
       pcall(function()
         GuildRoll.RollWithEP_ShowLootUI(lootItems)
       end)
+    else
+      if GuildRoll and GuildRoll.defaultPrint then
+        pcall(function() GuildRoll:defaultPrint("ERROR: No UI function available!") end)
+      end
     end
   end
 end
