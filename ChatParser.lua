@@ -13,7 +13,14 @@ local addonPatterns = {
   { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled Cumulative SR (%d+)%s*%-%s*(%d+)", map = function(p,v1,v2) return p, tonumber(v1), "SR" end },
   { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled SR \"(%d+)%s*%-%s*(%d+)\"", map = function(p,v1,v2) return p, tonumber(v1), "SR" end },
   { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled MS \"(%d+)%s*%-%s*(%d+)\"", map = function(p,v1,v2) return p, tonumber(v1), "MS" end },
-  -- Add patterns for EP, CSR, numeric button labels 101..98 as needed
+  { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled OS \"(%d+)%s*%-%s*(%d+)\"", map = function(p,v1,v2) return p, tonumber(v1), "OS" end },
+  { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled EP \"(%d+)%s*%-%s*(%d+)\"", map = function(p,v1,v2) return p, tonumber(v1), "EP" end },
+  { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled Tmog \"(%d+)%s*%-%s*(%d+)\"", map = function(p,v1,v2) return p, tonumber(v1), "Tmog" end },
+  -- Numeric button labels 101, 100, 99, 98
+  { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled \"?101\"? \"(%d+)%s*%-%s*(%d+)\"", map = function(p,v1,v2) return p, tonumber(v1), "SR" end },
+  { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled \"?100\"? \"(%d+)%s*%-%s*(%d+)\"", map = function(p,v1,v2) return p, tonumber(v1), "EP" end },
+  { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled \"?99\"? \"(%d+)%s*%-%s*(%d+)\"", map = function(p,v1,v2) return p, tonumber(v1), "MS" end },
+  { pattern = "%[S%]%s*%[([^%]]+)%]:%s*I rolled \"?98\"? \"(%d+)%s*%-%s*(%d+)\"", map = function(p,v1,v2) return p, tonumber(v1), "OS" end },
 }
 
 function GuildRoll_ChatParser:parse(msg)

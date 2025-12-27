@@ -545,6 +545,15 @@ end
 
 -- Event handler: CHAT_MSG_SYSTEM (system roll messages)
 local function OnSystemMessage(msg)
+  -- Always try to parse and add to tracker if tracker is available
+  local tracker = InitTracker()
+  if tracker and RollWithEP.parser then
+    local roll = RollWithEP.parser:parse(msg)
+    if roll then
+      tracker:add(roll)
+    end
+  end
+  
   if not RollWithEP.enabled or not RollWithEP.currentSession then return end
   
   -- Parse: "Name rolls N (min-max)"
@@ -571,6 +580,15 @@ end
 
 -- Event handler: CHAT_MSG_RAID and CHAT_MSG_RAID_LEADER (human announces)
 local function OnRaidMessage(msg, sender)
+  -- Always try to parse and add to tracker if tracker is available
+  local tracker = InitTracker()
+  if tracker and RollWithEP.parser then
+    local roll = RollWithEP.parser:parse(msg)
+    if roll then
+      tracker:add(roll)
+    end
+  end
+  
   if not RollWithEP.enabled or not RollWithEP.currentSession then return end
   
   sender = StripRealm(sender)
