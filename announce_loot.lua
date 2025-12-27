@@ -377,6 +377,19 @@ local function OnLootOpened()
         local hasRollWithEPUI = (GuildRoll.RollWithEP_ShowLootUI ~= nil)
         GuildRoll:defaultPrint(string.format("UI check: RollTableUI=%s, RollWithEPUI=%s, items=%d", 
           tostring(hasRollTableUI), tostring(hasRollWithEPUI), table.getn(lootItems)))
+        
+        -- Debug: List all keys in GuildRoll table that contain "Show"
+        local keys = {}
+        for k, v in pairs(GuildRoll) do
+          if type(k) == "string" and string.find(k, "Show") then
+            table.insert(keys, k .. "=" .. type(v))
+          end
+        end
+        if table.getn(keys) > 0 then
+          GuildRoll:defaultPrint("GuildRoll keys with 'Show': " .. table.concat(keys, ", "))
+        else
+          GuildRoll:defaultPrint("GuildRoll: NO keys containing 'Show' found!")
+        end
       end)
     end
     
