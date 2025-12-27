@@ -96,8 +96,13 @@ function GuildRoll.RollWithEP_ShowRollTable()
   -- Get rolls from tracker
   local rolls = tracker:getAll()
   
-  -- TODO: Get SR lookup from current session or cache
+  -- Get SR lookup from cache
   local srLookup = {}
+  if GuildRoll_rollForEPCache and GuildRoll_rollForEPCache.lastImport and GuildRoll_rollForEPCache.lastImport.srlist then
+    srLookup = GuildRoll_rollForEPCache.lastImport.srlist
+  elseif GuildRoll and GuildRoll._RollForEP_currentLoot and GuildRoll._RollForEP_currentLoot.srlist then
+    srLookup = GuildRoll._RollForEP_currentLoot.srlist
+  end
   
   -- Show and refresh UI
   GuildRoll_RollTableUI:show()
@@ -556,6 +561,10 @@ local function OnSystemMessage(msg)
     local roll = RollWithEP.parser:parse(msg)
     if roll then
       tracker:add(roll)
+      -- Auto-refresh RollTable if it's visible
+      if GuildRoll_RollTableUI and GuildRoll_RollTableUI.frame and GuildRoll_RollTableUI.frame:IsShown() then
+        GuildRoll.RollWithEP_ShowRollTable()
+      end
     end
   end
   
@@ -591,6 +600,10 @@ local function OnRaidMessage(msg, sender)
     local roll = RollWithEP.parser:parse(msg)
     if roll then
       tracker:add(roll)
+      -- Auto-refresh RollTable if it's visible
+      if GuildRoll_RollTableUI and GuildRoll_RollTableUI.frame and GuildRoll_RollTableUI.frame:IsShown() then
+        GuildRoll.RollWithEP_ShowRollTable()
+      end
     end
   end
   
@@ -1421,6 +1434,14 @@ function ShowItemContextMenu(itemLink, itemID, itemName, slotIndex)
   pcall(function()
     D:Open("RollWithEP_ItemMenu",
       "children", function()
+        -- Title
+        D:AddLine(
+          "text", L["Give loot to"] or "Give loot to",
+          "isTitle", true
+        )
+        D:AddLine()
+        
+        -- Start Rolls
         D:AddLine(
           "text", L["Start Rolls"],
           "func", function()
@@ -1428,46 +1449,68 @@ function ShowItemContextMenu(itemLink, itemID, itemName, slotIndex)
             pcall(function() D:Close() end)
           end
         )
+        
+        -- Show Roll Table
         D:AddLine(
-          "text", L["Give to DE/Bank"],
+          "text", "Show Roll Table",
           "func", function()
-            -- Create a temporary session for DE/Bank only
-            RollWithEP.currentSession = {
-              itemLink = itemLink,
-              itemID = itemID,
-              itemName = itemName,
-              slotIndex = slotIndex,
-              rolls = {},
-              systemRolls = {},
-              humanAnnounces = {},
-              startTime = GetTime(),
-              closed = true,
-              winner = nil,
-              tieState = nil
-            }
-            RollWithEP_GiveToDE()
+            if GuildRoll and GuildRoll.RollWithEP_ShowRollTable then
+              GuildRoll.RollWithEP_ShowRollTable()
+            end
             pcall(function() D:Close() end)
           end
         )
+        
+        D:AddLine()
+        
+        -- Special submenu
         D:AddLine(
-          "text", L["Give to Player"],
-          "func", function()
-            -- Create a temporary session for Give to Player only
-            RollWithEP.currentSession = {
-              itemLink = itemLink,
-              itemID = itemID,
-              itemName = itemName,
-              slotIndex = slotIndex,
-              rolls = {},
-              systemRolls = {},
-              humanAnnounces = {},
-              startTime = GetTime(),
-              closed = true,
-              winner = nil,
-              tieState = nil
-            }
-            ShowPlayerPicker()
-            pcall(function() D:Close() end)
+          "text", "Special",
+          "hasArrow", true,
+          "hasSlantedArrow", true,
+          "children", function()
+            D:AddLine(
+              "text", L["Give to DE/Bank"],
+              "func", function()
+                -- Create a temporary session for DE/Bank only
+                RollWithEP.currentSession = {
+                  itemLink = itemLink,
+                  itemID = itemID,
+                  itemName = itemName,
+                  slotIndex = slotIndex,
+                  rolls = {},
+                  systemRolls = {},
+                  humanAnnounces = {},
+                  startTime = GetTime(),
+                  closed = true,
+                  winner = nil,
+                  tieState = nil
+                }
+                RollWithEP_GiveToDE()
+                pcall(function() D:Close() end)
+              end
+            )
+            D:AddLine(
+              "text", L["Give to Player"],
+              "func", function()
+                -- Create a temporary session for Give to Player only
+                RollWithEP.currentSession = {
+                  itemLink = itemLink,
+                  itemID = itemID,
+                  itemName = itemName,
+                  slotIndex = slotIndex,
+                  rolls = {},
+                  systemRolls = {},
+                  humanAnnounces = {},
+                  startTime = GetTime(),
+                  closed = true,
+                  winner = nil,
+                  tieState = nil
+                }
+                ShowPlayerPicker()
+                pcall(function() D:Close() end)
+              end
+            )
           end
         )
       end

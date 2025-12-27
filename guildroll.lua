@@ -227,6 +227,19 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       end,
       order = 10,
     },
+    rolltable = {
+      type = "execute",
+      name = "Show Roll Table",
+      desc = "Open the roll tracking table UI",
+      func = function()
+        if GuildRoll and GuildRoll.RollWithEP_ShowRollTable then
+          GuildRoll.RollWithEP_ShowRollTable()
+        else
+          GuildRoll:defaultPrint("Roll Table not available")
+        end
+      end,
+      order = 11,
+    },
     nogp = {
       type = "text",
       name = "Migrate to EP-only",
@@ -304,6 +317,19 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       GuildRoll:RollCommand(true, bonus)
       end,
       order = 8,
+    },
+    rolltable = {
+      type = "execute",
+      name = "Show Roll Table",
+      desc = "Open the roll tracking table UI",
+      func = function()
+        if GuildRoll and GuildRoll.RollWithEP_ShowRollTable then
+          GuildRoll.RollWithEP_ShowRollTable()
+        else
+          GuildRoll:defaultPrint("Roll Table not available")
+        end
+      end,
+      order = 9,
     },
   }}
 GuildRoll.cmdtable = function() 
