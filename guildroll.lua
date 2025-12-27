@@ -917,6 +917,36 @@ function GuildRoll:buildMenu()
     self._last_scan_mode = scan_mode
     
     options.args["ep_actions"].args["MainStanding"].args = GuildRoll:buildClassMemberTable(members,"MainStanding")
+    
+    -- Populate Set De/Bank with raid members grouped by class
+    if GetNumRaidMembers() > 0 then
+      local raidMembers = {}
+      for i = 1, GetNumRaidMembers(true) do
+        local name, rank, subgroup, level, class = GetRaidRosterInfo(i)
+        if name and class then
+          -- Strip realm suffix
+          local cleanName = string.gsub(name, "%-[^%-]+$", "")
+          table.insert(raidMembers, {name = cleanName, class = class})
+        end
+      end
+      options.args["loot_settings"].args["set_de_bank"].args = GuildRoll:buildDEBankMemberTable(raidMembers)
+    else
+      -- Not in raid - show empty or message
+      options.args["loot_settings"].args["set_de_bank"].args = {
+        no_raid = {
+          type = "execute",
+          name = "Not in raid",
+          desc = "You must be in a raid to set DE/Bank player",
+          order = 1,
+          func = function()
+            if GuildRoll and GuildRoll.defaultPrint then
+              GuildRoll:defaultPrint("You must be in a raid to set DE/Bank player.")
+            end
+          end
+        }
+      }
+    end
+    
     if (needInit) then needInit = false end
     if (needRefresh) then needRefresh = false end
   end
@@ -2233,6 +2263,58 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
       end
     end
   end
+  return c
+end
+
+-- Build class-grouped member table for DE/Bank selection
+function GuildRoll:buildDEBankMemberTable(raidMembers)
+  local c = {}
+  
+  -- Add "Clear" option at the top
+  c["clear_de_bank"] = {
+    type = "execute",
+    name = L["Clear"],
+    desc = "Clear DE/Bank player assignment",
+    order = 0,
+    func = function()
+      if GuildRoll and GuildRoll.RollWithEP_SetDEBank then
+        pcall(function() GuildRoll.RollWithEP_SetDEBank(nil) end)
+      end
+    end
+  }
+  
+  -- Add "Members" submenu with class groups
+  c["members"] = {
+    type = "group",
+    name = "Members",
+    desc = "Select a raid member to receive DE/Bank items",
+    order = 1,
+    args = {}
+  }
+  
+  -- Group members by class
+  for i, member in ipairs(raidMembers) do
+    local class, name = member.class, member.name
+    if class and c["members"].args[class] == nil then
+      c["members"].args[class] = {}
+      c["members"].args[class].type = "group"
+      c["members"].args[class].name = C:Colorize(BC:GetHexColor(class), class)
+      c["members"].args[class].desc = class .. " members"
+      c["members"].args[class].args = {}
+    end
+    if name and c["members"].args[class].args[name] == nil then
+      c["members"].args[class].args[name] = {}
+      c["members"].args[class].args[name].type = "execute"
+      c["members"].args[class].args[name].name = name
+      c["members"].args[class].args[name].desc = "Set " .. name .. " as DE/Bank player"
+      c["members"].args[class].args[name].func = function()
+        if GuildRoll and GuildRoll.RollWithEP_SetDEBank then
+          pcall(function() GuildRoll.RollWithEP_SetDEBank(name) end)
+        end
+      end
+    end
+  end
+  
   return c
 end
 
