@@ -2,9 +2,16 @@
 local L
 do
   local ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if not ok or not result or type(result.new) ~= "function" then return end
+  if not ok or not result or type(result.new) ~= "function" then 
+    DEFAULT_CHAT_FRAME:AddMessage("announce_loot: FAILED to load - AceLocale-2.2 not available")
+    return 
+  end
   ok, L = pcall(function() return result:new("guildroll") end)
-  if not ok or not L then return end
+  if not ok or not L then 
+    DEFAULT_CHAT_FRAME:AddMessage("announce_loot: FAILED to load - could not create locale instance")
+    return 
+  end
+  DEFAULT_CHAT_FRAME:AddMessage("announce_loot: Successfully loaded with AceLocale")
 end
 
 -- Helper: Strip realm suffix from player name
