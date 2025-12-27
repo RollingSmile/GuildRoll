@@ -5,23 +5,42 @@
 
 -- Guard: Check if required libraries are available
 local T, D, C, L
+local librariesLoaded = false
 do
   local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    DEFAULT_CHAT_FRAME:AddMessage("RollWithEP: Failed to load Tablet-2.0")
+    return 
+  end
   T = result
   
   ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    DEFAULT_CHAT_FRAME:AddMessage("RollWithEP: Failed to load Dewdrop-2.0")
+    return 
+  end
   D = result
   
   ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    DEFAULT_CHAT_FRAME:AddMessage("RollWithEP: Failed to load Crayon-2.0")
+    return 
+  end
   C = result
   
   ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if not ok or not result or type(result.new) ~= "function" then return end
+  if not ok or not result or type(result.new) ~= "function" then 
+    DEFAULT_CHAT_FRAME:AddMessage("RollWithEP: Failed to load AceLocale-2.2")
+    return 
+  end
   ok, L = pcall(function() return result:new("guildroll") end)
-  if not ok or not L then return end
+  if not ok or not L then 
+    DEFAULT_CHAT_FRAME:AddMessage("RollWithEP: Failed to create locale instance")
+    return 
+  end
+  
+  librariesLoaded = true
+  DEFAULT_CHAT_FRAME:AddMessage("RollWithEP: All libraries loaded successfully")
 end
 
 -- Use existing localization from localization.lua
