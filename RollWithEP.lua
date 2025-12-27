@@ -1392,6 +1392,23 @@ function GuildRoll.RollWithEP_ShowLootUI(lootItems)
     pcall(function() T:Open("RollWithEP_Loot") end)
   end
   pcall(function() T:Refresh("RollWithEP_Loot") end)
+  
+  -- Force tablet to top layer (pfUI compatibility)
+  pcall(function()
+    local frame = T:GetFrame("RollWithEP_Loot")
+    if frame then
+      frame:SetFrameStrata("TOOLTIP")
+      frame:SetFrameLevel(100)
+      frame:Raise()
+    end
+  end)
+  
+  -- Debug message
+  if GuildRoll and GuildRoll.defaultPrint then
+    pcall(function()
+      GuildRoll:defaultPrint(string.format("Loot UI opened with %d items", table.getn(lootItems)))
+    end)
+  end
 end
 
 -- UI: Build loot tablet
