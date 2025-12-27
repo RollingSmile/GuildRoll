@@ -414,12 +414,13 @@ function GuildRoll:buildMenu()
       end
     }
     
-    -- Loot Settings Group (NO permission checks - always visible for testing)
+    -- Loot Settings Group (admin-only, raid-only)
     options.args["loot_settings"] = {
       type = "group",
       name = "Loot Settings",
-      desc = "Configure loot management settings",
+      desc = "Configure loot management settings (Admin only, Raid only)",
       order = 2,
+      hidden = function() return not admin() end,
       args = {}
     }
     
@@ -429,6 +430,15 @@ function GuildRoll:buildMenu()
       desc = L["Import soft reserves from RaidRes CSV format"],
       order = 1,
       func = function()
+        -- Check if in raid
+        local numRaidMembers = GetNumRaidMembers()
+        if numRaidMembers == 0 then
+          if GuildRoll and GuildRoll.defaultPrint then
+            GuildRoll:defaultPrint("You must be in a raid to import CSV.")
+          end
+          return
+        end
+        
         -- Show CSV import dialog
         StaticPopupDialogs["ROLLWITHEP_IMPORT_CSV"] = {
           text = L["Paste CSV"] .. "\n" .. L["Enter RaidRes CSV data:"],
@@ -455,89 +465,12 @@ function GuildRoll:buildMenu()
       end
     }
     
-    -- Members Group
-    options.args["members"] = {
+    -- Set De/Bank - group type like + EP to Member
+    options.args["loot_settings"].args["set_de_bank"] = {
       type = "group",
-      name = L["Members"],
-      desc = "Member and raid management",
-      order = 3,
-      args = {}
-    }
-    
-    -- Special Options submenu under Members
-    options.args["members"].args["special_options"] = {
-      type = "group",
-      name = "Special Options",
-      desc = "Special options for loot and member management",
-      order = 1,
-      args = {}
-    }
-    
-    -- Move DE/Bank to Special Options submenu
-    options.args["members"].args["special_options"].args["set_de_bank"] = {
-      type = "execute",
-      name = L["Set DE/Bank"],
+      name = L["Set De/Bank"],
       desc = L["Select player to receive DE/Bank items"],
-      order = 1,
-      func = function()
-        -- Build list of raid members
-        local raidMembers = {}
-        local numRaidMembers = GetNumRaidMembers()
-        if numRaidMembers > 0 then
-          for i = 1, numRaidMembers do
-            local name = UnitName("raid" .. i)
-            if name then
-              -- Strip realm suffix
-              local cleanName = string.gsub(name, "%-[^%-]+$", "")
-              table.insert(raidMembers, cleanName)
-            end
-          end
-        end
-        
-        -- Sort alphabetically
-        table.sort(raidMembers)
-        
-        -- Show Dewdrop menu with raid members
-        if D then
-          pcall(function()
-            D:Open(UIParent,
-              "children", function()
-                D:AddLine(
-                  "text", L["Select DE/Bank Player"],
-                  "isTitle", true
-                )
-                D:AddLine()
-                
-                -- Option to clear DE/Bank
-                D:AddLine(
-                  "text", L["Clear"],
-                  "func", function()
-                    if GuildRoll and GuildRoll.RollWithEP_SetDEBank then
-                      pcall(function() GuildRoll.RollWithEP_SetDEBank(nil) end)
-                    end
-                    pcall(function() D:Close() end)
-                  end
-                )
-                
-                D:AddLine()
-                
-                -- List raid members
-                for _, playerName in ipairs(raidMembers) do
-                  D:AddLine(
-                    "text", playerName,
-                    "func", function()
-                      if GuildRoll and GuildRoll.RollWithEP_SetDEBank then
-                        pcall(function() GuildRoll.RollWithEP_SetDEBank(playerName) end)
-                      end
-                      pcall(function() D:Close() end)
-                    end
-                  )
-                end
-              end
-            )
-          end)
-        end
-      end
+      order = 2,
     }
     
     -- EP Actions Group (admin-only)

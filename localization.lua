@@ -228,7 +228,6 @@ Results will print here when done.]],
   -- Menu reorganization
   ["Quick Actions"] = true,
   ["EP Actions"] = true,
-  ["Members"] = true,
   ["Options"] = true,
   ["Admin Settings"] = true,
   ["Admin configuration options"] = true,
@@ -249,7 +248,8 @@ Results will print here when done.]],
   -- RollWithEP module
   ["Import SR CSV"] = true,
   ["Import soft reserves from RaidRes CSV format"] = true,
-  ["Set DE/Bank"] = true,
+  ["Set De/Bank"] = true,
+  ["Set DE/Bank"] = true, -- Keep for backward compatibility
   ["Select player to receive DE/Bank items"] = true,
   ["Paste CSV"] = true,
   ["Enter RaidRes CSV data:"] = true,
