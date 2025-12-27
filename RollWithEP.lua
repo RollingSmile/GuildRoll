@@ -1686,3 +1686,79 @@ function GuildRoll.RollTableUI_ShowLootUI(lootItems)
     GuildRoll.RollWithEP_ShowRollTable()
   end
 end
+
+-- ============================================================================
+-- Loot Frame Hooks - Override WoW's default master loot menu
+-- ============================================================================
+
+-- Hook LootButton right-click to show our custom menu
+local function HookLootButtons()
+  -- Only hook if we can use RollWithEP and we're master looter
+  if not CanUseRollWithEP() then
+    return
+  end
+  
+  -- Hook LootButton clicks (there are multiple buttons: LootButton1, LootButton2, etc.)
+  for i = 1, 16 do  -- WoW 1.12 typically has up to 16 loot slots
+    local buttonName = "LootButton" .. i
+    local button = getglobal(buttonName)
+    
+    if button and not button.RollWithEP_Hooked then
+      -- Store original OnClick
+      local originalOnClick = button:GetScript("OnClick")
+      
+      -- Override OnClick
+      button:SetScript("OnClick", function()
+        local slot = this:GetID()
+        
+        -- Get loot info
+        local lootIcon, lootName, lootQuantity, lootQuality = GetLootSlotInfo(slot)
+        
+        -- Check if it's a valid item and if right-click (arg1 == "RightButton" in 1.12)
+        if arg1 == "RightButton" and lootName and lootQuality and lootQuality >= 2 then
+          -- Get item link
+          local itemLink = GetLootSlotLink(slot)
+          
+          if itemLink then
+            -- Extract item ID from link
+            local _, _, itemID = string.find(itemLink, "item:(%d+)")
+            
+            if itemID and CanUseRollWithEP() then
+              -- Show our custom menu
+              ShowItemContextMenu(itemLink, tonumber(itemID), lootName, slot)
+              return
+            end
+          end
+        end
+        
+        -- Call original handler if not intercepted
+        if originalOnClick then
+          originalOnClick()
+        end
+      end)
+      
+      button.RollWithEP_Hooked = true
+    end
+  end
+end
+
+-- Register hook on LOOT_OPENED event
+if GuildRoll then
+  pcall(function()
+    GuildRoll:RegisterEvent("LOOT_OPENED", function()
+      -- Small delay to ensure loot frame is fully loaded
+      pcall(function()
+        -- Use a timer-like approach with OnUpdate
+        local frame = CreateFrame("Frame")
+        local elapsed = 0
+        frame:SetScript("OnUpdate", function()
+          elapsed = elapsed + arg1
+          if elapsed >= 0.1 then  -- 100ms delay
+            HookLootButtons()
+            frame:SetScript("OnUpdate", nil)
+          end
+        end)
+      end)
+    end)
+  end)
+end
