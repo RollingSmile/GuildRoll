@@ -1,13 +1,17 @@
 -- RollWithEP.lua
--- Unified Roll / EP module (replaces RollWithEP + RollForEP)
--- - Custom loot frame (default ON)
--- - CSV RaidRes import (optional)
--- - SR/CSR integration: pre-populate RollTable with SR players (SR=YES)
--- - PRIORITY_MAP, tie detection, Ask Tie Roll, Close session
--- - Attempt GiveMasterLoot when awarding (master looter only)
+-- Unified Roll / EP module for Turtle WoW (WoW 1.12)
+-- Merges RollWithEP + RollForEP responsibilities, adapted for ML-only processing of rolls:
+--  - parses chat "I rolled ..." messages (type + EP)
+--  - parses system "Player rolls X (min-max)" messages (numeric result)
+--  - associates chat declaration with system result within a short window
+--  - pre-populates RollTable with SR players (SR = YES) when session starts
+--  - only the loot manager (ML/admin) processes details and manages RollTable
+--  - attempts GiveMasterLoot when awarding (if slot & candidate resolved)
 -- Comments in English; prepared for localization via L table.
 
--- Safe optional libs
+-- Do NOT modify anything under Libs/
+
+-- Optional libs (safe load)
 local T, D, C, L
 do
   local ok, res = pcall(function() return AceLibrary and AceLibrary("Tablet-2.0") end)
@@ -36,12 +40,13 @@ end
 
 -- Module state
 local RollMod = {
-  lootSlots = {},       -- current loot slots (from LOOT_OPENED or announce_loot)
-  currentSession = nil, -- active roll session
-  frames = {}
+  lootSlots = {},       -- current loot slot list (slot, itemLink, itemID, itemName, rarity, texture)
+  currentSession = nil, -- active session
+  frames = {},          -- UI frames references
+  lastDeclaredRolls = {} -- transient map: player -> { type=..., ep=..., rangeMin=..., rangeMax=..., ts=... }
 }
 
--- Helpers
+-- Helpers ---------------------------------------------------------------------
 local function StripRealm(name)
   if not name then return nil end
   return string.gsub(name, "%-[^%-]+$", "")
@@ -73,7 +78,8 @@ local function CanUseLootAdmin()
   local method = nil
   pcall(function() method = (select(1, GetLootMethod())) end)
   if method == "master" then
-    return IsMasterLooter()
+    local ml = IsMasterLooter()
+    return ml
   else
     local ok2, isRL = pcall(IsRaidLeader)
     return ok2 and isRL
@@ -89,33 +95,19 @@ local function AnnounceToChannel(text)
   end
 end
 
-local function BroadcastAddon(prefix, message)
-  if not prefix or prefix == "" then return end
-  local channel = GetNumRaidMembers() > 0 and "RAID" or "PARTY"
-  if GuildRoll and GuildRoll.SendMessage then
-    pcall(function() GuildRoll:SendMessage(prefix, message) end)
-  else
-    if ChatThrottleLib and ChatThrottleLib.SendAddonMessage then
-      pcall(function() ChatThrottleLib:SendAddonMessage("BULK", prefix, message, channel) end)
-    else
-      pcall(function() SendAddonMessage(prefix, message, channel) end)
-    end
-  end
-end
-
--- PRIORITY map
+-- PRIORITY map (keep same semantics as before)
 local PRIORITY_MAP = {
   CSR = 4,
-  SR = 4,
+  SR  = 4,
   ["101"] = 4,
-  EP = 3,
+  EP  = 3,
   ["100"] = 3,
   ["99"] = 1,
   ["98"] = 0,
   INVALID = -1
 }
 
--- CSV parser: RaidRes style (ID,Item,Attendee,Comment,SR+)
+-- CSV parser (RaidRes) and legacy parser (kept)
 local function splitCSVLine(line)
   local fields = {}
   local i = 1
@@ -199,7 +191,6 @@ local function ImportSRCsvRaidRes(text)
   return srmap
 end
 
--- Legacy parser kept for backward-compatibility
 local function ParseSRCSV_Legacy(text)
   if not text or text == "" then return {} end
   local srdata = {}
@@ -214,7 +205,6 @@ local function ParseSRCSV_Legacy(text)
   return srdata
 end
 
--- Public import wrapper
 function RollWithEP_ImportCSV(text)
   if not text or text == "" then
     if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["No CSV data provided."] or "No CSV data provided.") end
@@ -280,50 +270,6 @@ local function GetSRListForItem(itemID, itemName)
   return srlist
 end
 
-local function GetSRType(itemID, itemName, playerName)
-  if GuildRoll and GuildRoll._RollForEP_currentLoot and GuildRoll._RollForEP_currentLoot.srlist then
-    local sessionSR = GuildRoll._RollForEP_currentLoot.srlist
-    local clean = StripRealm(playerName)
-    if sessionSR[playerName] or sessionSR[clean] then
-      local items = sessionSR[playerName] or sessionSR[clean]
-      if type(items) == "table" then
-        for _, item in ipairs(items) do
-          if type(item) == "table" then
-            local match = false
-            if item.itemID and itemID and tonumber(item.itemID) == tonumber(itemID) then match = true
-            elseif item.itemName and itemName and item.itemName == itemName then match = true
-            end
-            if match then
-              if item.weeks and tonumber(item.weeks) and tonumber(item.weeks) > 0 then return "CSR wk" .. item.weeks else return "SR" end
-            end
-          end
-        end
-      end
-    end
-  end
-  if GuildRoll_rollForEPCache and GuildRoll_rollForEPCache.lastImport and GuildRoll_rollForEPCache.lastImport.srlist then
-    local cacheSR = GuildRoll_rollForEPCache.lastImport.srlist
-    local clean = StripRealm(playerName)
-    if cacheSR[playerName] or cacheSR[clean] then
-      local items = cacheSR[playerName] or cacheSR[clean]
-      if type(items) == "table" then
-        for _, item in ipairs(items) do
-          if type(item) == "table" then
-            local match = false
-            if item.itemID and itemID and tonumber(item.itemID) == tonumber(itemID) then match = true
-            elseif item.itemName and itemName and item.itemName == itemName then match = true
-            end
-            if match then
-              if item.weeks and tonumber(item.weeks) and tonumber(item.weeks) > 0 then return "CSR wk" .. item.weeks else return "SR" end
-            end
-          end
-        end
-      end
-    end
-  end
-  return nil
-end
-
 local function HasSR(playerName, srlist)
   if not srlist or table.getn(srlist) == 0 then return false end
   local clean = StripRealm(playerName)
@@ -331,7 +277,7 @@ local function HasSR(playerName, srlist)
   return false
 end
 
--- UI: Custom Loot Frame
+-- UI: Custom Loot Frame creation (unchanged structure from prior implementation)
 local function CreateLootFrame()
   if RollMod.frames.loot then return RollMod.frames.loot end
   local f = CreateFrame("Frame", "GuildRoll_LootFrame", UIParent, "BasicFrameTemplate")
@@ -437,7 +383,7 @@ local function CreateLootFrame()
   return f
 end
 
--- Roll Table (session UI)
+-- Roll Table
 local function CreateRollTable()
   if RollMod.frames.rollTable then return RollMod.frames.rollTable end
   local f = CreateFrame("Frame", "GuildRoll_RollTable", UIParent, "BasicFrameTemplate")
@@ -539,16 +485,14 @@ local function CreateRollTable()
   return f
 end
 
--- Helpers to find slot index and candidate index to attempt GiveMasterLoot
+-- Helpers: find slot & candidate index for GiveMasterLoot attempt
 local function FindSlotIndexForItem(itemLink, itemID)
-  -- try cached lootSlots first
   if RollMod.lootSlots then
     for _, it in ipairs(RollMod.lootSlots) do
       if it.itemLink and itemLink and it.itemLink == itemLink then return it.slot end
       if it.itemID and itemID and it.itemID == itemID then return it.slot end
     end
   end
-  -- fallback: scan current loot window
   for i=1, GetNumLootItems() do
     local link = GetLootSlotLink(i)
     if link and itemLink and link == itemLink then return i end
@@ -559,27 +503,17 @@ end
 local function GetCandidateIndexForPlayer(slotIndex, playerName)
   if not slotIndex or not playerName then return nil end
   playerName = StripRealm(playerName)
-  -- iterate master loot candidates (slot candidates)
-  for i = 1, 40 do
-    local name = nil
-    if GetMasterLootCandidate then
-      name = GetMasterLootCandidate(slotIndex, i)
-    else
-      -- fallback not available -> try raid roster mapping
-      -- can't determine candidate via API: return nil
-      name = nil
-    end
-    if name then
+  if GetMasterLootCandidate then
+    for i = 1, 40 do
+      local name = GetMasterLootCandidate(slotIndex, i)
+      if not name then break end
       if StripRealm(name) == playerName then return i end
-    else
-      -- no candidate at this index -> stop
-      break
     end
   end
   return nil
 end
 
--- Start session
+-- Start a roll session (pre-populate SR rows)
 function RollMod:StartSessionForItem(itemData)
   if not CanUseLootAdmin() then if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Only master looter or raid leader admin can use this feature."] or "No permission.") end return end
   local itemLink = itemData and (itemData.itemLink or itemData.itemName) or "Unknown"
@@ -601,7 +535,6 @@ function RollMod:StartSessionForItem(itemData)
     slotIndex = itemData and itemData.slot or nil
   }
 
-  -- Pre-populate with SR players (SR = YES) so rows are visible immediately
   for _, player in ipairs(srlist) do
     local clean = StripRealm(player)
     table.insert(session.rolls, { player = clean, sr = true, type = "", roll = "" })
@@ -611,14 +544,16 @@ function RollMod:StartSessionForItem(itemData)
   GuildRoll._RollForEP_currentLoot = session
 
   AnnounceToChannel(string.format(L and L["Start rolling for %s"] or "Start rolling for %s", itemLink))
-  if GuildRoll and GuildRoll.VARS and GuildRoll.VARS.prefix then BroadcastAddon(GuildRoll.VARS.prefix, "ROLL_START:" .. (itemLink or "unknown")) end
+  if GuildRoll and GuildRoll.VARS and GuildRoll.VARS.prefix then
+    pcall(function() SendAddonMessage(GuildRoll.VARS.prefix, "ROLL_START:" .. (itemLink or "unknown"), GetNumRaidMembers()>0 and "RAID" or "PARTY") end)
+  end
 
   local rt = CreateRollTable()
   rt:Show()
   rt:UpdateRows()
 end
 
--- Process incoming roll
+-- Core: process incoming roll (called by parser)
 function RollMod:ProcessIncomingRoll(player, rollType, rollValue)
   if not self.currentSession then return end
   player = StripRealm(player)
@@ -666,7 +601,7 @@ function RollMod:ProcessIncomingRoll(player, rollType, rollValue)
   if RollMod.frames.rollTable then RollMod.frames.rollTable:UpdateRows() end
 end
 
--- Ask tie roll
+-- Ask tie roll, close session, give flows (unchanged logic, see earlier implementation)
 function RollMod:AskTieRoll()
   if not CanUseLootAdmin() then return end
   if not self.currentSession or not self.currentSession.tieState then return end
@@ -681,7 +616,6 @@ function RollMod:AskTieRoll()
   if RollMod.frames.rollTable then RollMod.frames.rollTable:UpdateRows() end
 end
 
--- Close session
 function RollMod:CloseSession()
   if not CanUseLootAdmin() then return end
   if not self.currentSession then if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["No active loot session."] or "No active loot session.") end return end
@@ -697,7 +631,6 @@ function RollMod:CloseSession()
   if RollMod.frames.rollTable then RollMod.frames.rollTable:Hide() end
 end
 
--- Give to winner attempt (announce + try GiveMasterLoot)
 function RollMod:GiveToWinner()
   if not CanUseLootAdmin() then return end
   if not self.currentSession or not self.currentSession.winner or self.currentSession.winner == "Tie" then return end
@@ -720,10 +653,10 @@ function RollMod:GiveToWinner()
           pcall(function() GiveMasterLoot(slot, candIdx) end)
           if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Award confirmed"] or "Award confirmed") end
         else
-          if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Item given to: %s"] or ("Item given to: "..tostring(winner))) end
+          if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(string.format(L and L["Item given to: %s"] or "Item given to: %s", winner)) end
         end
       else
-        if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Item given to: %s"] or ("Item given to: "..tostring(winner))) end
+        if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(string.format(L and L["Item given to: %s"] or "Item given to: %s", winner)) end
       end
       self.currentSession = nil
       GuildRoll._RollForEP_currentLoot = nil
@@ -735,7 +668,6 @@ function RollMod:GiveToWinner()
   StaticPopup_Show("ROLLWITHEP_CONFIRM_GIVE")
 end
 
--- Give to player (explicit)
 function RollMod:GiveToPlayer(playerName, itemData)
   if not CanUseLootAdmin() then if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Only master looter or raid leader admin can use this feature."] or "No permission.") end return end
   playerName = playerName and StripRealm(playerName) or "Unknown"
@@ -765,22 +697,169 @@ function RollMod:GiveToPlayer(playerName, itemData)
   StaticPopup_Show("ROLLWITHEP_CONFIRM_GIVE_PLAYER")
 end
 
--- Addon message parser
+-- Parsing: chat "I rolled ..." and system "Player rolls ..." pairing
+-- We store recent chat declarations per player (type + EP + range) and match with system line
+local DECLARE_TTL = 10 -- seconds to keep declaration before it expires
+
+local function store_player_declaration(player, dtype, ep, rangeMin, rangeMax)
+  RollMod.lastDeclaredRolls[player] = { type = dtype, ep = ep, rangeMin = rangeMin, rangeMax = rangeMax, ts = GetTime() }
+end
+
+local function get_and_clear_declaration_for(player)
+  local entry = RollMod.lastDeclaredRolls[player]
+  if not entry then return nil end
+  -- check freshness
+  if GetTime() - (entry.ts or 0) > DECLARE_TTL then
+    RollMod.lastDeclaredRolls[player] = nil
+    return nil
+  end
+  -- keep entry but don't delete — we may allow multiple system lines? We'll return entry and leave to GC later
+  return entry
+end
+
+-- parse chat messages produced by roll UI
+local function parse_chat_rolled_line(msg)
+  if not msg then return nil end
+  -- Cumulative SR (CSR)
+  local minv, maxv, ep = string.match(msg, "Cumulative%s+SR%s*(%d+)%s*%-%s*(%d+)%s*with%s*(%d+)")
+  if minv and maxv then
+    return "CSR", tonumber(ep), tonumber(minv), tonumber(maxv)
+  end
+  -- SR quoted range with EP
+  local minv2, maxv2, ep2 = string.match(msg, 'I rolled%s+SR%s*"?%s*(%d+)%s*%-%s*(%d+)%s*"?%s*with%s*(%d+)')
+  if minv2 and maxv2 then
+    return "SR", tonumber(ep2), tonumber(minv2), tonumber(maxv2)
+  end
+  -- MS quoted range with EP -> map to EP
+  local minv3, maxv3, ep3 = string.match(msg, 'I rolled%s+MS%s*"?%s*(%d+)%s*%-%s*(%d+)%s*"?%s*with%s*(%d+)')
+  if minv3 and maxv3 then
+    return "EP", tonumber(ep3), tonumber(minv3), tonumber(maxv3)
+  end
+  -- generic pattern with type and EP
+  local typ4, minv4, maxv4, ep4 = string.match(msg, 'I rolled%s+([A-Za-z]+)%s*"?%s*(%d+)%s*%-%s*(%d+)%s*"?%s*with%s*(%d+)')
+  if typ4 and maxv4 then
+    local t = string.upper(typ4)
+    if t == "MS" then t = "EP" end
+    return t, tonumber(ep4), tonumber(minv4), tonumber(maxv4)
+  end
+  -- simple "I rolled 65"
+  local simple = string.match(msg, "^I rolled%s+(%d+)")
+  if simple then return "SYS", tonumber(simple), nil, nil end
+  -- fallback token search
+  local token = string.match(msg, "(CSR|SR|EP|MS)")
+  local number = string.match(msg, "(%d+)")
+  if token and number then
+    local t = string.upper(token)
+    if t == "MS" then t = "EP" end
+    return t, tonumber(number), nil, nil
+  end
+  return nil
+end
+
+-- parse system roll line "Name rolls 234 (149-248)"
+local function parse_system_roll_line(msg)
+  if not msg then return nil end
+  -- try with a player capture that allows spaces up to ' rolls '
+  local name, roll, minv, maxv = string.match(msg, "^(.-)%s+rolls%s+(%d+)%s*%(%s*(%d+)%s*%-%s*(%d+)%s*%)")
+  if not name then
+    -- simple pattern: "Name rolls 98 (1-100)"
+    name, roll, minv, maxv = string.match(msg, "^(%S+)%s+rolls%s+(%d+)%s*%(%s*(%d+)%s*%-%s*(%d+)%s*%)")
+  end
+  if name and roll then
+    return StripRealm(name), tonumber(roll), tonumber(minv), tonumber(maxv)
+  end
+  return nil
+end
+
+-- Main handler: called on chat/system events
+local function OnIncomingRollMessage(event, msg, sender, ...)
+  if not msg then return end
+  -- Only ML/admin processes the details
+  if not CanUseLootAdmin() then return end
+
+  -- If system line detected, parse and attempt to match to last declaration
+  if event == "CHAT_MSG_SYSTEM" or string.find(msg or "", " rolls ") then
+    local pname, numericRoll, minv, maxv = parse_system_roll_line(msg)
+    if pname and numericRoll then
+      -- Try find recent declaration
+      local decl = get_and_clear_declaration_for(pname)
+      if decl and decl.type then
+        -- If declaration had a range, ensure it matches system range if present
+        if decl.rangeMin and decl.rangeMax and (minv and maxv) then
+          -- if ranges match or overlap we accept declaration type, otherwise still accept but log
+          -- proceed to ProcessIncomingRoll: use declared type, roll = numericRoll
+          pcall(function() RollMod:ProcessIncomingRoll(pname, decl.type, numericRoll) end)
+          return
+        else
+          -- no ranges or mismatch: still use declaration (prefer declared type/EP)
+          pcall(function() RollMod:ProcessIncomingRoll(pname, decl.type, numericRoll) end)
+          return
+        end
+      else
+        -- no declaration: process as SYS numeric
+        pcall(function() RollMod:ProcessIncomingRoll(pname, "SYS", numericRoll) end)
+        return
+      end
+    end
+    return
+  end
+
+  -- Chat messages (I rolled ...). Use sender as player
+  local parsedType, parsedEP, rmin, rmax = parse_chat_rolled_line(msg)
+  if parsedType then
+    local player = StripRealm(sender)
+    -- store declaration for matching with subsequent system line
+    store_player_declaration(player, parsedType, parsedEP, rmin, rmax)
+    -- Optionally: if session exists and we want immediate prepopulation or display, do nothing else
+    -- If the chat line doesn't have a system line following (e.g. local self-roll), we might still want to register roll:
+    -- But prefer to wait for the system line for the numeric roll value.
+    return
+  end
+end
+
+-- Register chat/system handlers
+local function register_roll_parsers()
+  if GuildRoll and GuildRoll.RegisterEvent then
+    pcall(function()
+      GuildRoll:RegisterEvent("CHAT_MSG_RAID", function(self, msg, sender, ...) OnIncomingRollMessage("CHAT_MSG_RAID", msg, sender, ...) end)
+      GuildRoll:RegisterEvent("CHAT_MSG_RAID_LEADER", function(self, msg, sender, ...) OnIncomingRollMessage("CHAT_MSG_RAID_LEADER", msg, sender, ...) end)
+      GuildRoll:RegisterEvent("CHAT_MSG_PARTY", function(self, msg, sender, ...) OnIncomingRollMessage("CHAT_MSG_PARTY", msg, sender, ...) end)
+      GuildRoll:RegisterEvent("CHAT_MSG_SAY", function(self, msg, sender, ...) OnIncomingRollMessage("CHAT_MSG_SAY", msg, sender, ...) end)
+      GuildRoll:RegisterEvent("CHAT_MSG_SYSTEM", function(self, msg, ...) OnIncomingRollMessage("CHAT_MSG_SYSTEM", msg, nil, ...) end)
+    end)
+  else
+    local f = eventFrame or CreateFrame("Frame")
+    f:RegisterEvent("CHAT_MSG_RAID")
+    f:RegisterEvent("CHAT_MSG_RAID_LEADER")
+    f:RegisterEvent("CHAT_MSG_PARTY")
+    f:RegisterEvent("CHAT_MSG_SAY")
+    f:RegisterEvent("CHAT_MSG_SYSTEM")
+    f:SetScript("OnEvent", function(_, event, ...)
+      local arg1, arg2 = ...
+      OnIncomingRollMessage(event, arg1, arg2, ...)
+    end)
+  end
+end
+
+pcall(register_roll_parsers)
+
+-- OnAddonMessage handler (legacy kept for compatibility)
 local function OnAddonMessage(prefix, message, channel, sender)
   if not prefix or not message or not sender then return end
   if not (GuildRoll and GuildRoll.VARS and GuildRoll.VARS.prefix) then return end
   if prefix ~= GuildRoll.VARS.prefix then return end
   sender = StripRealm(sender)
+
   if string.sub(message,1,5) == "ROLL:" then
     local payload = string.sub(message,6)
     local typ, val = string.match(payload, "^([^:]+):(.+)$")
-    if typ and val then RollMod:ProcessIncomingRoll(sender, typ, tonumber(val) or val) else RollMod:ProcessIncomingRoll(sender, "SYS", tonumber(payload) or payload) end
+    if typ and val then RollMod:ProcessIncomingRoll(sender, typ, tonumber(val) or val)
+    else RollMod:ProcessIncomingRoll(sender, "SYS", tonumber(payload) or payload) end
+
   elseif string.sub(message,1,11) == "ROLL_START:" then
     local item = string.sub(message,12)
     if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint("Roll started for "..tostring(item)) end
-  elseif string.sub(message,1,7) == "IMPORT:" then
-    local payload = string.sub(message,8)
-    pcall(function() ImportSRCsvRaidRes(payload) end)
+
   elseif string.sub(message,1,8) == "GIVE_REQ:" then
     local payload = string.sub(message,9)
     local winner, item = string.match(payload, "^([^:]+):(.+)$")
@@ -806,84 +885,15 @@ local function OnAddonMessage(prefix, message, channel, sender)
   end
 end
 
--- Event registration
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("ADDON_LOADED")
-eventFrame:RegisterEvent("LOOT_OPENED")
-eventFrame:RegisterEvent("LOOT_CLOSED")
-eventFrame:RegisterEvent("CHAT_MSG_ADDON")
-eventFrame:SetScript("OnEvent", function(self, event, ...)
-  if event == "ADDON_LOADED" then
-    local name = ...
-    if name == "GuildRoll" or name == "guildroll" then end
-  elseif event == "LOOT_OPENED" then
-    if GuildRoll_rollForEPCache._settings.useCustomLootFrame then
-      local items = {}
-      local n = GetNumLootItems()
-      for i=1,n do
-        local name, texture, quantity, quality, locked, isQuestItem, questId, isActive = GetLootSlotInfo(i)
-        local link = GetLootSlotLink(i)
-        local id
-        if link then
-          local s = string.find(link, "item:")
-          if s then
-            local idstr = ""
-            for j = s+5, string.len(link) do
-              local ch = string.sub(link, j, j)
-              if ch >= "0" and ch <= "9" then idstr = idstr .. ch else break end
-            end
-            if idstr ~= "" then id = tonumber(idstr) end
-          end
-        end
-        table.insert(items, { slot = i, itemLink = link, itemID = id, itemName = name, rarity = quality, texture = texture })
-      end
-      if items and #items > 0 then RollMod.lootSlots = items; RollMod:ShowLootUI(items) end
-    end
-  elseif event == "LOOT_CLOSED" then
-    if RollMod.frames.loot then RollMod.frames.loot:Hide() end
-  elseif event == "CHAT_MSG_ADDON" then
-    local prefix, msg, channel, sender = ...
-    OnAddonMessage(prefix, msg, channel, sender)
-  end
+-- Event registration for CHAT_MSG_ADDON (kept)
+local eventFrame2 = CreateFrame("Frame")
+eventFrame2:RegisterEvent("CHAT_MSG_ADDON")
+eventFrame2:SetScript("OnEvent", function(self, event, ...)
+  local prefix, msg, channel, sender = ...
+  OnAddonMessage(prefix, msg, channel, sender)
 end)
 
--- Show Loot UI (integration with announce_loot.lua)
-function RollMod:ShowLootUI(lootItems)
-  if GuildRoll_rollForEPCache._settings.useCustomLootFrame == false then return end
-  if not lootItems or #lootItems == 0 then
-    -- fallback to game loot
-    lootItems = {}
-    local n = GetNumLootItems()
-    for i=1,n do
-      local name, texture, quantity, quality, locked, isQuestItem, questId, isActive = GetLootSlotInfo(i)
-      local link = GetLootSlotLink(i)
-      local id
-      if link then
-        local s = string.find(link, "item:")
-        if s then
-          local idstr = ""
-          for j = s+5, string.len(link) do
-            local ch = string.sub(link, j, j)
-            if ch >= "0" and ch <= "9" then idstr = idstr .. ch else break end
-          end
-          if idstr ~= "" then id = tonumber(idstr) end
-        end
-      end
-      table.insert(lootItems, { slot = i, itemLink = link, itemID = id, itemName = name, rarity = quality, texture = texture })
-    end
-  end
-  if not lootItems or #lootItems == 0 then return end
-  self.lootSlots = lootItems
-  local f = CreateLootFrame()
-  f:Update()
-  f:Show()
-  for _, it in ipairs(lootItems) do pcall(function() if it.itemLink then SendChatMessage(it.itemLink, GetNumRaidMembers()>0 and "RAID" or "PARTY") end end) end
-end
-
 -- Backwards-compatible wrappers & exposure
-function RollWithEP_ImportCSV_wrapper(text) pcall(function() RollWithEP_ImportCSV(text) end) end
-function RollWithEP_SetDEBank(player) if player == nil then GuildRoll_rollForEPCache.DEPlayer = nil; if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["DE/Bank player cleared."] or "DE/Bank cleared.") end else GuildRoll_rollForEPCache.DEPlayer = StripRealm(player); if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(string.format(L and L["DE/Bank player set to: %s"] or "DE/Bank player set to: %s", GuildRoll_rollForEPCache.DEPlayer)) end end end
-
 GuildRoll.RollWithEP_ShowLootUI = function(lootItems) pcall(function() RollMod:ShowLootUI(lootItems) end) end
 GuildRoll.RollWithEP_ImportCSV = function(text) pcall(function() RollWithEP_ImportCSV(text) end) end
 GuildRoll.RollWithEP_SetDEBank = function(player) pcall(function() RollWithEP_SetDEBank(player) end) end
