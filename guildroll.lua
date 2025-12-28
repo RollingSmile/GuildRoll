@@ -520,6 +520,32 @@ function GuildRoll:buildMenu()
         end
       end
     }
+
+	options.args["loot_settings"].args["use_custom_loot_frame"] = {
+  		type = "toggle",
+  		name = L["Use custom loot frame"],
+  		desc = L["Use GuildRoll custom loot frame instead of default game or pfUI loot window"],
+  		order = 3,
+  		hidden = function() return not (GuildRoll and GuildRoll:IsAdmin()) end,
+  		disabled = function()
+    		local method, partyIndex, raidIndex = GetLootMethod()
+    		if method == "master" then
+      		  if GetNumRaidMembers() > 0 and raidIndex and raidIndex > 0 then
+        		local ml = StripRealm(UnitName("raid"..raidIndex))
+        		return ml ~= StripRealm(UnitName("player"))
+      		  elseif GetNumPartyMembers() > 0 and partyIndex == 0 then
+        		return false
+      		  else
+        		return true
+      	      end
+    		else
+      		  local ok, isRL = pcall(IsRaidLeader)
+      		  return not (ok and isRL)
+    		end
+  		  end,
+  		  get = function() return GuildRoll_rollForEPCache._settings.useCustomLootFrame == true end,
+  		  set = function(v) GuildRoll_rollForEPCache._settings.useCustomLootFrame = v end
+		}
     
     -- EP Actions Group (admin-only)
     options.args["ep_actions"] = {
