@@ -1,0 +1,899 @@
+-- rollsystem.lua
+-- Modulo per gestione drop/rolls/assegnazione in Raid (LootAdmin)
+-- Versione completa: matching SAY/RAID <-> SYSTEM, import CSV opzionale, EP verification ({48} in officer notes),
+-- RollTable UI, custom loot frame, Start Rolls, Close Rolls, Give to Winner, Give to Member (dropdown/list of raid members).
+-- Autore: generato / adattato su richiesta ( RollingSmile / GuildRoll )
+
+local RollSystem = {}
+RollSystem.frame = CreateFrame("Frame", "GuildRoll_RollSystemFrame")
+RollSystem.db = {
+    softReserves = {},
+    activeSession = nil,
+    deBank = nil,
+}
+
+-- Config
+local MATCH_WINDOW = 6         -- secondi massimi per associare announce <-> system roll
+local MAX_QUEUE_PER_PLAYER = 8 -- numero massimo di messaggi tenuti in memoria per giocatore
+local CLEANUP_INTERVAL = 10    -- pulizia periodica dei vecchi eventi (sec)
+
+-- Buffers
+RollSystem.announcements = {} -- announcements[player] = queue of { typeCode, min, max, epDeclared, ts, raw, chan }
+RollSystem.systemRolls = {}   -- systemRolls[player] = queue of { value, min, max, ts, raw }
+
+-- mapping e priorità
+local ROLL_TYPE_MAP = {
+    CSR = { type="SR", priority=4 }, SR  = { type="SR", priority=4 }, ["101"] = { type="SR", priority=4 },
+    EP  = { type="MS", priority=3 }, ["100"] = { type="MS", priority=3 }, MS = { type="MS", priority=3},
+    ["99"] = { type="OS", priority=2 }, ["98"] = { type="Tmog", priority=1 },
+}
+local TYPE_PRIORITY = { SR=4, MS=3, OS=2, Tmog=1 }
+
+-- Utility: push limited-size queue (newest first)
+local function pushQueue(tbl, entry, maxSize)
+    if not tbl then tbl = {} end
+    table.insert(tbl, 1, entry) -- push front (newest first)
+    while #tbl > (maxSize or 10) do table.remove(tbl) end
+    return tbl
+end
+
+-- Infer type from range if needed
+local function inferTypeFromRange(minv, maxv)
+    if not minv or not maxv then return "SR" end
+    minv = tonumber(minv); maxv = tonumber(maxv)
+    if minv == 1 and maxv == 101 then return "101" end
+    if minv == 1 and maxv == 100 then return "100" end
+    if minv == 1 and maxv == 99 then return "99" end
+    if minv == 1 and maxv == 98 then return "98" end
+    if minv > 100 then return "CSR" end
+    return "SR"
+end
+
+-- Parse EP from an announcement text (es. "with 48 EP", "with 48 EP + 100 from SR", "I rolled ... with 48 EP")
+local function parseEPFromText(msg)
+    if not msg then return nil end
+    -- try pattern "with 48 EP" or "48 EP"
+    local ep = msg:match("[Ww]ith%s*(%d+)%s*[Ee][Pp]") or msg:match("(%d+)%s*[Ee][Pp]")
+    if ep then return tonumber(ep) end
+    return nil
+end
+
+-- Get officer note EP for a player by scanning guild roster
+-- Priorità parsing:
+-- 1) pattern {48}
+-- 2) "EP: 48" or "EP 48"
+-- 3) primo numero nella officer note
+-- Ritorna numero EP (tonumber) oppure nil se non presente / non accessibile
+function RollSystem:GetOfficerNoteEP(playerName)
+    if not IsInGuild() then return nil end
+    -- Aggiorna roster se possibile (silenzioso)
+    if GuildRoster then pcall(GuildRoster) end
+    local num = GetNumGuildMembers and GetNumGuildMembers() or 0
+    for i=1,num do
+        local name, _, _, _, _, _, _, officernote = GetGuildRosterInfo(i)
+        if name then
+            local short = Ambiguate(name, "none")
+            if short == playerName then
+                if officernote and officernote ~= "" then
+                    -- 1) cerca {48} pattern
+                    local brace = officernote:match("%{%s*(%d+)%s*%}")
+                    if brace then return tonumber(brace) end
+                    -- 2) cerca "EP: 48" o "EP 48"
+                    local ep = officernote:match("[Ee][Pp]%s*[:%-]?%s*(%d+)")
+                    if ep then return tonumber(ep) end
+                    -- 3) fallback: primo numero nella nota
+                    local anynum = officernote:match("(%d+)")
+                    if anynum then return tonumber(anynum) end
+                end
+                return nil
+            end
+        end
+    end
+    return nil
+end
+
+-- Validazione EP: ritorna (isValidBoolean, officerEPOrNil)
+local function validateEP(playerName, epDeclared)
+    if not epDeclared then return true, nil end -- niente dichiarato -> non posso validare
+    local epOfficer = RollSystem:GetOfficerNoteEP(playerName)
+    if not epOfficer then return true, nil end -- non posso verificare -> neutral
+    if tonumber(epDeclared) == tonumber(epOfficer) then
+        return true, epOfficer
+    else
+        return false, epOfficer
+    end
+end
+
+-- Aggiunge un roll alla sessione attiva
+function RollSystem:AddRoll(playerName, typeCode, value, epDeclared, epVerified)
+    local session = self.db.activeSession
+    if not session or session.closed then return end
+    local map = ROLL_TYPE_MAP[typeCode] or { type=typeCode, priority=1 }
+    local entry = {
+        player = playerName,
+        type = map.type,
+        typeCode = typeCode,
+        priority = map.priority or TYPE_PRIORITY[map.type] or 1,
+        value = tonumber(value) or 0,
+        epDeclared = epDeclared,
+        epOfficer = epVerified,
+        suspicious = (epDeclared ~= nil and epVerified ~= nil and tonumber(epDeclared) ~= tonumber(epVerified))
+    }
+    table.insert(session.rolls, entry)
+    if self.rollFrame then self:RefreshRollTable() end
+end
+
+-- Match system <-> announcement per un giocatore
+function RollSystem:TryMatchForPlayer(player)
+    local annQ = self.announcements[player]
+    local sysQ = self.systemRolls[player]
+    if not annQ or not sysQ then return end
+
+    -- iterate system rolls newest-first
+    local i = #sysQ
+    while i >= 1 do
+        local sys = sysQ[i]
+        local bestAnnIdx, bestAnn, bestDt
+        -- 1) search for exact min/max match
+        for j = 1, #annQ do
+            local ann = annQ[j]
+            if ann.min and ann.max and sys.min and sys.max and tonumber(ann.min) == tonumber(sys.min) and tonumber(ann.max) == tonumber(sys.max) then
+                local dt = math.abs((sys.ts or 0) - (ann.ts or 0))
+                if not bestDt or dt < bestDt then bestDt = dt; bestAnn = ann; bestAnnIdx = j end
+            end
+        end
+        -- 2) if none, pick closest in time within MATCH_WINDOW
+        if not bestAnn then
+            for j = 1, #annQ do
+                local ann = annQ[j]
+                local dt = math.abs((sys.ts or 0) - (ann.ts or 0))
+                if dt <= MATCH_WINDOW then
+                    if not bestDt or dt < bestDt then bestDt = dt; bestAnn = ann; bestAnnIdx = j end
+                end
+            end
+        end
+
+        if bestAnn then
+            local chosenType = bestAnn.typeCode or inferTypeFromRange(sys.min, sys.max)
+            local epDeclared = bestAnn.epDeclared
+            local valid, epOfficer = validateEP(player, epDeclared)
+            self:AddRoll(player, chosenType, sys.value, epDeclared, epOfficer)
+            table.remove(sysQ, i)
+            table.remove(annQ, bestAnnIdx)
+            -- continue to next available sys roll
+        else
+            -- cannot match this sys roll now; move to previous
+            i = i - 1
+        end
+    end
+
+    if annQ and #annQ == 0 then self.announcements[player] = nil end
+    if sysQ and #sysQ == 0 then self.systemRolls[player] = nil end
+end
+
+-- Cleanup periodico
+local lastCleanup = 0
+local function cleanupOld()
+    local now = GetTime()
+    if now - lastCleanup < CLEANUP_INTERVAL then return end
+    lastCleanup = now
+    for player, q in pairs(RollSystem.announcements) do
+        local newq = {}
+        for _, v in ipairs(q) do
+            if now - (v.ts or 0) <= (MATCH_WINDOW*3) then table.insert(newq, v) end
+        end
+        if #newq == 0 then RollSystem.announcements[player] = nil else RollSystem.announcements[player] = newq end
+    end
+    for player, q in pairs(RollSystem.systemRolls) do
+        local newq = {}
+        for _, v in ipairs(q) do
+            if now - (v.ts or 0) <= (MATCH_WINDOW*3) then table.insert(newq, v) end
+        end
+        if #newq == 0 then RollSystem.systemRolls[player] = nil else RollSystem.systemRolls[player] = newq end
+    end
+end
+
+-- Store announcement (SAY/RAID)
+function RollSystem:StoreAnnouncement(player, msg, chan)
+    local ts = GetTime()
+    -- extract min-max patterns "169 - 268" or similar
+    local minv, maxv = msg:match("(%d+)%s*[%-%–]%s*(%d+)")
+    local ep = parseEPFromText(msg)
+    local detected = nil
+    if msg:match("[Cc]umulative%s+[Ss][Rr]") or msg:match("[Cc][Ss][Rr]") then detected = "CSR"
+    elseif msg:match("[Ss][Rr]") and not msg:match("[Mm][Ss]") then detected = "SR"
+    elseif msg:match("[Mm][Ss]") and not msg:match("[Ss][Rr]") then detected = "MS" end
+
+    local entry = { typeCode = detected, min = minv and tonumber(minv) or nil, max = maxv and tonumber(maxv) or nil, epDeclared = ep, ts = ts, raw = msg, chan = chan }
+    self.announcements[player] = pushQueue(self.announcements[player], entry, MAX_QUEUE_PER_PLAYER)
+    self:TryMatchForPlayer(player)
+end
+
+-- Store system roll message "Player rolls 176 (169-268)"
+function RollSystem:StoreSystemRoll(player, value, minv, maxv, raw)
+    local ts = GetTime()
+    local entry = { value = tonumber(value), min = tonumber(minv), max = tonumber(maxv), ts = ts, raw = raw }
+    self.systemRolls[player] = pushQueue(self.systemRolls[player], entry, MAX_QUEUE_PER_PLAYER)
+    self:TryMatchForPlayer(player)
+end
+
+-- CSV parsing (simple)
+local function parseCSVLine(line)
+    local res = {}
+    local i = 1
+    local len = #line
+    while i <= len do
+        if line:sub(i,i) == '"' then
+            local j = i+1
+            local field = ""
+            while j <= len do
+                local c = line:sub(j,j)
+                if c == '"' and line:sub(j+1,j+1) == '"' then
+                    field = field .. '"'
+                    j = j + 2
+                elseif c == '"' then
+                    break
+                else
+                    field = field .. c
+                    j = j + 1
+                end
+            end
+            table.insert(res, field)
+            i = j + 2
+        else
+            local j = line:find(",", i) or (len+1)
+            local field = line:sub(i, j-1)
+            table.insert(res, field)
+            i = j + 1
+        end
+    end
+    return res
+end
+
+function RollSystem.ImportSoftReservesFromText(csvText)
+    RollSystem.db.softReserves = {}
+    for line in csvText:gmatch("[^\r\n]+") do
+        if line:match("%S") then
+            local fields = parseCSVLine(line)
+            local id = fields[1] and tonumber(fields[1])
+            local item = fields[2] or ""
+            local attendee = fields[3] or ""
+            local comment = fields[4] or ""
+            local srplus = fields[5] or ""
+            local key = tostring(id or item)
+            RollSystem.db.softReserves[key] = RollSystem.db.softReserves[key] or {}
+            table.insert(RollSystem.db.softReserves[key], { attendee=attendee, comment=comment, srplus=srplus, item=item, id=id })
+        end
+    end
+    print("GuildRoll: SoftReserves importati.")
+end
+
+function RollSystem.GetSoftReservesForItem(itemID, itemName)
+    local keyId = tostring(itemID)
+    if RollSystem.db.softReserves[keyId] then return RollSystem.db.softReserves[keyId] end
+    if itemName then
+        local keyName = tostring(itemName)
+        if RollSystem.db.softReserves[keyName] then return RollSystem.db.softReserves[keyName] end
+    end
+    return nil
+end
+
+-- DE/Bank helpers
+function RollSystem:SetDEBank(name)
+    RollSystem.db.deBank = name
+    print("GuildRoll: DE/Bank impostato a: "..tostring(name))
+end
+function RollSystem:GetDEBank()
+    if RollSystem.db.deBank and RollSystem.db.deBank ~= "" then return RollSystem.db.deBank end
+    return UnitName("player")
+end
+
+-- Role checks (IsPlayerAddonAdmin must be adapted by you)
+function RollSystem.IsPlayerAddonAdmin()
+    -- TODO: sostituire con controllo reale rank/lista admin
+    if IsInGuild() then return true end
+    return false
+end
+
+function RollSystem.IsLootAdmin()
+    if not RollSystem.IsPlayerAddonAdmin() then return false end
+    if not IsInRaid() then return false end
+    local lootMethod, masterUnit = GetLootMethod()
+    if not lootMethod or lootMethod ~= "master" then return false end
+    local playerName = UnitName("player")
+    if masterUnit then
+        local masterName = nil
+        if type(masterUnit) == "string" then
+            if masterUnit:match("^raid") or masterUnit:match("^party") then masterName = UnitName(masterUnit) else masterName = masterUnit end
+        end
+        if masterName and masterName == playerName then return true end
+    end
+    if UnitIsGroupLeader("player") then return true end
+    return false
+end
+
+-- UI: custom loot frame
+function RollSystem:OpenCustomLootFrame(lootItems, mobGUID)
+    if not RollSystem.IsLootAdmin() then return end
+
+    if not self.lootFrame then
+        local f = CreateFrame("Frame", "GuildRoll_CustomLootFrame", UIParent, "BackdropTemplate")
+        f:SetSize(360, 260)
+        f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        f:SetBackdrop({ bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=16 })
+        f:Hide()
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        f.title:SetPoint("TOP", 0, -8)
+        f.title:SetText("GuildRoll Loot")
+        f.items = {}
+        local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -40)
+        scroll:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 40)
+        f.scroll = scroll
+        local content = CreateFrame("Frame", nil, scroll)
+        content:SetSize(320, 1)
+        scroll:SetScrollChild(content)
+        f.content = content
+        self.lootFrame = f
+    end
+
+    local f = self.lootFrame
+    local content = f.content
+    for i,v in ipairs(f.items) do if v and v.Hide then v:Hide() end end
+    f.items = {}
+
+    for idx,item in ipairs(lootItems) do
+        local btn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+        btn:SetSize(320, 32)
+        btn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(idx-1)*36)
+        btn.itemLink = item.itemLink
+        btn.slot = item.slot
+        btn.itemID = item.itemID
+        btn:SetText(item.itemLink or ("item "..tostring(item.itemID)))
+        btn:SetNormalFontObject("GameFontNormalSmall")
+        btn:Show()
+
+        local sr = RollSystem.GetSoftReservesForItem(item.itemID, item.itemLink and tostring(item.itemLink))
+        if sr and #sr > 0 then
+            local txt = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            local names = {}
+            for _,r in ipairs(sr) do table.insert(names, r.attendee) end
+            txt:SetPoint("LEFT", btn, "RIGHT", 4, 0)
+            txt:SetText("SR: "..table.concat(names, ", "))
+            txt:SetJustifyH("LEFT")
+            txt:SetWidth(320)
+        end
+
+        btn:SetScript("OnClick", function() RollSystem:OnLootItemClicked(btn) end)
+        table.insert(f.items, btn)
+    end
+
+    local sendChannel = IsInRaid() and "RAID" or "SAY"
+    for _,item in ipairs(lootItems) do
+        local txt = tostring(item.itemLink or ("item "..tostring(item.itemID)))
+        local sr = RollSystem.GetSoftReservesForItem(item.itemID, item.itemLink and tostring(item.itemLink))
+        if sr and #sr > 0 then
+            local names = {}
+            for _,r in ipairs(sr) do table.insert(names, r.attendee) end
+            txt = txt .. " (SR: "..table.concat(names, ", ")..")"
+        end
+        SendChatMessage(txt, sendChannel)
+    end
+
+    f:Show()
+end
+
+-- Item click menu: Start Rolls / Give to Member
+function RollSystem:OnLootItemClicked(btn)
+    if not btn then return end
+    local menu = self._itemMenu
+    if not menu then
+        menu = CreateFrame("Frame", "GuildRoll_ItemMenu", UIParent, "UIDropDownMenuTemplate")
+        self._itemMenu = menu
+    end
+
+    local itemLink = btn.itemLink
+    local slot = btn.slot
+    local itemID = btn.itemID
+
+    local dropdown = {
+        { text = "Start Rolls", func = function() RollSystem:StartRollSession(itemLink, itemID, slot) end },
+        { text = "Give to Member", func = function() RollSystem:OpenGiveToMemberDialog(itemLink, itemID, slot) end },
+    }
+
+    EasyMenu(dropdown, menu, "cursor", 0 , 0, "MENU")
+end
+
+-- Start roll session
+function RollSystem:StartRollSession(itemLink, itemID, slot)
+    self.db.activeSession = {
+        itemLink = itemLink,
+        itemID = itemID,
+        slot = slot,
+        rolls = {},
+        closed = false,
+        winner = nil,
+    }
+
+    local announceText = "ROLL START: "..tostring(itemLink).." - Use your roll keys (CSR/SR/EP/101/100/99/98)"
+    if IsInRaid() then
+        SendChatMessage(announceText, "RAID")
+        pcall(SendChatMessage, announceText, "RAID_WARNING")
+    else
+        SendChatMessage(announceText, "SAY")
+    end
+
+    RollSystem:OpenRollTableFrame()
+end
+
+-- RollTable UI
+function RollSystem:OpenRollTableFrame()
+    local session = self.db.activeSession
+    if not session then return end
+
+    if not self.rollFrame then
+        local f = CreateFrame("Frame", "GuildRoll_RollTable", UIParent, "BackdropTemplate")
+        f:SetSize(560, 380)
+        f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        f:SetBackdrop({ bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=16 })
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        f.title:SetPoint("TOP", 0, -8)
+        f.title:SetText("Rolls")
+        f.closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        f.closeBtn:SetSize(120, 26)
+        f.closeBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -36)
+        f.closeBtn:SetText("Close Rolls")
+        f.closeBtn:SetScript("OnClick", function() RollSystem:CloseRolls() end)
+        f.giveWinnerBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        f.giveWinnerBtn:SetSize(140, 26)
+        f.giveWinnerBtn:SetPoint("LEFT", f.closeBtn, "RIGHT", 8, 0)
+        f.giveWinnerBtn:SetText("Give to Winner")
+        f.giveWinnerBtn:Disable()
+        f.giveWinnerBtn:SetScript("OnClick", function() RollSystem:PromptGiveToWinner() end)
+        f.giveMemberBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        f.giveMemberBtn:SetSize(140, 26)
+        f.giveMemberBtn:SetPoint("LEFT", f.giveWinnerBtn, "RIGHT", 8, 0)
+        f.giveMemberBtn:SetText("Give to Member")
+        f.giveMemberBtn:Disable()
+        f.giveMemberBtn:SetScript("OnClick", function()
+            local session = RollSystem.db.activeSession
+            if session then RollSystem:OpenGiveToMemberDialog(session.itemLink, session.itemID, session.slot) end
+        end)
+
+        -- scroll area for rows
+        local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -72)
+        scroll:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 12)
+        f.scroll = scroll
+        local content = CreateFrame("Frame", nil, scroll)
+        content:SetSize(510, 1)
+        scroll:SetScrollChild(content)
+        f.content = content
+        f.rows = {}
+        self.rollFrame = f
+    end
+
+    self.rollFrame.title:SetText("Rolls for: "..tostring(session.itemLink))
+    self:RefreshRollTable()
+    self.rollFrame:Show()
+end
+
+-- Refresh roll table rows (shows EP info and suspicious marks)
+function RollSystem:RefreshRollTable()
+    local session = self.db.activeSession
+    if not session or not self.rollFrame then return end
+    local content = self.rollFrame.content
+
+    -- hide old rows
+    for i,row in ipairs(self.rollFrame.rows) do
+        if row and row.Hide then row:Hide() end
+    end
+    self.rollFrame.rows = {}
+
+    for idx,entry in ipairs(session.rolls) do
+        local r = CreateFrame("Frame", nil, content)
+        r:SetSize(510, 22)
+        r:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(idx-1)*24)
+        r.playerText = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        r.playerText:SetPoint("LEFT", r, "LEFT", 4, 0)
+        r.playerText:SetText(entry.player)
+        r.rollText = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        r.rollText:SetPoint("LEFT", r, "LEFT", 180, 0)
+        r.rollText:SetText(entry.type)
+        r.valueText = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        r.valueText:SetPoint("LEFT", r, "LEFT", 260, 0)
+        r.valueText:SetText(tostring(entry.value))
+
+        local epinfo = ""
+        if entry.epDeclared then epinfo = epinfo .. "EP:"..tostring(entry.epDeclared) end
+        if entry.epOfficer then epinfo = epinfo .. " (officer:"..tostring(entry.epOfficer)..")" end
+        if epinfo ~= "" then
+            r.epText = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            r.epText:SetPoint("LEFT", r, "LEFT", 340, 0)
+            r.epText:SetText(epinfo)
+        end
+
+        if entry.suspicious then
+            r.playerText:SetTextColor(1,0.2,0.2)
+            r.rollText:SetText(r.rollText:GetText().." (EP mismatch)")
+        end
+
+        r:Show()
+        table.insert(self.rollFrame.rows, r)
+    end
+end
+
+-- Determine winner according to priorities and values
+function RollSystem:DetermineWinner()
+    local session = self.db.activeSession
+    if not session then return nil end
+    if #session.rolls == 0 then return nil end
+    table.sort(session.rolls, function(a,b)
+        if a.priority ~= b.priority then return a.priority > b.priority
+        elseif a.value ~= b.value then return a.value > b.value
+        else return false end
+    end)
+    return session.rolls[1]
+end
+
+-- Close rolls: compute winner, announce, enable give buttons
+function RollSystem:CloseRolls()
+    local session = self.db.activeSession
+    if not session or session.closed then return end
+    local winner = self:DetermineWinner()
+    session.winner = winner
+    session.closed = true
+
+    local text
+    if winner then
+        text = "ROLLS CLOSED for "..tostring(session.itemLink)..". Winner: "..winner.player.." ("..(winner.type or "")..", "..tostring(winner.value)..")"
+    else
+        text = "ROLLS CLOSED for "..tostring(session.itemLink)..". No rolls."
+    end
+
+    if IsInRaid() then
+        SendChatMessage(text, "RAID")
+        pcall(SendChatMessage, text, "RAID_WARNING")
+    else
+        SendChatMessage(text, "SAY")
+    end
+
+    if self.rollFrame then
+        self.rollFrame.giveWinnerBtn:Enable()
+        self.rollFrame.giveMemberBtn:Enable()
+    end
+end
+
+-- Confirmation static popup helper
+local function StaticPopup_ShowConfirm(title, text, acceptFunc)
+    StaticPopupDialogs["GUILDROLL_CONFIRM"] = StaticPopupDialogs["GUILDROLL_CONFIRM"] or {
+        text = text or "",
+        button1 = ACCEPT,
+        button2 = CANCEL,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        OnAccept = function() if acceptFunc then pcall(acceptFunc) end end,
+    }
+    StaticPopup_Show("GUILDROLL_CONFIRM")
+end
+
+-- Give to Winner prompt
+function RollSystem:PromptGiveToWinner()
+    local session = self.db.activeSession
+    if not session or not session.winner then print("No winner to give to.") return end
+    local name = session.winner.player
+    StaticPopup_ShowConfirm("Give to Winner", "Give "..tostring(session.itemLink).." to "..name.."?", function()
+        RollSystem:GiveItemToPlayer(session.itemLink, session.itemID, name)
+    end)
+end
+
+-- Give to Member: open a frame listing raid members (dropdown/list style)
+function RollSystem:OpenGiveToMemberDialog(itemLink, itemID, slot)
+    if not self.giveMemberFrame then
+        local f = CreateFrame("Frame", "GuildRoll_GiveMemberFrame", UIParent, "BackdropTemplate")
+        f:SetSize(340, 420)
+        f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        f:SetBackdrop({ bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=16 })
+        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        f.title:SetPoint("TOP", 0, -8)
+        f.title:SetText("Give to Member")
+
+        -- Search box (optional)
+        f.searchBox = CreateFrame("EditBox", nil, f, "InputBoxTemplate")
+        f.searchBox:SetSize(200, 24)
+        f.searchBox:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -40)
+        f.searchBox:SetAutoFocus(false)
+        f.searchBox:SetScript("OnTextChanged", function(_, user)
+            if not user then return end
+            RollSystem:PopulateGiveMemberList(f, f.currentItemLink, f.currentItemID)
+        end)
+
+        -- scrollframe for member list
+        local scroll = CreateFrame("ScrollFrame", "GuildRoll_GiveMemberScroll", f, "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -72)
+        scroll:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 60)
+        f.scroll = scroll
+        local content = CreateFrame("Frame", nil, scroll)
+        content:SetSize(280, 1)
+        scroll:SetScrollChild(content)
+        f.content = content
+        f.memberButtons = {}
+
+        -- confirm and cancel buttons
+        f.confirmBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        f.confirmBtn:SetSize(140, 26)
+        f.confirmBtn:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 12, 12)
+        f.confirmBtn:SetText("Give Selected")
+        f.confirmBtn:SetScript("OnClick", function()
+            if f.selectedMember then
+                local name = f.selectedMember
+                StaticPopup_ShowConfirm("Confirm Give", "Give "..tostring(f.currentItemLink).." to "..name.."?", function()
+                    RollSystem:GiveItemToPlayer(f.currentItemLink, f.currentItemID, name)
+                    f:Hide()
+                end)
+            else
+                print("GuildRoll: No member selected.")
+            end
+        end)
+
+        f.cancelBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+        f.cancelBtn:SetSize(140, 26)
+        f.cancelBtn:SetPoint("LEFT", f.confirmBtn, "RIGHT", 8, 0)
+        f.cancelBtn:SetText("Cancel")
+        f.cancelBtn:SetScript("OnClick", function() f:Hide() end)
+
+        self.giveMemberFrame = f
+    end
+
+    -- set current item info
+    local gf = self.giveMemberFrame
+    gf.currentItemLink = itemLink
+    gf.currentItemID = itemID
+    gf.title:SetText("Give: "..(itemLink or tostring(itemID)))
+    gf.searchBox:SetText("")
+    gf.selectedMember = nil
+
+    -- populate list
+    self:PopulateGiveMemberList(gf, itemLink, itemID)
+    gf:Show()
+end
+
+-- Populate the give member list (filters by search box text)
+function RollSystem:PopulateGiveMemberList(frame, itemLink, itemID)
+    local content = frame.content
+    -- clear existing buttons
+    for i,btn in ipairs(frame.memberButtons) do
+        if btn and btn:IsShown() then btn:Hide() end
+    end
+    frame.memberButtons = {}
+
+    -- gather raid members
+    local members = {}
+    local numRaid = GetNumGroupMembers and GetNumGroupMembers() or 0
+    if IsInRaid() then
+        -- GetRaidRosterInfo(index) returns name, rank, rankIndex, level, class, zone, publicNote, officerNote, online, isDead, role, isML
+        for i=1, numRaid do
+            local name = GetRaidRosterInfo(i)
+            if name and name ~= "" then
+                local short = Ambiguate(name, "none")
+                table.insert(members, short)
+            end
+        end
+    else
+        -- fallback: add party members and player
+        table.insert(members, UnitName("player"))
+        for i=1, GetNumGroupMembers() or 0 do
+            local unit = "party"..i
+            if UnitExists(unit) then
+                local nm = UnitName(unit)
+                if nm then table.insert(members, Ambiguate(nm, "none")) end
+            end
+        end
+    end
+
+    -- apply search filter
+    local filter = frame.searchBox:GetText()
+    if filter and filter ~= "" then
+        local f = filter:lower()
+        local filtered = {}
+        for _,n in ipairs(members) do if n:lower():find(f, 1, true) then table.insert(filtered, n) end end
+        members = filtered
+    end
+
+    -- create buttons for members
+    for idx, name in ipairs(members) do
+        local btn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+        btn:SetSize(260, 22)
+        btn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(idx-1)*26)
+        btn:SetText(name)
+        btn:SetNormalFontObject("GameFontNormalSmall")
+        btn:SetScript("OnClick", function()
+            frame.selectedMember = name
+            -- highlight selection, simple color change
+            for _,b in ipairs(frame.memberButtons) do
+                if b.SetBackdropColor then b:SetBackdropColor(0,0,0,0) end
+                if b.text then b.text:SetTextColor(1,1,1) end
+            end
+            btn.text = btn.text or btn:GetFontString()
+            if btn.text then btn.text:SetTextColor(1,0.8,0) end
+        end)
+        btn:Show()
+        table.insert(frame.memberButtons, btn)
+    end
+
+    -- adjust scrollchild height
+    content:SetHeight(math.max(1, #members * 26))
+end
+
+-- Give item to player (master looter)
+function RollSystem:GiveItemToPlayer(itemLink, itemID, playerName)
+    -- Try to find raid index for playerName
+    local raidIndex = nil
+    local numRaid = GetNumGroupMembers and GetNumGroupMembers() or 0
+    if IsInRaid() then
+        for i=1, numRaid do
+            local name = GetRaidRosterInfo(i)
+            if name and Ambiguate(name, "none") == playerName then
+                raidIndex = i
+                break
+            end
+        end
+    else
+        -- fallback: scan party units
+        for i=1, GetNumGroupMembers() or 0 do
+            local unit = "party"..i
+            if UnitExists(unit) then
+                local nm = UnitName(unit)
+                if nm and Ambiguate(nm, "none") == playerName then
+                    raidIndex = i
+                    break
+                end
+            end
+        end
+        -- if none found and player is self
+        if not raidIndex and UnitName("player") == playerName then raidIndex = 0 end
+    end
+
+    if not raidIndex then
+        print("GuildRoll: Could not find raid index for "..tostring(playerName)..". Give manually.")
+        return
+    end
+
+    local slot = nil
+    if self.db.activeSession and self.db.activeSession.slot then slot = self.db.activeSession.slot end
+
+    if not slot then
+        print("GuildRoll: No loot slot recorded for item. Cannot call GiveMasterLoot automatically.")
+        return
+    end
+
+    -- GiveMasterLoot(slot, raidIndex) is often the function used; API may differ by version.
+    if GiveMasterLoot then
+        GiveMasterLoot(slot, raidIndex)
+        print("GuildRoll: Tentativo di assegnare "..tostring(itemLink).." a "..playerName)
+    else
+        print("GuildRoll: Funzione GiveMasterLoot non disponibile in questa versione. Dovrai chiamare la funzione di assegnazione corretta.")
+    end
+end
+
+-- ADDON MESSAGE prefix registration for external roll UI
+if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
+    C_ChatInfo.RegisterAddonMessagePrefix("GuildRoll")
+else
+    RegisterAddonMessagePrefix("GuildRoll")
+end
+
+-- Event handling
+RollSystem.frame:RegisterEvent("CHAT_MSG_ADDON")
+RollSystem.frame:RegisterEvent("CHAT_MSG_SYSTEM")
+RollSystem.frame:RegisterEvent("CHAT_MSG_SAY")
+RollSystem.frame:RegisterEvent("CHAT_MSG_RAID")
+RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
+    if event == "CHAT_MSG_ADDON" then
+        -- external roll UI can send "GuildRoll" prefix messages like "ROLL:SR:176"
+        local prefix, msg, channel, sender = ...
+        if prefix == "GuildRoll" and msg then
+            local parts = {}
+            for s in string.gmatch(msg, "([^:]+)") do table.insert(parts, s) end
+            if parts[1] == "ROLL" and parts[2] and parts[3] then
+                local typeCode = parts[2]
+                local value = tonumber(parts[3]) or 0
+                local sname = Ambiguate(sender, "none")
+                RollSystem:AddRoll(sname, typeCode, value, nil, nil)
+            end
+        end
+
+    elseif event == "CHAT_MSG_SYSTEM" then
+        local msg = ...
+        -- match "Player rolls 176 (169-268)"
+        local player, rolls, minStr, maxStr = msg:match("^(.+) rolls (%d+) %((%d+)%-(%d+)%)$")
+        if player and rolls then
+            player = Ambiguate(player, "none")
+            RollSystem:StoreSystemRoll(player, tonumber(rolls), tonumber(minStr), tonumber(maxStr), msg)
+        end
+
+    elseif event == "CHAT_MSG_SAY" or event == "CHAT_MSG_RAID" then
+        local msg, sender = ...
+        local sname = Ambiguate(sender, "none")
+        if not msg or not sname then return end
+        RollSystem:StoreAnnouncement(sname, msg, event)
+    end
+
+    cleanupOld()
+end)
+
+-- Loot Options menu integration (to be called by your main addon UI)
+function RollSystem.RegisterLootOptionsMenu(parentMenu)
+    if not RollSystem.IsPlayerAddonAdmin() then return end
+    local btn = CreateFrame("Button", "GuildRoll_LootOptionsButton", parentMenu, "UIPanelButtonTemplate")
+    btn:SetSize(160, 22)
+    btn:SetPoint("TOPLEFT", parentMenu, "TOPLEFT", 12, -12)
+    btn:SetText("Loot Options")
+    btn:SetScript("OnClick", function()
+        if not RollSystem.lootOptionsFrame then
+            local f = CreateFrame("Frame", "GuildRoll_LootOptions", UIParent, "BackdropTemplate")
+            f:SetSize(420, 260)
+            f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            f:SetBackdrop({ bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=16 })
+            f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+            f.title:SetPoint("TOP", 0, -8)
+            f.title:SetText("Loot Options")
+
+            local importBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+            importBtn:SetSize(160, 26)
+            importBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -36)
+            importBtn:SetText("Import SoftReserves")
+            importBtn:SetScript("OnClick", function()
+                StaticPopupDialogs["GUILDROLL_IMPORTSR"] = StaticPopupDialogs["GUILDROLL_IMPORTSR"] or {
+                    text = "Paste CSV text:",
+                    button1 = ACCEPT,
+                    button2 = CANCEL,
+                    timeout = 0,
+                    whileDead = true,
+                    hasEditBox = true,
+                    editBoxWidth = 360,
+                    OnAccept = function(self)
+                        local txt = self.editBox:GetText() or ""
+                        RollSystem.ImportSoftReservesFromText(txt)
+                    end,
+                }
+                StaticPopup_Show("GUILDROLL_IMPORTSR")
+            end)
+
+            local debankBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+            debankBtn:SetSize(160, 26)
+            debankBtn:SetPoint("LEFT", importBtn, "RIGHT", 8, 0)
+            debankBtn:SetText("Set DE/Bank")
+            debankBtn:SetScript("OnClick", function()
+                StaticPopupDialogs["GUILDROLL_SETDEBANK"] = StaticPopupDialogs["GUILDROLL_SETDEBANK"] or {
+                    text = "Set DE/Bank player name:",
+                    button1 = ACCEPT,
+                    button2 = CANCEL,
+                    timeout = 0,
+                    whileDead = true,
+                    hasEditBox = true,
+                    editBoxWidth = 200,
+                    OnAccept = function(self)
+                        local nm = self.editBox:GetText()
+                        if nm and nm ~= "" then RollSystem:SetDEBank(nm) end
+                    end,
+                }
+                StaticPopup_Show("GUILDROLL_SETDEBANK")
+            end)
+
+            f.debankInfo = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            f.debankInfo:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -76)
+            f.debankInfo:SetText("DE/Bank: "..tostring(RollSystem:GetDEBank()))
+
+            RollSystem.lootOptionsFrame = f
+        end
+        RollSystem.lootOptionsFrame.debankInfo:SetText("DE/Bank: "..tostring(RollSystem:GetDEBank()))
+        RollSystem.lootOptionsFrame:Show()
+    end)
+end
+
+-- Expose module globally for integration
+_G.GuildRoll_RollSystem = RollSystem
+
+return RollSystem
