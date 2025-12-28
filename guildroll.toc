@@ -35,7 +35,6 @@ Libs\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
 Libs\ChatThrottleLib.lua
 
 localization.lua
-RollWithEP.lua
 guildroll.lua
 utils.lua
 ui_helpers.lua
@@ -47,6 +46,3 @@ alts.lua
 logs.lua
 adminlog.lua
 buffcheck.lua
-announce_loot.lua
-rollingtables.lua
-RollForEP.lua
