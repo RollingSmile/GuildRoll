@@ -115,10 +115,6 @@ function GuildRollAlts:Toggle(forceShow)
   end
 end
 
-function GuildRollAlts:OnClickItem(name)
-  --ChatFrame_SendTell(name)
-end
-
 function GuildRollAlts:BuildAltsTable()
   return GuildRoll.alts
 end
@@ -143,7 +139,6 @@ function GuildRollAlts:OnTooltipUpdate()
     cat:AddLine(
       "text", main,
       "text2", altstring--,
-      --"func", "OnClickItem", "arg1", self, "arg2", main
     )
   end
 end

@@ -57,7 +57,7 @@ local BUFF_REQUIREMENTS = {
     "Mark of the Wild",
     "Gift of the Wild",
   },
-  -- WARRIOR removed - Battle Shout no longer checked
+  
   PALADIN = {
     -- Special handling: count number of paladins and require min(N, #blessing_types) distinct blessings
     "Blessing of Might",
@@ -86,20 +86,19 @@ local ROLE_CONSUMABLES = {
     "Medivh's Merlot", --Stamina Merlot
     "Elixir of Giants",
     "Elixir of Fortitude",    
-    "Greater Stoneshield Potion",
     "Gurubashi Gumbo",
     "Le Fishe Au Chocolat",
     "Grilled Squid",
     "Sour Mountain Berry",
-    "Flask of Titans",
     "Rage of Ages", --R.O.I.D.S.
-    "Elemental Sharpening Stone",
     "Strike of the Scorpok",
+    "Elemental Sharpening Stone",
     "Well Fed";
   },
   PHYSICAL = {
     "Spirit of Zanza",
     "Elixir of the Mongoose",
+    "Elixir of Giants",
     "Juju Power",
     "Winterfall Firewater",
     "Juju Might",
@@ -107,6 +106,7 @@ local ROLE_CONSUMABLES = {
     "Strike of the Scorpok",
     "Le Fishe Au Chocolat",
     "Grilled Squid",
+    "Increased Strength", -- Power Mushroom
     "Elemental Sharpening Stone",
     "Mana Regeneration", --Mageblood Potion
     "Increased Agility", --Sour Mountain Berry
@@ -120,11 +120,14 @@ local ROLE_CONSUMABLES = {
     "Greater Arcane Elixir",
     "Arcane Elixir",
     "Dreamshard Elixir",
+    "Elixir of Greater Firepower";
+    "Elixir of Frost Power";
+    "Elixir of Shadow Power";
+    "Dreamtonic";
     "Brilliant Wizard Oil",
     "Brilliant Mana Oil",
     "Nightfin Soup",
     "Fizzy Energy Drink",
-    "Herbal Tea",
     "Kreeg's Stout Beatdown",
     "Medivh's Merlot Blue Label",
     "Danonzo's Tel'Abim Delight",
@@ -132,12 +135,13 @@ local ROLE_CONSUMABLES = {
   },
   HEALER = {
     "Spirit of Zanza",
+    "Dreamshard Elixir",
     "Medivh's Merlot Blue Label",
     "Danonzo's Tel'Abim Medley",
     "Cerebral Cortex Compound",
     "Mana Regeneration", --Mageblood Potion
-    "Herbal Tea",
     "Nightfin Soup",
+    "Brilliant Mana Oil",
     "Well Fed";
   }
 }
