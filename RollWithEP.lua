@@ -1,38 +1,109 @@
 -- RollWithEP.lua
--- Roll management module with enhanced UI and tie-handling for Turtle WoW (WoW 1.12)
--- Master looter or raid leader (when no ML) can manage loot rolls with SR/CSR priority
--- All strings use AceLocale for future localization
+-- Unified Roll / EP module (replaces RollWithEP + RollForEP)
+-- - Custom loot frame (default ON)
+-- - CSV RaidRes import (optional)
+-- - SR/CSR integration: pre-populate RollTable with SR players (SR=YES)
+-- - PRIORITY_MAP, tie detection, Ask Tie Roll, Close session
+-- - Attempt GiveMasterLoot when awarding (master looter only)
+-- Comments in English; prepared for localization via L table.
 
--- Guard: Check if required libraries are available
+-- Safe optional libs
 local T, D, C, L
 do
-  local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
-  if not ok or not result then return end
-  T = result
-  
-  ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
-  if not ok or not result then return end
-  D = result
-  
-  ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
-  if not ok or not result then return end
-  C = result
-  
-  ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if not ok or not result or type(result.new) ~= "function" then return end
-  ok, L = pcall(function() return result:new("guildroll") end)
-  if not ok or not L then return end
+  local ok, res = pcall(function() return AceLibrary and AceLibrary("Tablet-2.0") end)
+  if ok and res then T = res end
+  ok, res = pcall(function() return AceLibrary and AceLibrary("Dewdrop-2.0") end)
+  if ok and res then D = res end
+  ok, res = pcall(function() return AceLibrary and AceLibrary("Crayon-2.0") end)
+  if ok and res then C = res end
+  ok, res = pcall(function() return AceLibrary and AceLibrary("AceLocale-2.2") end)
+  if ok and res and type(res.new) == "function" then
+    ok, res = pcall(function() return res:new("guildroll") end)
+    if ok and res then L = res end
+  end
 end
 
--- Use existing localization from localization.lua
--- RollWithEP-specific strings should be added to localization.lua instead
--- For now, we just use the existing locale instance without registering new translations
+-- Ensure main table exists
+if not GuildRoll then GuildRoll = {} end
 
--- Wait for GuildRoll table to be initialized before accessing it
--- GuildRoll is created in guildroll.lua which loads after this file
--- We'll initialize VARS in the functions that need them instead of at load time
+-- Saved data compatibility
+GuildRoll_rollForEPCache = GuildRoll_rollForEPCache or {}
+GuildRoll_rollForEPCache.lastImport = GuildRoll_rollForEPCache.lastImport or { timestamp = 0, srlist = {} }
+GuildRoll_rollForEPCache._settings = GuildRoll_rollForEPCache._settings or {}
+if GuildRoll_rollForEPCache._settings.useCustomLootFrame == nil then
+  GuildRoll_rollForEPCache._settings.useCustomLootFrame = true
+end
 
--- Constants - reuse PRIORITY_MAP from RollForEP concept
+-- Module state
+local RollMod = {
+  lootSlots = {},       -- current loot slots (from LOOT_OPENED or announce_loot)
+  currentSession = nil, -- active roll session
+  frames = {}
+}
+
+-- Helpers
+local function StripRealm(name)
+  if not name then return nil end
+  return string.gsub(name, "%-[^%-]+$", "")
+end
+
+local function IsMasterLooter()
+  local method, partyIndex, raidIndex = GetLootMethod()
+  if method ~= "master" then return false, nil end
+  local player = StripRealm(UnitName("player"))
+  if GetNumRaidMembers() > 0 then
+    if raidIndex and raidIndex > 0 then
+      local ml = StripRealm(UnitName("raid"..raidIndex))
+      return ml == player, ml
+    end
+  elseif GetNumPartyMembers() > 0 then
+    if partyIndex and partyIndex > 0 then
+      local ml = StripRealm(UnitName("party"..partyIndex))
+      return ml == player, ml
+    elseif partyIndex == 0 then
+      return true, player
+    end
+  end
+  return false, nil
+end
+
+local function CanUseLootAdmin()
+  local ok, isAdmin = pcall(function() return GuildRoll and GuildRoll:IsAdmin() end)
+  if not ok or not isAdmin then return false end
+  local method = nil
+  pcall(function() method = (select(1, GetLootMethod())) end)
+  if method == "master" then
+    return IsMasterLooter()
+  else
+    local ok2, isRL = pcall(IsRaidLeader)
+    return ok2 and isRL
+  end
+end
+
+local function AnnounceToChannel(text)
+  if not text then return end
+  if GetNumRaidMembers() > 0 then
+    pcall(function() SendChatMessage(text, "RAID") end)
+  else
+    pcall(function() SendChatMessage(text, "PARTY") end)
+  end
+end
+
+local function BroadcastAddon(prefix, message)
+  if not prefix or prefix == "" then return end
+  local channel = GetNumRaidMembers() > 0 and "RAID" or "PARTY"
+  if GuildRoll and GuildRoll.SendMessage then
+    pcall(function() GuildRoll:SendMessage(prefix, message) end)
+  else
+    if ChatThrottleLib and ChatThrottleLib.SendAddonMessage then
+      pcall(function() ChatThrottleLib:SendAddonMessage("BULK", prefix, message, channel) end)
+    else
+      pcall(function() SendAddonMessage(prefix, message, channel) end)
+    end
+  end
+end
+
+-- PRIORITY map
 local PRIORITY_MAP = {
   CSR = 4,
   SR = 4,
@@ -44,1518 +115,783 @@ local PRIORITY_MAP = {
   INVALID = -1
 }
 
-local RECENT_RAID_CACHE_SECONDS = 3
-
--- Module state
-local RollWithEP = {
-  currentSession = nil,  -- {itemLink, itemID, itemName, slotIndex, rolls=[], systemRolls=[], humanAnnounces=[], startTime, closed, winner, tieState}
-  enabled = false,
-  lastMLCheck = 0,
-  isMasterLooter = false,
-  currentMasterLooter = nil,
-  lootSlots = {}  -- Cached loot slots from current loot window
-}
-
--- Helper: Strip realm suffix from player name
-local function StripRealm(name)
-  if not name then return nil end
-  return string.gsub(name, "%-[^%-]+$", "")
-end
-
--- Helper: Check if local player is master looter
-local function IsMasterLooter()
-  local now = GetTime()
-  if now - RollWithEP.lastMLCheck < 1 then
-    return RollWithEP.isMasterLooter, RollWithEP.currentMasterLooter
-  end
-  
-  RollWithEP.lastMLCheck = now
-  local method, partyIndex, raidIndex = GetLootMethod()
-  
-  if method ~= "master" then
-    RollWithEP.isMasterLooter = false
-    RollWithEP.currentMasterLooter = nil
-    return false, nil
-  end
-  
-  local playerName = StripRealm(UnitName("player"))
-  
-  -- Check if in raid
-  if GetNumRaidMembers() > 0 then
-    if raidIndex and raidIndex > 0 then
-      local mlName = StripRealm(UnitName("raid" .. raidIndex))
-      RollWithEP.isMasterLooter = (mlName == playerName)
-      RollWithEP.currentMasterLooter = mlName
-      return RollWithEP.isMasterLooter, mlName
-    end
-  elseif GetNumPartyMembers() > 0 then
-    if partyIndex and partyIndex > 0 then
-      local mlName = StripRealm(UnitName("party" .. partyIndex))
-      RollWithEP.isMasterLooter = (mlName == playerName)
-      RollWithEP.currentMasterLooter = mlName
-      return RollWithEP.isMasterLooter, mlName
-    elseif partyIndex == 0 then
-      RollWithEP.isMasterLooter = true
-      RollWithEP.currentMasterLooter = playerName
-      return true, playerName
+-- CSV parser: RaidRes style (ID,Item,Attendee,Comment,SR+)
+local function splitCSVLine(line)
+  local fields = {}
+  local i = 1
+  local len = string.len(line)
+  while i <= len do
+    local c = string.sub(line, i, i)
+    if c == '"' then
+      local j = i + 1
+      local field = ""
+      while j <= len do
+        local ch = string.sub(line, j, j)
+        if ch == '"' then
+          local nextch = string.sub(line, j+1, j+1)
+          if nextch == '"' then
+            field = field .. '"'
+            j = j + 2
+          else
+            j = j + 1
+            break
+          end
+        else
+          field = field .. ch
+          j = j + 1
+        end
+      end
+      if string.sub(line, j, j) == "," then j = j + 1 end
+      table.insert(fields, field)
+      i = j
+    else
+      local j = i
+      local field = ""
+      while j <= len do
+        local ch = string.sub(line, j, j)
+        if ch == "," then break end
+        field = field .. ch
+        j = j + 1
+      end
+      if string.sub(line, j, j) == "," then j = j + 1 end
+      table.insert(fields, field)
+      i = j
     end
   end
-  
-  RollWithEP.isMasterLooter = false
-  RollWithEP.currentMasterLooter = nil
-  return false, nil
+  return fields
 end
 
--- Helper: Check if local player is raid leader
-local function IsRaidLeader()
-  if GetNumRaidMembers() > 0 then
-    return IsRaidLeader and IsRaidLeader() or false
+local function ImportSRCsvRaidRes(text)
+  if not text or text == "" then return {} end
+  local lines = {}
+  for line in string.gmatch(text, "[^\r\n]+") do table.insert(lines, line) end
+  if #lines == 0 then return {} end
+
+  local idxStart = 1
+  do
+    local header = lines[1]
+    local sampleFields = splitCSVLine(header)
+    local likelyHeader = false
+    if sampleFields and #sampleFields >= 3 then
+      local h0 = string.lower(sampleFields[1] or "")
+      if string.find(h0, "id") or string.find(h0, "item") or string.find(h0, "attendee") then likelyHeader = true end
+    end
+    if likelyHeader then idxStart = 2 end
   end
-  return false
+
+  local srmap = {}
+  for i = idxStart, #lines do
+    local line = lines[i]
+    if line and line ~= "" then
+      local f = splitCSVLine(line)
+      local id = tonumber(f[1]) or nil
+      local itemName = f[2] and (f[2] ~= "" and f[2] or nil) or nil
+      local attendee = f[3] and (f[3] ~= "" and f[3] or nil) or nil
+      if attendee and (id or itemName) then
+        local cleanName = StripRealm(attendee)
+        if not srmap[cleanName] then srmap[cleanName] = {} end
+        table.insert(srmap[cleanName], { itemID = id, itemName = itemName })
+      end
+    end
+  end
+
+  GuildRoll_rollForEPCache.lastImport = { timestamp = time(), srlist = srmap }
+  return srmap
 end
 
--- Helper: Check if local player can use RollWithEP MODULE features (roll tracking, etc.)
--- Permission: RAID + Admin + Master Loot method + (Master Looter OR Raid Leader when no ML)
-local function CanUseRollWithEP()
-  if not GuildRoll then
-    return false
+-- Legacy parser kept for backward-compatibility
+local function ParseSRCSV_Legacy(text)
+  if not text or text == "" then return {} end
+  local srdata = {}
+  for line in string.gmatch(text, "[^\r\n]+") do
+    local name, sr, weeks = string.match(line, "^%s*([^:]+):(%d+):(%d+)%s*$")
+    if name and sr then
+      name = StripRealm(name)
+      srdata[name] = { sr = tonumber(sr) or 0, weeks = tonumber(weeks) or 0 }
+    end
   end
-  
-  -- Pre-check 1: Must be in a raid (not party, not solo)
-  local ok, numRaidMembers = pcall(GetNumRaidMembers)
-  if not ok or not numRaidMembers or numRaidMembers == 0 then
-    return false
-  end
-  
-  -- Pre-check 2: Loot method must be Master Loot
-  local lootMethod, mlPartyIndex, mlRaidIndex = GetLootMethod()
-  if lootMethod ~= "master" then
-    return false  -- Must be master loot
-  end
-  
-  -- Pre-check 3: Must be Admin
-  if not GuildRoll.IsAdmin then
-    return false
-  end
-  
-  local ok, isAdmin = pcall(function() return GuildRoll:IsAdmin() end)
-  if not ok or not isAdmin then
-    return false
-  end
-  
-  -- Pre-check 4: Must be Master Looter OR Raid Leader
-  local isMl = IsMasterLooter()
-  local isRl = IsRaidLeader()
-  
-  if not isMl and not isRl then
-    return false
-  end
-  
-  return true
+  GuildRoll_rollForEPCache.lastImport = { timestamp = time(), srlist = srdata }
+  return srdata
 end
 
--- Helper: Check if can access MENU features (Import CSV, Set DE/Bank)
--- Permission: Admin + InRaid only (no Master Loot requirement)
--- This allows configuration even when not currently managing loot
-local function CanUseMenuFeatures()
-  if not GuildRoll then
-    return false
+-- Public import wrapper
+function RollWithEP_ImportCSV(text)
+  if not text or text == "" then
+    if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["No CSV data provided."] or "No CSV data provided.") end
+    return
   end
-  
-  -- Must be in a raid (not party, not solo)
-  local ok, numRaidMembers = pcall(GetNumRaidMembers)
-  if not ok or not numRaidMembers or numRaidMembers == 0 then
-    return false
+  local firstLine = string.match(text, "([^\r\n]+)")
+  if firstLine and string.find(firstLine, ",") then
+    local ok, sr = pcall(function() return ImportSRCsvRaidRes(text) end)
+    if ok and sr then
+      if GuildRoll and GuildRoll.defaultPrint then
+        local count = 0 for _ in pairs(sr) do count = count + 1 end
+        GuildRoll:defaultPrint(string.format(L and L["CSV imported successfully! %d players with soft reserves."] or "Imported SR data for %d players.", count))
+      end
+      return sr
+    end
   end
-  
-  -- Must be Admin - check if IsAdmin function exists
-  if not GuildRoll.IsAdmin or type(GuildRoll.IsAdmin) ~= "function" then
-    return false
-  end
-  
-  local ok, isAdmin = pcall(function() return GuildRoll:IsAdmin() end)
-  if not ok or not isAdmin then
-    return false
-  end
-  
-  return true
+  pcall(function() ParseSRCSV_Legacy(text) end)
 end
 
--- Helper: Get SR data for an item
--- Returns list of player names who have SR/CSR for the item
+-- SR helpers
 local function GetSRListForItem(itemID, itemName)
   local srlist = {}
   local found = {}
-  
-  -- Check RollForEP module data if available
-  if RollForEP and RollForEP.srData then
-    -- RollForEP.srData format: {playerName = {sr=count, weeks=count, items=[...]}}
-    for playerName, data in pairs(RollForEP.srData) do
-      if type(data) == "table" and data.items then
-        for _, item in ipairs(data.items) do
+  if GuildRoll and GuildRoll._RollForEP_currentLoot and GuildRoll._RollForEP_currentLoot.srlist then
+    local sessionSR = GuildRoll._RollForEP_currentLoot.srlist
+    for player, items in pairs(sessionSR) do
+      if type(items) == "table" then
+        for _, item in ipairs(items) do
           local match = false
-          if item.itemID and itemID and tonumber(item.itemID) == tonumber(itemID) then
-            match = true
-          elseif item.itemName and itemName and item.itemName == itemName then
-            match = true
+          if type(item) == "table" then
+            if item.itemID and itemID and tonumber(item.itemID) == tonumber(itemID) then match = true
+            elseif item.itemName and itemName and item.itemName == itemName then match = true
+            end
           end
-          
           if match then
-            local cleanName = StripRealm(playerName)
-            if cleanName and cleanName ~= "" and not found[cleanName] then
-              table.insert(srlist, cleanName)
-              found[cleanName] = true
-            end
+            local clean = StripRealm(player)
+            if clean and clean ~= "" and not found[clean] then table.insert(srlist, clean); found[clean] = true end
           end
         end
       end
     end
   end
-  
-  -- Fallback to cache
-  if table.getn(srlist) == 0 and GuildRoll_rollForEPCache and GuildRoll_rollForEPCache.lastImport then
-    local cache = GuildRoll_rollForEPCache.lastImport
-    if cache.srData then
-      for playerName, data in pairs(cache.srData) do
-        if type(data) == "table" and data.items then
-          for _, item in ipairs(data.items) do
-            local match = false
-            if item.itemID and itemID and tonumber(item.itemID) == tonumber(itemID) then
-              match = true
-            elseif item.itemName and itemName and item.itemName == itemName then
-              match = true
+
+  if table.getn(srlist) == 0 and GuildRoll_rollForEPCache and GuildRoll_rollForEPCache.lastImport and GuildRoll_rollForEPCache.lastImport.srlist then
+    local cacheSR = GuildRoll_rollForEPCache.lastImport.srlist
+    for player, items in pairs(cacheSR) do
+      if type(items) == "table" then
+        for _, item in ipairs(items) do
+          local match = false
+          if type(item) == "table" then
+            if item.itemID and itemID and tonumber(item.itemID) == tonumber(itemID) then match = true
+            elseif item.itemName and itemName and item.itemName == itemName then match = true
             end
-            
-            if match then
-              local cleanName = StripRealm(playerName)
-              if cleanName and cleanName ~= "" and not found[cleanName] then
-                table.insert(srlist, cleanName)
-                found[cleanName] = true
-              end
-            end
+          end
+          if match then
+            local clean = StripRealm(player)
+            if clean and clean ~= "" and not found[clean] then table.insert(srlist, clean); found[clean] = true end
           end
         end
       end
     end
   end
-  
   return srlist
 end
 
--- Helper: Get EP for a player
-local function GetPlayerEP(playerName)
-  if not GuildRoll or not GuildRoll.get_ep_v3 then
-    return 0
-  end
-  
-  local name = StripRealm(playerName)
-  local ok, ep = pcall(function() return GuildRoll:get_ep_v3(name) end)
-  if ok and ep then
-    return tonumber(ep) or 0
-  end
-  return 0
-end
-
--- Helper: Check if player is an alt
-local function IsPlayerAlt(playerName)
-  if not GuildRoll or not GuildRoll.parseAlt then
-    return false
-  end
-  
-  local name = StripRealm(playerName)
-  local ok, main = pcall(function() return GuildRoll:parseAlt(name) end)
-  if ok and main and type(main) == "string" then
-    local mainClean = StripRealm(main)
-    if mainClean ~= name then
-      return true, mainClean
-    end
-  end
-  return false, nil
-end
-
--- Helper: Parse human announce message for roll details
-local function ParseHumanAnnounce(msg, systemMin, systemMax)
-  if not msg then return nil end
-  
-  msg = string.lower(msg)
-  
-  -- CSR pattern
-  local csrMatch = string.match(msg, "cumulative%s+sr") or string.match(msg, "csr")
-  if csrMatch then
-    local weeks = tonumber(string.match(msg, "(%d+)%s+consecutive%s+weeks?")) or tonumber(string.match(msg, "(%d+)%s+weeks?"))
-    local ep = tonumber(string.match(msg, "with%s+(%d+)%s+ep"))
-    local min = tonumber(string.match(msg, "(%d+)%s*%-%s*%d+"))
-    local max = tonumber(string.match(msg, "%d+%s*%-%s*(%d+)"))
-    return "CSR", ep, min, max, weeks
-  end
-  
-  -- SR pattern
-  local srMatch = string.match(msg, "soft%s+reserve") or string.match(msg, "%s+sr%s+") or string.match(msg, "^sr%s+")
-  if srMatch then
-    local ep = tonumber(string.match(msg, "with%s+(%d+)%s+ep"))
-    local min = tonumber(string.match(msg, "(%d+)%s*%-%s*%d+"))
-    local max = tonumber(string.match(msg, "%d+%s*%-%s*(%d+)"))
-    return "SR", ep, min, max, nil
-  end
-  
-  -- EP/MS pattern
-  local epMatch = string.match(msg, "with%s+%d+%s+ep") or string.match(msg, "ms")
-  if epMatch then
-    local ep = tonumber(string.match(msg, "with%s+(%d+)%s+ep"))
-    return "EP", ep, systemMin, systemMax, nil
-  end
-  
-  return nil
-end
-
--- Helper: Infer roll type from system roll range
-local function InferRollType(min, max)
-  if max == 101 and min >= 1 then
-    return "101"
-  elseif max == 100 and min >= 1 then
-    return "100"
-  elseif max == 99 and min >= 1 then
-    return "99"
-  elseif max == 98 and min >= 1 then
-    return "98"
-  end
-  return nil
-end
-
--- Helper: Validate a roll entry
-local function ValidateRoll(entry)
-  local rollType = entry.rollType
-  local playerName = entry.playerName
-  local value = entry.value
-  local min = entry.min
-  local max = entry.max
-  local announcedEP = entry.announcedEP
-  local flags = {}
-  
-  -- Check if player is alt
-  local isAlt, mainName = IsPlayerAlt(playerName)
-  if isAlt then
-    table.insert(flags, "ALT")
-    if mainName then
-      table.insert(flags, "Main:" .. mainName)
-    end
-  end
-  
-  -- Validate based on roll type
-  if rollType == "CSR" or rollType == "SR" or rollType == "EP" then
-    if not announcedEP then
-      return false, "INVALID", flags
-    end
-    
-    local actualEP = GetPlayerEP(playerName)
-    if math.abs(actualEP - announcedEP) > 0.5 then
-      return false, "INVALID", flags
-    end
-  elseif rollType == "101" or rollType == "100" or rollType == "99" or rollType == "98" then
-    if min < 1 then
-      return false, "INVALID", flags
-    end
-    
-    if value < min or value > max then
-      return false, "INVALID", flags
-    end
-  end
-  
-  return true, rollType, flags
-end
-
--- Helper: Match system roll with human announce
-local function MatchRollMessages()
-  if not RollWithEP.currentSession then return end
-  
-  local session = RollWithEP.currentSession
-  
-  -- Process unmatched system rolls
-  for i, sysRoll in ipairs(session.systemRolls) do
-    if not sysRoll.matched then
-      local playerName = sysRoll.playerName
-      local rollValue = sysRoll.value
-      local rollMin = sysRoll.min
-      local rollMax = sysRoll.max
-      local rollTime = sysRoll.timestamp
-      
-      -- Look for matching human announce
-      local matchedAnnounce = nil
-      for j, announce in ipairs(session.humanAnnounces) do
-        if not announce.matched and announce.playerName == playerName then
-          local timeDiff = math.abs(announce.timestamp - rollTime)
-          if timeDiff <= RECENT_RAID_CACHE_SECONDS then
-            matchedAnnounce = announce
-            break
+local function GetSRType(itemID, itemName, playerName)
+  if GuildRoll and GuildRoll._RollForEP_currentLoot and GuildRoll._RollForEP_currentLoot.srlist then
+    local sessionSR = GuildRoll._RollForEP_currentLoot.srlist
+    local clean = StripRealm(playerName)
+    if sessionSR[playerName] or sessionSR[clean] then
+      local items = sessionSR[playerName] or sessionSR[clean]
+      if type(items) == "table" then
+        for _, item in ipairs(items) do
+          if type(item) == "table" then
+            local match = false
+            if item.itemID and itemID and tonumber(item.itemID) == tonumber(itemID) then match = true
+            elseif item.itemName and itemName and item.itemName == itemName then match = true
+            end
+            if match then
+              if item.weeks and tonumber(item.weeks) and tonumber(item.weeks) > 0 then return "CSR wk" .. item.weeks else return "SR" end
+            end
           end
         end
       end
-      
-      -- Create roll entry
-      local rollType = nil
-      local announcedEP = nil
-      local srWeeks = nil
-      
-      if matchedAnnounce then
-        rollType, announcedEP, _, _, srWeeks = ParseHumanAnnounce(matchedAnnounce.message, rollMin, rollMax)
-        matchedAnnounce.matched = true
-      end
-      
-      -- Fallback: infer from system roll range
-      if not rollType then
-        rollType = InferRollType(rollMin, rollMax)
-      end
-      
-      if rollType then
-        local entry = {
-          playerName = playerName,
-          value = rollValue,
-          min = rollMin,
-          max = rollMax,
-          rollType = rollType,
-          announcedEP = announcedEP,
-          srWeeks = srWeeks,
-          timestamp = rollTime
-        }
-        
-        local isValid, validatedType, flags = ValidateRoll(entry)
-        if not isValid then
-          entry.rollType = "INVALID"
-        else
-          entry.rollType = validatedType
-        end
-        entry.flags = flags
-        
-        table.insert(session.rolls, entry)
-      end
-      
-      sysRoll.matched = true
     end
   end
-  
-  -- Update winner and tie state
-  UpdateWinnerAndTieState()
-  RefreshTablet()
+  if GuildRoll_rollForEPCache and GuildRoll_rollForEPCache.lastImport and GuildRoll_rollForEPCache.lastImport.srlist then
+    local cacheSR = GuildRoll_rollForEPCache.lastImport.srlist
+    local clean = StripRealm(playerName)
+    if cacheSR[playerName] or cacheSR[clean] then
+      local items = cacheSR[playerName] or cacheSR[clean]
+      if type(items) == "table" then
+        for _, item in ipairs(items) do
+          if type(item) == "table" then
+            local match = false
+            if item.itemID and itemID and tonumber(item.itemID) == tonumber(itemID) then match = true
+            elseif item.itemName and itemName and item.itemName == itemName then match = true
+            end
+            if match then
+              if item.weeks and tonumber(item.weeks) and tonumber(item.weeks) > 0 then return "CSR wk" .. item.weeks else return "SR" end
+            end
+          end
+        end
+      end
+    end
+  end
+  return nil
 end
 
--- Helper: Update winner and tie state
-function UpdateWinnerAndTieState()
-  if not RollWithEP.currentSession or table.getn(RollWithEP.currentSession.rolls) == 0 then
-    RollWithEP.currentSession.winner = nil
-    RollWithEP.currentSession.tieState = nil
-    return
+local function HasSR(playerName, srlist)
+  if not srlist or table.getn(srlist) == 0 then return false end
+  local clean = StripRealm(playerName)
+  for _, n in ipairs(srlist) do if StripRealm(n) == clean then return true end end
+  return false
+end
+
+-- UI: Custom Loot Frame
+local function CreateLootFrame()
+  if RollMod.frames.loot then return RollMod.frames.loot end
+  local f = CreateFrame("Frame", "GuildRoll_LootFrame", UIParent, "BasicFrameTemplate")
+  f:SetSize(340, 240)
+  f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+  f:Hide()
+
+  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  f.title:SetPoint("TOP", 0, -6)
+  f.title:SetText(L and L["RollWithEP - Loot Session"] or "Loot")
+
+  f.content = CreateFrame("Frame", nil, f)
+  f.content:SetPoint("TOPLEFT", 10, -30)
+  f.content:SetPoint("BOTTOMRIGHT", -10, 10)
+  f.rows = {}
+
+  local function createRow(i)
+    local row = CreateFrame("Frame", "GuildRoll_LootRow"..i, f.content)
+    row:SetWidth(320); row:SetHeight(28)
+    if i == 1 then row:SetPoint("TOPLEFT", f.content, "TOPLEFT", 0, 0)
+    else row:SetPoint("TOPLEFT", f.rows[i-1], "BOTTOMLEFT", 0, -4) end
+
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(24, 24); row.icon:SetPoint("LEFT", 2, 0)
+    row.text = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.text:SetPoint("LEFT", row.icon, "RIGHT", 6, 0); row.text:SetWidth(210); row.text:SetJustifyH("LEFT")
+    row.menuBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.menuBtn:SetSize(86, 20); row.menuBtn:SetPoint("RIGHT", -2, 0); row.menuBtn:SetText(L and L["Open"] or "Open")
+    return row
   end
-  
-  local session = RollWithEP.currentSession
-  
-  -- Sort rolls by priority then value
-  local sortedRolls = {}
-  for _, roll in ipairs(session.rolls) do
-    if roll.rollType ~= "INVALID" then
-      table.insert(sortedRolls, roll)
+
+  f.Update = function(self)
+    local num = #RollMod.lootSlots
+    for i = 1, num do
+      local r = self.rows[i]
+      if not r then r = createRow(i); self.rows[i] = r end
+      local data = RollMod.lootSlots[i]
+      r.text:SetText(data.itemLink or data.itemName or "<unknown>")
+      if data.texture then r.icon:SetTexture(data.texture) else r.icon:SetTexture(nil) end
+
+      r.menuBtn:SetScript("OnClick", function()
+        if D then
+          pcall(function()
+            D:Open(UIParent,
+              "children", function()
+                D:AddLine("text", data.itemLink or data.itemName or "Item", "isTitle", true)
+                D:AddLine()
+                D:AddLine("text", L and L["Start Rolls"] or "Start session",
+                  "func", function()
+                    if CanUseLootAdmin() then RollMod:StartSessionForItem(data) else if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Only master looter or raid leader admin can use this feature."] or "No permission.") end end
+                    pcall(function() D:Close() end)
+                  end
+                )
+                D:AddLine("text", L and L["Give to DE/Bank"] or "Give to DE/Bank",
+                  "func", function() if CanUseLootAdmin() then RollMod:GiveToDEBank(data) end; pcall(function() D:Close() end) end)
+                D:AddLine("text", L and L["Give to Player"] or "Give to Member",
+                  "func", function()
+                    if CanUseLootAdmin() then
+                      if GetNumRaidMembers() > 0 then
+                        local members = {}
+                        for ii = 1, GetNumRaidMembers() do local nm = UnitName("raid"..ii) if nm then table.insert(members, StripRealm(nm)) end end
+                        table.sort(members)
+                        D:Open(UIParent, "children", function()
+                          D:AddLine("text", L and L["Select Player"] or "Select Player", "isTitle", true)
+                          for _,nm in ipairs(members) do D:AddLine("text", nm, "func", function() RollMod:GiveToPlayer(nm, data); pcall(function() D:Close() end) end) end
+                        end)
+                      else
+                        StaticPopupDialogs["GUILDROLL_GIVE_PLAYER"] = {
+                          text = L and L["Choose a raid member:"] or "Give to player:",
+                          button1 = L and L["Confirm"] or "Confirm",
+                          button2 = L and L["Cancel"] or "Cancel",
+                          hasEditBox = true,
+                          OnAccept = function() local name = this:GetParent().editBox:GetText(); RollMod:GiveToPlayer(name, data) end,
+                          timeout = 0, whileDead = true, hideOnEscape = true
+                        }
+                        StaticPopup_Show("GUILDROLL_GIVE_PLAYER")
+                      end
+                    end
+                    pcall(function() D:Close() end)
+                  end)
+              end
+            )
+          end)
+        else
+          StaticPopupDialogs["GUILDROLL_LOOT_MENU"] = {
+            text = "Choose action for: ".. (data.itemLink or data.itemName or "item"),
+            button1 = L and L["Start Rolls"] or "Start session",
+            button2 = L and L["Give to Player"] or "Give to Member",
+            OnAccept = function() if CanUseLootAdmin() then RollMod:StartSessionForItem(data) end end,
+            OnCancel = function() if CanUseLootAdmin() then RollMod:GiveToPlayer(nil, data) end end,
+            timeout = 0, whileDead = true, hideOnEscape = true
+          }
+          StaticPopup_Show("GUILDROLL_LOOT_MENU")
+        end
+      end)
+
+      r:SetShown(true)
     end
+    for i = num + 1, #self.rows do self.rows[i]:Hide() end
   end
-  
-  table.sort(sortedRolls, function(a, b)
-    local priorityA = PRIORITY_MAP[a.rollType] or 0
-    local priorityB = PRIORITY_MAP[b.rollType] or 0
-    if priorityA ~= priorityB then
-      return priorityA > priorityB
+
+  RollMod.frames.loot = f
+  return f
+end
+
+-- Roll Table (session UI)
+local function CreateRollTable()
+  if RollMod.frames.rollTable then return RollMod.frames.rollTable end
+  local f = CreateFrame("Frame", "GuildRoll_RollTable", UIParent, "BasicFrameTemplate")
+  f:SetSize(520, 420)
+  f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+  f:Hide()
+
+  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  f.title:SetPoint("TOP", 0, -6)
+  f.title:SetText(L and L["RollWithEP - Loot Session"] or "Roll Session")
+
+  f.closeRollsBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.closeRollsBtn:SetSize(120, 22); f.closeRollsBtn:SetPoint("TOPLEFT", 12, -30)
+  f.closeRollsBtn:SetText(L and L["Close Rolls"] or "Close rolls")
+  f.closeRollsBtn:SetScript("OnClick", function() RollMod:CloseSession() end)
+
+  f.giveDEBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.giveDEBtn:SetSize(140,22); f.giveDEBtn:SetPoint("LEFT", f.closeRollsBtn, "RIGHT", 8, 0)
+  f.giveDEBtn:SetText(L and L["Give to DE/Bank"] or "Give to DE/Bank")
+  f.giveDEBtn:SetScript("OnClick", function() if RollMod.currentSession then RollMod:GiveToDEBank({ itemLink = RollMod.currentSession.itemLink }) end end)
+
+  f.giveMemberBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.giveMemberBtn:SetSize(140,22); f.giveMemberBtn:SetPoint("LEFT", f.giveDEBtn, "RIGHT", 8, 0)
+  f.giveMemberBtn:SetText(L and L["Give to Player"] or "Give to Member")
+  f.giveMemberBtn:SetScript("OnClick", function()
+    if RollMod.currentSession then
+      if GetNumRaidMembers() > 0 and D then
+        local members = {}
+        for ii=1,GetNumRaidMembers() do local nm = UnitName("raid"..ii) if nm then table.insert(members, StripRealm(nm)) end end
+        table.sort(members)
+        D:Open(UIParent, "children", function()
+          D:AddLine("text", L and L["Select Player"] or "Select Player", "isTitle", true)
+          for _, nm in ipairs(members) do D:AddLine("text", nm, "func", function() RollMod:GiveToPlayer(nm, { itemLink = RollMod.currentSession.itemLink }); pcall(function() D:Close() end) end) end
+        end)
+      else
+        StaticPopupDialogs["GUILDROLL_GIVE_PLAYER2"] = {
+          text = L and L["Choose a raid member:"] or "Give to player:",
+          button1 = L and L["Confirm"] or "Confirm",
+          button2 = L and L["Cancel"] or "Cancel",
+          hasEditBox = true,
+          OnAccept = function() local name = this:GetParent().editBox:GetText(); RollMod:GiveToPlayer(name, { itemLink = RollMod.currentSession.itemLink }) end,
+          timeout = 0, whileDead = true, hideOnEscape = true
+        }
+        StaticPopup_Show("GUILDROLL_GIVE_PLAYER2")
+      end
     end
-    return a.value > b.value
   end)
-  
-  if table.getn(sortedRolls) == 0 then
-    session.winner = nil
-    session.tieState = nil
-    return
+
+  f.askTieBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+  f.askTieBtn:SetSize(120,22); f.askTieBtn:SetPoint("LEFT", f.giveMemberBtn, "RIGHT", 8, 0)
+  f.askTieBtn:SetText(L and L["Ask Tie Roll"] or "Ask Tie Roll")
+  f.askTieBtn:SetScript("OnClick", function() RollMod:AskTieRoll() end)
+
+  local header = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  header:SetPoint("TOPLEFT", 12, -68)
+  header:SetText((L and L["Player"] or "Player").."   "..(L and L["SR"] or "SR").."   "..(L and L["Type"] or "Type").."   "..(L and L["Roll"] or "Roll"))
+
+  f.rows = {}
+  local function createRow(i)
+    local row = {}
+    row.frame = CreateFrame("Frame", nil, f)
+    row.frame:SetWidth(480); row.frame:SetHeight(18)
+    row.frame:SetPoint("TOPLEFT", 12, -90 - ((i-1)*20))
+    row.player = row.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.player:SetPoint("LEFT", 0, 0); row.player:SetWidth(180)
+    row.sr = row.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.sr:SetPoint("LEFT", 190, 0); row.sr:SetWidth(50)
+    row.type = row.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.type:SetPoint("LEFT", 260, 0); row.type:SetWidth(120)
+    row.roll = row.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    row.roll:SetPoint("LEFT", 390, 0); row.roll:SetWidth(80)
+    return row
   end
-  
-  -- Check for tie at top
-  local topRoll = sortedRolls[1]
-  local topPriority = PRIORITY_MAP[topRoll.rollType] or 0
-  local topValue = topRoll.value
-  
-  local tiedPlayers = {topRoll.playerName}
-  for i = 2, table.getn(sortedRolls) do
-    local roll = sortedRolls[i]
-    local priority = PRIORITY_MAP[roll.rollType] or 0
-    if priority == topPriority and roll.value == topValue then
-      table.insert(tiedPlayers, roll.playerName)
+
+  f.UpdateRows = function(self)
+    local rolls = RollMod.currentSession and RollMod.currentSession.rolls or {}
+    for i = 1, 40 do
+      if not self.rows[i] then self.rows[i] = createRow(i) end
+      local r = self.rows[i]
+      if rolls[i] then
+        r.player:SetText(rolls[i].player)
+        r.sr:SetText(rolls[i].sr and "YES" or "")
+        r.type:SetText(rolls[i].type or "")
+        r.roll:SetText(rolls[i].roll and tostring(rolls[i].roll) or "")
+        r.frame:Show()
+      else
+        r.frame:Hide()
+      end
+    end
+    if not self.winnerText then
+      self.winnerText = self:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+      self.winnerText:SetPoint("BOTTOM", 0, 12)
+    end
+    local winner = (RollMod.currentSession and RollMod.currentSession.winner) or "-"
+    self.winnerText:SetText((L and L["Winner"] or "Winner")..": "..winner)
+  end
+
+  RollMod.frames.rollTable = f
+  return f
+end
+
+-- Helpers to find slot index and candidate index to attempt GiveMasterLoot
+local function FindSlotIndexForItem(itemLink, itemID)
+  -- try cached lootSlots first
+  if RollMod.lootSlots then
+    for _, it in ipairs(RollMod.lootSlots) do
+      if it.itemLink and itemLink and it.itemLink == itemLink then return it.slot end
+      if it.itemID and itemID and it.itemID == itemID then return it.slot end
+    end
+  end
+  -- fallback: scan current loot window
+  for i=1, GetNumLootItems() do
+    local link = GetLootSlotLink(i)
+    if link and itemLink and link == itemLink then return i end
+  end
+  return nil
+end
+
+local function GetCandidateIndexForPlayer(slotIndex, playerName)
+  if not slotIndex or not playerName then return nil end
+  playerName = StripRealm(playerName)
+  -- iterate master loot candidates (slot candidates)
+  for i = 1, 40 do
+    local name = nil
+    if GetMasterLootCandidate then
+      name = GetMasterLootCandidate(slotIndex, i)
     else
+      -- fallback not available -> try raid roster mapping
+      -- can't determine candidate via API: return nil
+      name = nil
+    end
+    if name then
+      if StripRealm(name) == playerName then return i end
+    else
+      -- no candidate at this index -> stop
       break
     end
   end
-  
-  if table.getn(tiedPlayers) > 1 then
-    session.tieState = {
-      players = tiedPlayers,
-      priority = topPriority,
-      value = topValue
-    }
-    session.winner = "Tie"
-  else
-    session.winner = topRoll.playerName
-    session.tieState = nil
-  end
+  return nil
 end
 
--- Event handler: CHAT_MSG_SYSTEM (system roll messages)
-local function OnSystemMessage(msg)
-  if not RollWithEP.enabled or not RollWithEP.currentSession then return end
-  
-  -- Parse: "Name rolls N (min-max)"
-  local playerName, value, min, max = string.match(msg, "(.+) rolls (%d+) %((%d+)%-(%d+)%)")
-  if playerName and value and min and max then
-    playerName = StripRealm(playerName)
-    value = tonumber(value)
-    min = tonumber(min)
-    max = tonumber(max)
-    
-    local entry = {
-      playerName = playerName,
-      value = value,
-      min = min,
-      max = max,
-      timestamp = GetTime(),
-      matched = false
-    }
-    
-    table.insert(RollWithEP.currentSession.systemRolls, entry)
-    MatchRollMessages()
-  end
-end
+-- Start session
+function RollMod:StartSessionForItem(itemData)
+  if not CanUseLootAdmin() then if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Only master looter or raid leader admin can use this feature."] or "No permission.") end return end
+  local itemLink = itemData and (itemData.itemLink or itemData.itemName) or "Unknown"
+  local itemID = itemData and itemData.itemID
+  local itemName = nil
+  if itemLink then itemName = string.match(itemLink, "%[(.-)%]") or itemData.itemName end
 
--- Event handler: CHAT_MSG_RAID and CHAT_MSG_RAID_LEADER (human announces)
-local function OnRaidMessage(msg, sender)
-  if not RollWithEP.enabled or not RollWithEP.currentSession then return end
-  
-  sender = StripRealm(sender)
-  
-  -- Check if message contains roll-related keywords
-  local lowerMsg = string.lower(msg)
-  if string.match(lowerMsg, "roll") or string.match(lowerMsg, "sr") or string.match(lowerMsg, "ep") or string.match(lowerMsg, "csr") then
-    local entry = {
-      playerName = sender,
-      message = msg,
-      timestamp = GetTime(),
-      matched = false
-    }
-    
-    table.insert(RollWithEP.currentSession.humanAnnounces, entry)
-    MatchRollMessages()
-  end
-end
-
--- UI: Refresh Tablet
-function RefreshTablet()
-  if not T:IsRegistered("RollWithEP") then
-    T:Register("RollWithEP",
-      "children", function()
-        T:SetTitle(L["RollWithEP - Loot Session"])
-        BuildTablet()
-      end,
-      "clickable", true,
-      "showTitleWhenDetached", true,
-      "showHintWhenDetached", true,
-      "cantAttach", true,
-      "menu", function()
-        if GuildRoll and GuildRoll.SafeDewdropAddLine then
-          GuildRoll:SafeDewdropAddLine(
-            "text", L["Close"],
-            "func", function() 
-              pcall(function() T:Close("RollWithEP") end)
-            end
-          )
-        else
-          D:AddLine(
-            "text", L["Close"],
-            "func", function() 
-              pcall(function() T:Close("RollWithEP") end)
-            end
-          )
-        end
-      end
-    )
-  end
-  
-  if not T:IsAttached("RollWithEP") then
-    pcall(function() T:Open("RollWithEP") end)
-  end
-  pcall(function() T:Refresh("RollWithEP") end)
-end
-
--- UI: Build Tablet content
-function BuildTablet()
-  if not RollWithEP.currentSession then
-    T:AddLine("text", L["No active loot session"], "textR", 1, "textG", 0, "textB", 0)
-    return
-  end
-  
-  local session = RollWithEP.currentSession
-  
-  -- Header
-  T:AddLine(
-    "text", string.format(L["Item: %s"], session.itemLink or "Unknown"),
-    "textR", 1, "textG", 0.82, "textB", 0
-  )
-  
-  T:AddLine(
-    "text", string.format(L["Status: %s"], session.closed and L["CLOSED"] or L["OPEN"]),
-    "textR", 1, "textG", session.closed and 0 or 1, "textB", 0
-  )
-  
-  -- Winner
-  if session.winner then
-    T:AddLine(
-      "text", string.format(L["Winner: %s"], session.winner),
-      "textR", 0, "textG", 1, "textB", 1
-    )
-  end
-  
-  T:AddLine("text", " ")
-  
-  -- Sort rolls by priority then value
-  local sortedRolls = {}
-  for _, roll in ipairs(session.rolls) do
-    table.insert(sortedRolls, roll)
-  end
-  
-  table.sort(sortedRolls, function(a, b)
-    local priorityA = PRIORITY_MAP[a.rollType] or 0
-    local priorityB = PRIORITY_MAP[b.rollType] or 0
-    if priorityA ~= priorityB then
-      return priorityA > priorityB
-    end
-    return a.value > b.value
-  end)
-  
-  -- Column headers
-  T:AddLine(
-    "text", L["Player"],
-    "text2", L["Roll"],
-    "text3", L["Type"],
-    "text4", L["Flags"],
-    "textR", 1, "textG", 1, "textB", 1,
-    "textR2", 1, "textG2", 1, "textB2", 1,
-    "textR3", 1, "textG3", 1, "textB3", 1,
-    "textR4", 1, "textG4", 1, "textB4", 1
-  )
-  
-  -- Rolls
-  for i, roll in ipairs(sortedRolls) do
-    local color = {r = 1, g = 1, b = 1}
-    if roll.rollType == "INVALID" then
-      color = {r = 1, g = 0, b = 0}
-    elseif roll.playerName == session.winner and session.winner ~= "Tie" then
-      color = {r = 0, g = 1, b = 0}
-    end
-    
-    local flagsText = table.concat(roll.flags or {}, ", ")
-    
-    T:AddLine(
-      "text", roll.playerName,
-      "text2", string.format("%d (%d-%d)", roll.value, roll.min, roll.max),
-      "text3", roll.rollType,
-      "text4", flagsText,
-      "textR", color.r, "textG", color.g, "textB", color.b,
-      "textR2", color.r, "textG2", color.g, "textB2", color.b,
-      "textR3", color.r, "textG3", color.g, "textB3", color.b,
-      "textR4", color.r, "textG4", color.g, "textB4", color.b
-    )
-  end
-  
-  T:AddLine("text", " ")
-  
-  -- Actions
-  if not session.closed then
-    if session.tieState then
-      -- Show Ask Tie Roll button
-      T:AddLine(
-        "text", "[" .. L["Ask Tie Roll"] .. "]",
-        "textR", 1, "textG", 0.5, "textB", 0,
-        "func", function()
-          RollWithEP_AskTieRoll()
-        end
-      )
-    else
-      -- Show Stop Rolls button
-      T:AddLine(
-        "text", "[" .. L["Stop Rolls"] .. "]",
-        "textR", 1, "textG", 0, "textB", 0,
-        "func", function()
-          RollWithEP_CloseRolls()
-        end
-      )
-    end
-  else
-    -- Show Give buttons after closed
-    if session.winner and session.winner ~= "Tie" then
-      T:AddLine(
-        "text", "[" .. L["Give to Winner"] .. "]",
-        "textR", 0, "textG", 1, "textB", 0,
-        "func", function()
-          RollWithEP_GiveToWinner()
-        end
-      )
-    end
-  end
-  
-  -- Always show DE/Bank and Give to Player
-  T:AddLine(
-    "text", "[" .. L["Give to DE/Bank"] .. "]",
-    "textR", 0, "textG", 1, "textB", 1,
-    "func", function()
-      RollWithEP_GiveToDE()
-    end
-  )
-  
-  T:AddLine(
-    "text", "[" .. L["Give to Player"] .. "]",
-    "textR", 0, "textG", 1, "textB", 0,
-    "func", function()
-      ShowPlayerPicker()
-    end
-  )
-end
-
--- Helper: Show player picker
-function ShowPlayerPicker()
-  if not RollWithEP.currentSession then return end
-  
-  -- Build list of raid members
-  local raidMembers = {}
-  local numRaid = GetNumRaidMembers()
-  if numRaid > 0 then
-    for i = 1, numRaid do
-      local name = GetRaidRosterInfo(i)
-      if name then
-        table.insert(raidMembers, StripRealm(name))
-      end
-    end
-  else
-    local numParty = GetNumPartyMembers()
-    if numParty > 0 then
-      table.insert(raidMembers, StripRealm(UnitName("player")))
-      for i = 1, numParty do
-        local name = UnitName("party" .. i)
-        if name then
-          table.insert(raidMembers, StripRealm(name))
-        end
-      end
-    end
-  end
-  
-  if table.getn(raidMembers) == 0 then
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(L["No raid members found."])
-    end
-    return
-  end
-  
-  -- Show picker using Dewdrop
-  pcall(function()
-    D:Open("RollWithEP_PlayerPicker",
-      "children", function()
-        D:AddLine(
-          "text", L["Select Player"],
-          "isTitle", true
-        )
-        for _, name in ipairs(raidMembers) do
-          if GuildRoll and GuildRoll.SafeDewdropAddLine then
-            GuildRoll:SafeDewdropAddLine(
-              "text", name,
-              "func", function()
-                RollWithEP_GiveToPlayer(name)
-                pcall(function() D:Close() end)
-              end
-            )
-          else
-            D:AddLine(
-              "text", name,
-              "func", function()
-                RollWithEP_GiveToPlayer(name)
-                pcall(function() D:Close() end)
-              end
-            )
-          end
-        end
-      end
-    )
-  end)
-end
-
--- API: Start roll for item
-function RollWithEP_StartRollForItem(itemLink, itemID, itemName, slotIndex)
-  if not CanUseRollWithEP() then
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(L["Only master looter or raid leader admin can use this feature."])
-    end
-    return
-  end
-  
-  -- Create new session
-  RollWithEP.currentSession = {
+  local srlist = GetSRListForItem(itemID, itemName) or {}
+  local session = {
     itemLink = itemLink,
     itemID = itemID,
     itemName = itemName,
-    slotIndex = slotIndex,
+    srlist = srlist,
     rolls = {},
-    systemRolls = {},
-    humanAnnounces = {},
-    startTime = GetTime(),
-    closed = false,
     winner = nil,
-    tieState = nil
+    tieState = nil,
+    closed = false,
+    startTime = GetTime(),
+    slotIndex = itemData and itemData.slot or nil
   }
-  
-  RollWithEP.enabled = true
-  
-  -- Get SR list for item
-  local srList = GetSRListForItem(itemID, itemName)
-  
-  -- Determine chat channel
-  local channel = "SAY"
-  if GetNumRaidMembers() > 0 then
-    channel = "RAID"
+
+  -- Pre-populate with SR players (SR = YES) so rows are visible immediately
+  for _, player in ipairs(srlist) do
+    local clean = StripRealm(player)
+    table.insert(session.rolls, { player = clean, sr = true, type = "", roll = "" })
   end
-  
-  -- Announce in chat
-  local message = string.format(L["Roll for %s"], itemLink)
-  if table.getn(srList) > 0 then
-    local srNames = table.concat(srList, ", ")
-    if table.getn(srList) > 7 then
-      srNames = table.concat({srList[1], srList[2], srList[3], srList[4], srList[5], srList[6], srList[7]}, ", ")
-      srNames = srNames .. " +" .. (table.getn(srList) - 7) .. " more"
-    end
-    message = message .. " - " .. string.format(L["SoftReserves: %s"], srNames)
-  end
-  
-  SendChatMessage(message, channel)
-  
-  -- Open Tablet
-  RefreshTablet()
-  
-  if GuildRoll and GuildRoll.defaultPrint then
-    GuildRoll:defaultPrint(string.format(L["Started roll session for: %s"], itemLink))
-  end
+
+  self.currentSession = session
+  GuildRoll._RollForEP_currentLoot = session
+
+  AnnounceToChannel(string.format(L and L["Start rolling for %s"] or "Start rolling for %s", itemLink))
+  if GuildRoll and GuildRoll.VARS and GuildRoll.VARS.prefix then BroadcastAddon(GuildRoll.VARS.prefix, "ROLL_START:" .. (itemLink or "unknown")) end
+
+  local rt = CreateRollTable()
+  rt:Show()
+  rt:UpdateRows()
 end
 
--- API: Close rolls (announce winner and change to Give buttons)
-function RollWithEP_CloseRolls()
-  if not CanUseRollWithEP() then
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(L["Only master looter or raid leader admin can use this feature."])
+-- Process incoming roll
+function RollMod:ProcessIncomingRoll(player, rollType, rollValue)
+  if not self.currentSession then return end
+  player = StripRealm(player)
+  rollType = tostring(rollType or "SYS")
+  local numericRoll = tonumber(rollValue) or rollValue
+
+  local priority = PRIORITY_MAP[rollType] or PRIORITY_MAP.INVALID
+  if rollType == "SYS" and tonumber(numericRoll) then priority = 2 end
+
+  local isSRMember = false
+  if self.currentSession and self.currentSession.srlist then isSRMember = HasSR(player, self.currentSession.srlist) end
+  if rollType == "SR" or rollType == "CSR" then isSRMember = true end
+
+  local found = nil
+  for _, r in ipairs(self.currentSession.rolls) do if r.player == player then found = r; break end end
+  if not found then
+    found = { player = player, type = rollType, roll = numericRoll, priority = priority, sr = isSRMember }
+    table.insert(self.currentSession.rolls, found)
+  else
+    found.type = rollType
+    found.roll = numericRoll
+    found.priority = priority
+    found.sr = isSRMember
+  end
+
+  table.sort(self.currentSession.rolls, function(a,b)
+    if (a.priority or -999) ~= (b.priority or -999) then return (a.priority or -999) > (b.priority or -999) end
+    local ra = tonumber(a.roll) or -math.huge
+    local rb = tonumber(b.roll) or -math.huge
+    return ra > rb
+  end)
+
+  local top = self.currentSession.rolls[1]
+  if not top then
+    self.currentSession.winner = nil; self.currentSession.tieState = nil
+  else
+    local ties = {}
+    for i, rr in ipairs(self.currentSession.rolls) do
+      if rr.priority == top.priority and (tonumber(rr.roll) or rr.roll) == (tonumber(top.roll) or top.roll) then table.insert(ties, rr.player) else break end
     end
-    return
+    if #ties == 1 then self.currentSession.winner = top.player; self.currentSession.tieState = nil
+    else self.currentSession.winner = "Tie"; self.currentSession.tieState = { players = ties, itemLink = self.currentSession.itemLink, ts = GetTime() } end
   end
-  
-  if not RollWithEP.currentSession then
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(L["No active loot session."])
-    end
-    return
-  end
-  
-  RollWithEP.currentSession.closed = true
-  
-  -- Announce winner
-  local channel = "SAY"
-  if GetNumRaidMembers() > 0 then
-    channel = "RAID"
-  end
-  
-  if RollWithEP.currentSession.winner and RollWithEP.currentSession.winner ~= "Tie" then
-    local message = string.format(L["Winner: %s"], RollWithEP.currentSession.winner) .. " - " .. RollWithEP.currentSession.itemLink
+
+  if RollMod.frames.rollTable then RollMod.frames.rollTable:UpdateRows() end
+end
+
+-- Ask tie roll
+function RollMod:AskTieRoll()
+  if not CanUseLootAdmin() then return end
+  if not self.currentSession or not self.currentSession.tieState then return end
+  local tiedPlayers = self.currentSession.tieState.players
+  local playerList = table.concat(tiedPlayers, ", ")
+  local channel = GetNumRaidMembers() > 0 and "RAID" or "SAY"
+  local message = string.format(L and L["Tie roll for %s - Roll now!"] or "Tie roll for %s - Roll now!", self.currentSession.itemLink) .. " (" .. playerList .. ")"
+  SendChatMessage(message, channel)
+  self.currentSession.rolls = {}
+  self.currentSession.tieState = nil
+  self.currentSession.winner = nil
+  if RollMod.frames.rollTable then RollMod.frames.rollTable:UpdateRows() end
+end
+
+-- Close session
+function RollMod:CloseSession()
+  if not CanUseLootAdmin() then return end
+  if not self.currentSession then if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["No active loot session."] or "No active loot session.") end return end
+  self.currentSession.closed = true
+  local channel = GetNumRaidMembers() > 0 and "RAID" or "SAY"
+  if self.currentSession.winner and self.currentSession.winner ~= "Tie" then
+    local message = string.format(L and L["Winner: %s"] or "Winner: %s", self.currentSession.winner) .. " - " .. (self.currentSession.itemLink or "")
     SendChatMessage(message, channel)
   end
-  
-  -- Refresh Tablet
-  RefreshTablet()
-  
-  if GuildRoll and GuildRoll.defaultPrint then
-    GuildRoll:defaultPrint(L["Roll session closed."])
-  end
+  if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Roll session closed."] or "Roll session closed.") end
+  self.currentSession = nil
+  GuildRoll._RollForEP_currentLoot = nil
+  if RollMod.frames.rollTable then RollMod.frames.rollTable:Hide() end
 end
 
--- API: Ask tie roll
-function RollWithEP_AskTieRoll()
-  if not CanUseRollWithEP() then
-    return
-  end
-  
-  if not RollWithEP.currentSession or not RollWithEP.currentSession.tieState then
-    return
-  end
-  
-  local session = RollWithEP.currentSession
-  local tiedPlayers = session.tieState.players
-  
-  -- Announce tie roll request
-  local channel = "SAY"
-  if GetNumRaidMembers() > 0 then
-    channel = "RAID"
-  end
-  
-  local playerList = table.concat(tiedPlayers, ", ")
-  local message = string.format(L["Tie roll for %s - Roll now!"], session.itemLink) .. " (" .. playerList .. ")"
-  SendChatMessage(message, channel)
-  
-  -- Clear current rolls and prepare for tie breaker
-  session.rolls = {}
-  session.systemRolls = {}
-  session.humanAnnounces = {}
-  session.tieState = nil
-  session.winner = nil
-  
-  RefreshTablet()
-end
+-- Give to winner attempt (announce + try GiveMasterLoot)
+function RollMod:GiveToWinner()
+  if not CanUseLootAdmin() then return end
+  if not self.currentSession or not self.currentSession.winner or self.currentSession.winner == "Tie" then return end
+  local winner = self.currentSession.winner
+  local itemLink = self.currentSession.itemLink
 
--- API: Give to winner
-function RollWithEP_GiveToWinner()
-  if not CanUseRollWithEP() then
-    return
-  end
-  
-  if not RollWithEP.currentSession or not RollWithEP.currentSession.winner or RollWithEP.currentSession.winner == "Tie" then
-    return
-  end
-  
-  local winner = RollWithEP.currentSession.winner
-  local itemLink = RollWithEP.currentSession.itemLink
-  
-  -- Show confirmation popup
   StaticPopupDialogs["ROLLWITHEP_CONFIRM_GIVE"] = {
-    text = string.format(L["Confirm award %s to %s?"], itemLink, winner),
-    button1 = L["Confirm"],
-    button2 = L["Cancel"],
+    text = string.format(L and L["Confirm award %s to %s?"] or "Confirm award %s to %s?", itemLink, winner),
+    button1 = L and L["Confirm"] or "Confirm",
+    button2 = L and L["Cancel"] or "Cancel",
     OnAccept = function()
-      -- Announce award
-      local channel = "SAY"
-      if GetNumRaidMembers() > 0 then
-        channel = "RAID"
+      local ch = GetNumRaidMembers()>0 and "RAID" or "SAY"
+      SendChatMessage(string.format(L and L["%s receives %s"] or "%s receives %s", winner, itemLink), ch)
+      -- Try GiveMasterLoot if possible
+      local isML = IsMasterLooter()
+      local slot = self.currentSession.slotIndex or FindSlotIndexForItem(itemLink, self.currentSession.itemID)
+      if isML and slot then
+        local candIdx = GetCandidateIndexForPlayer(slot, winner)
+        if candIdx then
+          pcall(function() GiveMasterLoot(slot, candIdx) end)
+          if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Award confirmed"] or "Award confirmed") end
+        else
+          if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Item given to: %s"] or ("Item given to: "..tostring(winner))) end
+        end
+      else
+        if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Item given to: %s"] or ("Item given to: "..tostring(winner))) end
       end
-      
-      local message = string.format(L["%s receives %s"], winner, itemLink)
-      SendChatMessage(message, channel)
-      
-      -- Integration point for GiveMasterLoot
-      -- TODO: Implement GiveMasterLoot(slotIndex, candidateIndex) here when ready
-      -- Example: GiveMasterLoot(RollWithEP.currentSession.slotIndex, GetCandidateIndex(winner))
-      
-      -- Close session
-      RollWithEP.currentSession = nil
-      RollWithEP.enabled = false
-      if T and T.IsAttached and T:IsAttached("RollWithEP") then
-        pcall(function() T:Close("RollWithEP") end)
-      end
-      
-      if GuildRoll and GuildRoll.defaultPrint then
-        GuildRoll:defaultPrint(string.format(L["Item given to: %s"], winner))
-      end
+      self.currentSession = nil
+      GuildRoll._RollForEP_currentLoot = nil
+      if RollMod.frames.rollTable then RollMod.frames.rollTable:Hide() end
     end,
-    OnCancel = function()
-      if GuildRoll and GuildRoll.defaultPrint then
-        GuildRoll:defaultPrint(L["Award cancelled"])
-      end
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true
+    OnCancel = function() if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Award cancelled"] or "Award cancelled") end end,
+    timeout = 0, whileDead = true, hideOnEscape = true
   }
-  
   StaticPopup_Show("ROLLWITHEP_CONFIRM_GIVE")
 end
 
--- API: Give to player
-function RollWithEP_GiveToPlayer(playerName)
-  if not CanUseRollWithEP() then
-    return
-  end
-  
-  if not RollWithEP.currentSession then
-    return
-  end
-  
-  local itemLink = RollWithEP.currentSession.itemLink
-  
-  -- Show confirmation popup
+-- Give to player (explicit)
+function RollMod:GiveToPlayer(playerName, itemData)
+  if not CanUseLootAdmin() then if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Only master looter or raid leader admin can use this feature."] or "No permission.") end return end
+  playerName = playerName and StripRealm(playerName) or "Unknown"
+  local item = itemData and (itemData.itemLink or itemData.itemName) or (self.currentSession and self.currentSession.itemLink) or "Unknown"
   StaticPopupDialogs["ROLLWITHEP_CONFIRM_GIVE_PLAYER"] = {
-    text = string.format(L["Confirm award %s to %s?"], itemLink, playerName),
-    button1 = L["Confirm"],
-    button2 = L["Cancel"],
+    text = string.format(L and L["Confirm award %s to %s?"] or "Confirm award %s to %s?", item, playerName),
+    button1 = L and L["Confirm"] or "Confirm",
+    button2 = L and L["Cancel"] or "Cancel",
     OnAccept = function()
-      -- Announce award
-      local channel = "SAY"
-      if GetNumRaidMembers() > 0 then
-        channel = "RAID"
+      local ch = GetNumRaidMembers()>0 and "RAID" or "SAY"
+      SendChatMessage(string.format(L and L["%s receives %s"] or "%s receives %s", playerName, item), ch)
+      local isML = IsMasterLooter()
+      local slot = itemData and itemData.slot or (self.currentSession and self.currentSession.slotIndex) or FindSlotIndexForItem(item, self.currentSession and self.currentSession.itemID)
+      if isML and slot then
+        local candIdx = GetCandidateIndexForPlayer(slot, playerName)
+        if candIdx then pcall(function() GiveMasterLoot(slot, candIdx) end) end
       end
-      
-      local message = string.format(L["%s receives %s"], playerName, itemLink)
-      SendChatMessage(message, channel)
-      
-      -- Integration point for GiveMasterLoot
-      -- TODO: Implement GiveMasterLoot(slotIndex, candidateIndex) here when ready
-      
-      -- Close session
-      RollWithEP.currentSession = nil
-      RollWithEP.enabled = false
-      if T and T.IsAttached and T:IsAttached("RollWithEP") then
-        pcall(function() T:Close("RollWithEP") end)
-      end
-      
-      if GuildRoll and GuildRoll.defaultPrint then
-        GuildRoll:defaultPrint(string.format(L["Item given to: %s"], playerName))
-      end
+      if RollMod.frames.loot then RollMod.frames.loot:Hide() end
+      if RollMod.frames.rollTable then RollMod.frames.rollTable:Hide() end
+      self.currentSession = nil
+      GuildRoll._RollForEP_currentLoot = nil
+      if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(string.format(L and L["Item given to: %s"] or "Item given to: %s", playerName)) end
     end,
-    OnCancel = function()
-      if GuildRoll and GuildRoll.defaultPrint then
-        GuildRoll:defaultPrint(L["Award cancelled"])
-      end
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true
+    OnCancel = function() if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["Award cancelled"] or "Award cancelled") end end,
+    timeout = 0, whileDead = true, hideOnEscape = true
   }
-  
   StaticPopup_Show("ROLLWITHEP_CONFIRM_GIVE_PLAYER")
 end
 
--- API: Give to DE/Bank
-function RollWithEP_GiveToDE()
-  if not CanUseRollWithEP() then
-    return
-  end
-  
-  if not RollWithEP.currentSession then
-    return
-  end
-  
-  -- Initialize VARS if needed
-  if not GuildRoll.VARS then
-    GuildRoll.VARS = {}
-  end
-  
-  -- Check if DE player is set and still online
-  local dePlayer = GuildRoll.VARS.lootDE
-  local deML = GuildRoll.VARS.lootDE_ML
-  local isMl, currentML = IsMasterLooter()
-  
-  -- Reset DE if ML changed or DE player is offline
-  if dePlayer and (deML ~= currentML or not UnitExists(dePlayer)) then
-    GuildRoll.VARS.lootDE = nil
-    GuildRoll.VARS.lootDE_ML = nil
-    dePlayer = nil
-  end
-  
-  -- If no DE set, prompt to select
-  if not dePlayer then
-    -- Show player picker for DE selection
-    local raidMembers = {}
-    local numRaid = GetNumRaidMembers()
-    if numRaid > 0 then
-      for i = 1, numRaid do
-        local name = GetRaidRosterInfo(i)
-        if name then
-          table.insert(raidMembers, StripRealm(name))
-        end
-      end
-    else
-      local numParty = GetNumPartyMembers()
-      if numParty > 0 then
-        table.insert(raidMembers, StripRealm(UnitName("player")))
-        for i = 1, numParty do
-          local name = UnitName("party" .. i)
-          if name then
-            table.insert(raidMembers, StripRealm(name))
-          end
-        end
-      end
-    end
-    
-    if table.getn(raidMembers) == 0 then
-      if GuildRoll and GuildRoll.defaultPrint then
-        GuildRoll:defaultPrint(L["No raid members found."])
-      end
-      return
-    end
-    
-    -- Show DE picker
-    pcall(function()
-      D:Open("RollWithEP_DEPicker",
-        "children", function()
-          D:AddLine(
-            "text", L["Select DE/Bank player"],
-            "isTitle", true
-          )
-          for _, name in ipairs(raidMembers) do
-            if GuildRoll and GuildRoll.SafeDewdropAddLine then
-              GuildRoll:SafeDewdropAddLine(
-                "text", name,
-                "func", function()
-                  -- Set DE player
-                  GuildRoll.VARS.lootDE = name
-                  GuildRoll.VARS.lootDE_ML = currentML
-                  pcall(function() D:Close() end)
-                  -- Now give to DE
-                  RollWithEP_GiveToDEConfirm(name)
-                end
-              )
-            else
-              D:AddLine(
-                "text", name,
-                "func", function()
-                  GuildRoll.VARS.lootDE = name
-                  GuildRoll.VARS.lootDE_ML = currentML
-                  pcall(function() D:Close() end)
-                  RollWithEP_GiveToDEConfirm(name)
-                end
-              )
-            end
-          end
-        end
-      )
-    end)
-  else
-    -- DE player already set, proceed with confirmation
-    RollWithEP_GiveToDEConfirm(dePlayer)
-  end
-end
-
--- Helper: Confirm DE/Bank assignment
-function RollWithEP_GiveToDEConfirm(dePlayer)
-  if not RollWithEP.currentSession then
-    return
-  end
-  
-  local itemLink = RollWithEP.currentSession.itemLink
-  
-  StaticPopupDialogs["ROLLWITHEP_CONFIRM_DE"] = {
-    text = string.format(L["Confirm award %s to %s?"], itemLink, dePlayer .. " (DE/Bank)"),
-    button1 = L["Confirm"],
-    button2 = L["Cancel"],
-    OnAccept = function()
-      -- Announce DE/Bank
-      local channel = "SAY"
-      if GetNumRaidMembers() > 0 then
-        channel = "RAID"
-      end
-      
-      local message = string.format(L["%s (for DE/Bank)"], itemLink)
-      SendChatMessage(message, channel)
-      
-      -- Integration point for GiveMasterLoot
-      -- TODO: Implement GiveMasterLoot(slotIndex, candidateIndex) here when ready
-      
-      -- Close session
-      RollWithEP.currentSession = nil
-      RollWithEP.enabled = false
-      if T and T.IsAttached and T:IsAttached("RollWithEP") then
-        pcall(function() T:Close("RollWithEP") end)
-      end
-      
-      if GuildRoll and GuildRoll.defaultPrint then
-        GuildRoll:defaultPrint(L["Item marked for DE/Bank"])
-      end
-    end,
-    OnCancel = function()
-      if GuildRoll and GuildRoll.defaultPrint then
-        GuildRoll:defaultPrint(L["Award cancelled"])
-      end
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true
-  }
-  
-  StaticPopup_Show("ROLLWITHEP_CONFIRM_DE")
-end
-
--- Addon message handler for GIVE_REQ
+-- Addon message parser
 local function OnAddonMessage(prefix, message, channel, sender)
-  if not GuildRoll or not GuildRoll.VARS or prefix ~= GuildRoll.VARS.prefix then return end
-  
+  if not prefix or not message or not sender then return end
+  if not (GuildRoll and GuildRoll.VARS and GuildRoll.VARS.prefix) then return end
+  if prefix ~= GuildRoll.VARS.prefix then return end
   sender = StripRealm(sender)
-  
-  -- Parse GIVE_REQ messages
-  if string.match(message, "^GIVE_REQ:") then
-    -- Only process if we are the master looter
-    local isMl = IsMasterLooter()
-    if not isMl then return end
-    
-    -- Extract payload: GIVE_REQ:winner:itemLink
-    local winner, itemLink = string.match(message, "^GIVE_REQ:([^:]+):(.+)$")
-    if winner and itemLink then
-      -- Show confirmation popup
+  if string.sub(message,1,5) == "ROLL:" then
+    local payload = string.sub(message,6)
+    local typ, val = string.match(payload, "^([^:]+):(.+)$")
+    if typ and val then RollMod:ProcessIncomingRoll(sender, typ, tonumber(val) or val) else RollMod:ProcessIncomingRoll(sender, "SYS", tonumber(payload) or payload) end
+  elseif string.sub(message,1,11) == "ROLL_START:" then
+    local item = string.sub(message,12)
+    if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint("Roll started for "..tostring(item)) end
+  elseif string.sub(message,1,7) == "IMPORT:" then
+    local payload = string.sub(message,8)
+    pcall(function() ImportSRCsvRaidRes(payload) end)
+  elseif string.sub(message,1,8) == "GIVE_REQ:" then
+    local payload = string.sub(message,9)
+    local winner, item = string.match(payload, "^([^:]+):(.+)$")
+    if winner and item then
+      local isML = IsMasterLooter()
+      if not isML then return end
       StaticPopupDialogs["ROLLWITHEP_GIVE_REQ"] = {
-        text = string.format("Admin %s requests to give %s to %s. Confirm?", sender, itemLink, winner),
-        button1 = L["Confirm"],
-        button2 = L["Cancel"],
+        text = string.format("Admin %s requests to give %s to %s. Confirm?", sender, item, winner),
+        button1 = L and L["Confirm"] or "Confirm",
+        button2 = L and L["Cancel"] or "Cancel",
         OnAccept = function()
-          -- Send confirmation back
-          if GuildRoll.VARS.prefix then
-            SendAddonMessage(GuildRoll.VARS.prefix, "GIVE_CONF:" .. winner .. ":" .. itemLink, "WHISPER", sender)
-          end
-          
-          -- Announce
-          local ch = "SAY"
-          if GetNumRaidMembers() > 0 then
-            ch = "RAID"
-          end
-          SendChatMessage(string.format(L["%s receives %s"], winner, itemLink), ch)
+          if GuildRoll and GuildRoll.VARS and GuildRoll.VARS.prefix then pcall(function() SendAddonMessage(GuildRoll.VARS.prefix, "GIVE_CONF:" .. winner .. ":" .. item, "WHISPER", sender) end) end
+          local ch = GetNumRaidMembers()>0 and "RAID" or "SAY"
+          SendChatMessage(string.format(L and L["%s receives %s"] or "%s receives %s", winner, item), ch)
         end,
         OnCancel = function()
-          -- Send cancel back
-          if GuildRoll.VARS.prefix then
-            SendAddonMessage(GuildRoll.VARS.prefix, "GIVE_CANC:" .. winner .. ":" .. itemLink, "WHISPER", sender)
-          end
+          if GuildRoll and GuildRoll.VARS and GuildRoll.VARS.prefix then pcall(function() SendAddonMessage(GuildRoll.VARS.prefix, "GIVE_CANC:" .. winner .. ":" .. item, "WHISPER", sender) end) end
         end,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true
+        timeout = 0, whileDead = true, hideOnEscape = true
       }
-      
       StaticPopup_Show("ROLLWITHEP_GIVE_REQ")
     end
   end
 end
 
--- Initialize event handlers
-if GuildRoll then
-  -- Register events
-  pcall(function()
-    GuildRoll:RegisterEvent("CHAT_MSG_SYSTEM", function(self, msg)
-      OnSystemMessage(msg)
-    end)
-  end)
-  
-  pcall(function()
-    GuildRoll:RegisterEvent("CHAT_MSG_RAID", function(self, msg, sender)
-      OnRaidMessage(msg, sender)
-    end)
-  end)
-  
-  pcall(function()
-    GuildRoll:RegisterEvent("CHAT_MSG_RAID_LEADER", function(self, msg, sender)
-      OnRaidMessage(msg, sender)
-    end)
-  end)
-  
-  pcall(function()
-    GuildRoll:RegisterEvent("CHAT_MSG_ADDON", function(self, prefix, message, channel, sender)
-      OnAddonMessage(prefix, message, channel, sender)
-    end)
-  end)
-end
-
--- Ensure GuildRoll table exists (since we load before guildroll.lua)
-if not GuildRoll then
-  GuildRoll = {}
-end
-
--- Public API for integration
-GuildRoll.RollWithEP_StartRollForItem = RollWithEP_StartRollForItem
-
--- API: Show loot UI with item list
--- Called by announce_loot.lua when loot window opens
-function GuildRoll.RollWithEP_ShowLootUI(lootItems)
-  if not CanUseRollWithEP() then
-    return
-  end
-  
-  if not lootItems or table.getn(lootItems) == 0 then
-    return
-  end
-  
-  -- Store loot items for contextual menu access
-  RollWithEP.lootSlots = lootItems
-  
-  -- Open Tablet showing loot items
-  if not T:IsRegistered("RollWithEP_Loot") then
-    T:Register("RollWithEP_Loot",
-      "children", function()
-        T:SetTitle(L["Loot found:"])
-        BuildLootTablet()
-      end,
-      "clickable", true,
-      "showTitleWhenDetached", true,
-      "showHintWhenDetached", true,
-      "cantAttach", true,
-      "menu", function()
-        if GuildRoll and GuildRoll.SafeDewdropAddLine then
-          GuildRoll:SafeDewdropAddLine(
-            "text", L["Close"],
-            "func", function() 
-              pcall(function() T:Close("RollWithEP_Loot") end)
+-- Event registration
+local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("ADDON_LOADED")
+eventFrame:RegisterEvent("LOOT_OPENED")
+eventFrame:RegisterEvent("LOOT_CLOSED")
+eventFrame:RegisterEvent("CHAT_MSG_ADDON")
+eventFrame:SetScript("OnEvent", function(self, event, ...)
+  if event == "ADDON_LOADED" then
+    local name = ...
+    if name == "GuildRoll" or name == "guildroll" then end
+  elseif event == "LOOT_OPENED" then
+    if GuildRoll_rollForEPCache._settings.useCustomLootFrame then
+      local items = {}
+      local n = GetNumLootItems()
+      for i=1,n do
+        local name, texture, quantity, quality, locked, isQuestItem, questId, isActive = GetLootSlotInfo(i)
+        local link = GetLootSlotLink(i)
+        local id
+        if link then
+          local s = string.find(link, "item:")
+          if s then
+            local idstr = ""
+            for j = s+5, string.len(link) do
+              local ch = string.sub(link, j, j)
+              if ch >= "0" and ch <= "9" then idstr = idstr .. ch else break end
             end
-          )
-        else
-          D:AddLine(
-            "text", L["Close"],
-            "func", function() 
-              pcall(function() T:Close("RollWithEP_Loot") end)
-            end
-          )
-        end
-      end
-    )
-  end
-  
-  if not T:IsAttached("RollWithEP_Loot") then
-    pcall(function() T:Open("RollWithEP_Loot") end)
-  end
-  pcall(function() T:Refresh("RollWithEP_Loot") end)
-end
-
--- UI: Build loot tablet
-function BuildLootTablet()
-  if not RollWithEP.lootSlots or table.getn(RollWithEP.lootSlots) == 0 then
-    T:AddLine("text", L["No active loot session"], "textR", 1, "textG", 0, "textB", 0)
-    return
-  end
-  
-  -- List each loot item with SR info
-  for _, lootItem in ipairs(RollWithEP.lootSlots) do
-    local itemLink = lootItem.itemLink
-    local itemID = lootItem.itemID
-    local itemName = lootItem.itemName
-    local slotIndex = lootItem.slot
-    
-    -- Get SR list
-    local srList = GetSRListForItem(itemID, itemName)
-    local srText = ""
-    if table.getn(srList) > 0 then
-      srText = " (SR: " .. table.concat(srList, ", ") .. ")"
-      if table.getn(srList) > 5 then
-        srText = " (SR: " .. table.concat({srList[1], srList[2], srList[3], srList[4], srList[5]}, ", ") .. " +" .. (table.getn(srList) - 5) .. " more)"
-      end
-    end
-    
-    T:AddLine(
-      "text", itemLink .. srText,
-      "textR", 1, "textG", 0.82, "textB", 0,
-      "func", function()
-        -- Show contextual menu for this item
-        ShowItemContextMenu(itemLink, itemID, itemName, slotIndex)
-      end
-    )
-  end
-end
-
--- Helper: Show contextual menu for an item
-function ShowItemContextMenu(itemLink, itemID, itemName, slotIndex)
-  pcall(function()
-    D:Open("RollWithEP_ItemMenu",
-      "children", function()
-        D:AddLine(
-          "text", L["Start Rolls"],
-          "func", function()
-            RollWithEP_StartRollForItem(itemLink, itemID, itemName, slotIndex)
-            pcall(function() D:Close() end)
-          end
-        )
-        D:AddLine(
-          "text", L["Give to DE/Bank"],
-          "func", function()
-            -- Create a temporary session for DE/Bank only
-            RollWithEP.currentSession = {
-              itemLink = itemLink,
-              itemID = itemID,
-              itemName = itemName,
-              slotIndex = slotIndex,
-              rolls = {},
-              systemRolls = {},
-              humanAnnounces = {},
-              startTime = GetTime(),
-              closed = true,
-              winner = nil,
-              tieState = nil
-            }
-            RollWithEP_GiveToDE()
-            pcall(function() D:Close() end)
-          end
-        )
-        D:AddLine(
-          "text", L["Give to Player"],
-          "func", function()
-            -- Create a temporary session for Give to Player only
-            RollWithEP.currentSession = {
-              itemLink = itemLink,
-              itemID = itemID,
-              itemName = itemName,
-              slotIndex = slotIndex,
-              rolls = {},
-              systemRolls = {},
-              humanAnnounces = {},
-              startTime = GetTime(),
-              closed = true,
-              winner = nil,
-              tieState = nil
-            }
-            ShowPlayerPicker()
-            pcall(function() D:Close() end)
-          end
-        )
-      end
-    )
-  end)
-end
-
--- ============================================================================
--- Public API Exposure
--- ============================================================================
-
--- Expose menu permission check (Admin + InRaid only)
--- NOTE: This must be exposed early so guildroll.lua's buildMenu() can reference it
-if GuildRoll then
-  function GuildRoll.RollWithEP_CanUse()
-    -- Always print debug to help diagnose
-    local numRaid = 0
-    local isAdmin = false
-    local hasIsAdminFunc = false
-    
-    pcall(function()
-      numRaid = GetNumRaidMembers() or 0
-    end)
-    
-    if GuildRoll.IsAdmin and type(GuildRoll.IsAdmin) == "function" then
-      hasIsAdminFunc = true
-      pcall(function()
-        isAdmin = GuildRoll:IsAdmin() or false
-      end)
-    end
-    
-    local result = CanUseMenuFeatures()
-    
-    -- Always print debug to console when menu opens
-    if GuildRoll.defaultPrint then
-      pcall(function()
-        GuildRoll:defaultPrint(string.format("[RollWithEP Debug] CanUse=%s | InRaid=%d | IsAdmin=%s | HasFunc=%s", 
-          tostring(result), numRaid, tostring(isAdmin), tostring(hasIsAdminFunc)))
-      end)
-    end
-    
-    return result
-  end
-end
-
--- Expose CSV import function (uses menu permissions)
-function GuildRoll.RollWithEP_ImportCSV(csvData)
-  if not CanUseMenuFeatures() then
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(L["You don't have permission to import CSV."])
-    end
-    return false
-  end
-  
-  if not csvData or csvData == "" then
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(L["No CSV data provided."])
-    end
-    return false
-  end
-  
-  -- Initialize cache if needed
-  if not GuildRoll_rollForEPCache then
-    GuildRoll_rollForEPCache = {}
-  end
-  
-  -- Parse CSV data
-  local ok, result = pcall(function()
-    local srData = {}
-    local playerCount = 0
-    
-    -- Parse CSV line by line
-    for line in string.gmatch(csvData .. "\n", "(.-)\n") do
-      -- Skip empty lines and header
-      if line and line ~= "" and not string.find(line, "^Player,") then
-        -- Parse CSV line: Player,ItemID,ItemName,Week
-        local player, itemID, itemName, week = string.match(line, "^([^,]+),([^,]*),([^,]*),([^,]*)$")
-        
-        if player and player ~= "" then
-          -- Strip realm suffix
-          player = StripRealm(player)
-          
-          -- Initialize player if needed
-          if not srData[player] then
-            srData[player] = {
-              sr = 0,
-              weeks = {},
-              items = {}
-            }
-            playerCount = playerCount + 1
-          end
-          
-          -- Add item to player's SR list
-          local item = {
-            itemID = itemID and itemID ~= "" and tonumber(itemID) or nil,
-            itemName = itemName and itemName ~= "" and itemName or nil,
-            week = week and week ~= "" and tonumber(week) or nil
-          }
-          
-          table.insert(srData[player].items, item)
-          srData[player].sr = srData[player].sr + 1
-          
-          -- Track week if provided
-          if item.week and not srData[player].weeks[item.week] then
-            srData[player].weeks[item.week] = true
+            if idstr ~= "" then id = tonumber(idstr) end
           end
         end
+        table.insert(items, { slot = i, itemLink = link, itemID = id, itemName = name, rarity = quality, texture = texture })
       end
+      if items and #items > 0 then RollMod.lootSlots = items; RollMod:ShowLootUI(items) end
     end
-    
-    -- Store in cache
-    GuildRoll_rollForEPCache.lastImport = {
-      srData = srData,
-      timestamp = time(),
-      playerCount = playerCount
-    }
-    
-    -- Also expose in RollForEP module if available
-    if RollForEP then
-      RollForEP.srData = srData
-    end
-    
-    return playerCount
-  end)
-  
-  if ok and result then
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(string.format(L["CSV imported successfully! %d players with soft reserves."], result))
-    end
-    return true
-  else
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(L["Failed to parse CSV. Please check format."])
-    end
-    return false
+  elseif event == "LOOT_CLOSED" then
+    if RollMod.frames.loot then RollMod.frames.loot:Hide() end
+  elseif event == "CHAT_MSG_ADDON" then
+    local prefix, msg, channel, sender = ...
+    OnAddonMessage(prefix, msg, channel, sender)
   end
+end)
+
+-- Show Loot UI (integration with announce_loot.lua)
+function RollMod:ShowLootUI(lootItems)
+  if GuildRoll_rollForEPCache._settings.useCustomLootFrame == false then return end
+  if not lootItems or #lootItems == 0 then
+    -- fallback to game loot
+    lootItems = {}
+    local n = GetNumLootItems()
+    for i=1,n do
+      local name, texture, quantity, quality, locked, isQuestItem, questId, isActive = GetLootSlotInfo(i)
+      local link = GetLootSlotLink(i)
+      local id
+      if link then
+        local s = string.find(link, "item:")
+        if s then
+          local idstr = ""
+          for j = s+5, string.len(link) do
+            local ch = string.sub(link, j, j)
+            if ch >= "0" and ch <= "9" then idstr = idstr .. ch else break end
+          end
+          if idstr ~= "" then id = tonumber(idstr) end
+        end
+      end
+      table.insert(lootItems, { slot = i, itemLink = link, itemID = id, itemName = name, rarity = quality, texture = texture })
+    end
+  end
+  if not lootItems or #lootItems == 0 then return end
+  self.lootSlots = lootItems
+  local f = CreateLootFrame()
+  f:Update()
+  f:Show()
+  for _, it in ipairs(lootItems) do pcall(function() if it.itemLink then SendChatMessage(it.itemLink, GetNumRaidMembers()>0 and "RAID" or "PARTY") end end) end
 end
 
--- Expose Set DE/Bank function (uses menu permissions)
-function GuildRoll.RollWithEP_SetDEBank(playerName)
-  if not CanUseMenuFeatures() then
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(L["You don't have permission to set DE/Bank player."])
-    end
-    return
-  end
-  
-  if not GuildRoll.VARS then
-    GuildRoll.VARS = {}
-  end
-  
-  if playerName and playerName ~= "" then
-    GuildRoll.VARS.lootDE = StripRealm(playerName)
-    GuildRoll.VARS.lootDE_ML = StripRealm(UnitName("player"))
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(string.format(L["DE/Bank player set to: %s"], GuildRoll.VARS.lootDE))
-    end
-  else
-    GuildRoll.VARS.lootDE = nil
-    GuildRoll.VARS.lootDE_ML = nil
-    if GuildRoll and GuildRoll.defaultPrint then
-      GuildRoll:defaultPrint(L["DE/Bank player cleared."])
-    end
-  end
-end
+-- Backwards-compatible wrappers & exposure
+function RollWithEP_ImportCSV_wrapper(text) pcall(function() RollWithEP_ImportCSV(text) end) end
+function RollWithEP_SetDEBank(player) if player == nil then GuildRoll_rollForEPCache.DEPlayer = nil; if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(L and L["DE/Bank player cleared."] or "DE/Bank cleared.") end else GuildRoll_rollForEPCache.DEPlayer = StripRealm(player); if GuildRoll and GuildRoll.defaultPrint then GuildRoll:defaultPrint(string.format(L and L["DE/Bank player set to: %s"] or "DE/Bank player set to: %s", GuildRoll_rollForEPCache.DEPlayer)) end end end
+
+GuildRoll.RollWithEP_ShowLootUI = function(lootItems) pcall(function() RollMod:ShowLootUI(lootItems) end) end
+GuildRoll.RollWithEP_ImportCSV = function(text) pcall(function() RollWithEP_ImportCSV(text) end) end
+GuildRoll.RollWithEP_SetDEBank = function(player) pcall(function() RollWithEP_SetDEBank(player) end) end
+
+GuildRoll.RollForEP_StartRollForItem = function(itemLink) pcall(function() RollMod:StartSessionForItem({ itemLink = itemLink, itemName = itemLink }) end) end
+GuildRoll.RollForEP_SetDE = function() pcall(function() if RollMod.currentSession then RollMod:GiveToDEBank({ itemLink = RollMod.currentSession.itemLink }) end end) end
+GuildRoll.RollForEP_GiveToPlayer = function(playerName) pcall(function() if RollMod.currentSession then RollMod:GiveToPlayer(playerName, { itemLink = RollMod.currentSession.itemLink }) end end) end
+
+GuildRoll.RollWithEP = RollMod
+
+-- End of RollWithEP.lua
