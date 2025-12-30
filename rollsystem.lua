@@ -1,7 +1,7 @@
 -- rollsystem.lua
 -- Module for handling mob drops, roll sessions and loot assignment in raids (LootAdmin)
 -- Full file, English comments and strings.
--- Compatibility adjustments: avoid '#' operator and vararg '...' usages to work on legacy Lua environments.
+-- Compatibility adjustments: avoid '#' operator and vararg '...' usages; added API compatibility wrappers.
 -- Target: Retail-like (Turtle WoW 1.12). Adjust APIs if necessary.
 
 local RollSystem = {}
@@ -34,6 +34,70 @@ local ROLL_TYPE_MAP = {
     ["99"] = { type="OS", priority=2 }, ["98"] = { type="Tmog", priority=1 },
 }
 local TYPE_PRIORITY = { SR=4, MS=3, OS=2, Tmog=1 }
+
+-- Compatibility wrappers for environment where some globals are missing
+local function IsInRaidCompat()
+    if type(IsInRaid) == "function" then
+        return IsInRaid()
+    end
+    if type(UnitInRaid) == "function" then
+        return UnitInRaid("player") or false
+    end
+    if type(GetNumRaidMembers) == "function" then
+        return (GetNumRaidMembers() or 0) > 0
+    end
+    -- fallback: treat group with >5 members as raid
+    if type(GetNumGroupMembers) == "function" then
+        return (GetNumGroupMembers() or 0) > 5
+    end
+    return false
+end
+
+local function IsInGuildCompat()
+    if type(IsInGuild) == "function" then
+        return IsInGuild()
+    end
+    -- try GuildFrame existence or guild APIs
+    if type(GetGuildInfo) == "function" then
+        local n = GetGuildInfo("player")
+        return n and n ~= ""
+    end
+    return false
+end
+
+local function UnitNameCompat(unit)
+    if not unit then
+        if type(UnitName) == "function" then return UnitName("player") end
+        return nil
+    end
+    if type(UnitName) == "function" then return UnitName(unit) end
+    return nil
+end
+
+local function UnitIsGroupLeaderCompat(unit)
+    if type(UnitIsGroupLeader) == "function" then
+        return UnitIsGroupLeader(unit)
+    end
+    -- fallback: check party/raid leader unit tokens if available
+    if unit == "player" then
+        -- best effort: treat player as leader if GetRaidRosterInfo/UnitIsGroupLeader absent
+        return false
+    end
+    return false
+end
+
+local function GetRaidRosterNameCompat(index)
+    if type(GetRaidRosterInfo) == "function" then
+        return GetRaidRosterInfo(index)
+    end
+    return nil
+end
+
+local function GetNumGroupMembersCompat()
+    if type(GetNumGroupMembers) == "function" then return GetNumGroupMembers() end
+    if type(GetNumRaidMembers) == "function" then return GetNumRaidMembers() end
+    return 0
+end
 
 -- Compatibility: provide getn function without using '#'
 local function safe_getn(t)
@@ -74,23 +138,25 @@ end
 
 -- Officer note parsing: {48} preferred
 function RollSystem:GetOfficerNoteEP(playerName)
-    if not IsInGuild() then return nil end
-    if GuildRoster then pcall(GuildRoster) end
-    local num = GetNumGuildMembers and GetNumGuildMembers() or 0
+    if not IsInGuildCompat() then return nil end
+    if type(GuildRoster) == "function" then pcall(GuildRoster) end
+    local num = (type(GetNumGuildMembers) == "function") and GetNumGuildMembers() or 0
     for i=1, num do
-        local name, _, _, _, _, _, _, officernote = GetGuildRosterInfo(i)
-        if name then
-            local short = Ambiguate(name, "none")
-            if short == playerName then
-                if officernote and officernote ~= "" then
-                    local brace = officernote:match("%{%s*(%d+)%s*%}")
-                    if brace then return tonumber(brace) end
-                    local ep = officernote:match("[Ee][Pp]%s*[:%-]?%s*(%d+)")
-                    if ep then return tonumber(ep) end
-                    local any = officernote:match("(%d+)")
-                    if any then return tonumber(any) end
+        if type(GetGuildRosterInfo) == "function" then
+            local name, _, _, _, _, _, _, officernote = GetGuildRosterInfo(i)
+            if name then
+                local short = Ambiguate(name, "none")
+                if short == playerName then
+                    if officernote and officernote ~= "" then
+                        local brace = officernote:match("%{%s*(%d+)%s*%}")
+                        if brace then return tonumber(brace) end
+                        local ep = officernote:match("[Ee][Pp]%s*[:%-]?%s*(%d+)")
+                        if ep then return tonumber(ep) end
+                        local any = officernote:match("(%d+)")
+                        if any then return tonumber(any) end
+                    end
+                    return nil
                 end
-                return nil
             end
         end
     end
@@ -278,27 +344,27 @@ function RollSystem:SetDEBank(name)
 end
 function RollSystem:GetDEBank()
     if RollSystem.db.deBank and RollSystem.db.deBank ~= "" then return RollSystem.db.deBank end
-    return UnitName("player")
+    return UnitNameCompat("player")
 end
 
 -- Admin & LootAdmin checks (robust)
 function RollSystem.IsPlayerAddonAdmin()
-    if IsInGuild() then return true end
+    if IsInGuildCompat() then return true end
     return false
 end
 
 function RollSystem.IsLootAdmin()
     if not RollSystem.IsPlayerAddonAdmin() then return false end
-    if not IsInRaid() then return false end
+    if not IsInRaidCompat() then return false end
     local lootMethod, masterUnit = GetLootMethod()
     if not lootMethod or lootMethod ~= "master" then return false end
-    local playerName = UnitName("player")
+    local playerName = UnitNameCompat("player")
     if masterUnit == 0 or masterUnit == nil then
-        if UnitIsGroupLeader("player") then return true end
+        if UnitIsGroupLeaderCompat("player") then return true end
     elseif type(masterUnit) == "string" then
         local masterName = nil
         if masterUnit:match("^raid") or masterUnit:match("^party") or masterUnit == "player" then
-            masterName = UnitName(masterUnit)
+            masterName = UnitNameCompat(masterUnit)
         else
             masterName = masterUnit
         end
@@ -306,13 +372,13 @@ function RollSystem.IsLootAdmin()
     elseif type(masterUnit) == "number" then
         local index = masterUnit
         if index == 0 then
-            if UnitIsGroupLeader("player") then return true end
+            if UnitIsGroupLeaderCompat("player") then return true end
         else
-            local name = GetRaidRosterInfo(index)
+            local name = GetRaidRosterNameCompat(index)
             if name and Ambiguate(name, "none") == playerName then return true end
         end
     end
-    if UnitIsGroupLeader("player") then return true end
+    if UnitIsGroupLeaderCompat("player") then return true end
     return false
 end
 
@@ -345,7 +411,7 @@ end
 -- Announce loot found
 local function AnnounceLootFound(lootItems)
     if not lootItems or safe_getn(lootItems) == 0 then return end
-    local sendChannel = IsInRaid() and "RAID" or "SAY"
+    local sendChannel = IsInRaidCompat() and "RAID" or "SAY"
     SendChatMessage("LOOT FOUND:", sendChannel)
     for _, it in ipairs(lootItems) do
         if it.itemLink then
@@ -459,7 +525,7 @@ function RollSystem:StartRollSession(itemLink, itemID, slot)
     }
 
     local announceText = "ROLL START: "..tostring(itemLink).." - Use your roll keys (CSR/SR/EP/101/100/99/98)"
-    if IsInRaid() then
+    if IsInRaidCompat() then
         SendChatMessage(announceText, "RAID")
         pcall(SendChatMessage, announceText, "RAID_WARNING")
     else
@@ -586,7 +652,7 @@ function RollSystem:CloseRolls()
         text = "ROLLS CLOSED for "..tostring(session.itemLink)..". No rolls."
     end
 
-    if IsInRaid() then
+    if IsInRaidCompat() then
         SendChatMessage(text, "RAID")
         pcall(SendChatMessage, text, "RAID_WARNING")
     else
@@ -692,18 +758,18 @@ function RollSystem:PopulateGiveMemberList(frame, itemLink, itemID)
     frame.memberButtons = {}
 
     local members = {}
-    local numGroup = GetNumGroupMembers and GetNumGroupMembers() or 0
-    if IsInRaid() then
+    local numGroup = GetNumGroupMembersCompat()
+    if IsInRaidCompat() then
         for i=1, numGroup do
-            local name = GetRaidRosterInfo(i)
+            local name = GetRaidRosterNameCompat(i)
             if name and name ~= "" then table.insert(members, Ambiguate(name, "none")) end
         end
     else
-        table.insert(members, UnitName("player"))
-        for i=1, GetNumGroupMembers() or 0 do
+        table.insert(members, UnitNameCompat("player"))
+        for i=1, (type(GetNumGroupMembers) == "function" and GetNumGroupMembers() or 0) do
             local unit = "party"..i
             if UnitExists(unit) then
-                local nm = UnitName(unit)
+                local nm = UnitNameCompat(unit)
                 if nm then table.insert(members, Ambiguate(nm, "none")) end
             end
         end
@@ -740,27 +806,27 @@ end
 
 function RollSystem:GiveItemToPlayer(itemLink, itemID, playerName)
     local raidIndex = nil
-    local numGroup = GetNumGroupMembers and GetNumGroupMembers() or 0
-    if IsInRaid() then
+    local numGroup = GetNumGroupMembersCompat()
+    if IsInRaidCompat() then
         for i=1, numGroup do
-            local name = GetRaidRosterInfo(i)
+            local name = GetRaidRosterNameCompat(i)
             if name and Ambiguate(name, "none") == playerName then
                 raidIndex = i
                 break
             end
         end
     else
-        for i=1, GetNumGroupMembers() or 0 do
+        for i=1, (type(GetNumGroupMembers) == "function" and GetNumGroupMembers() or 0) do
             local unit = "party"..i
             if UnitExists(unit) then
-                local nm = UnitName(unit)
+                local nm = UnitNameCompat(unit)
                 if nm and Ambiguate(nm, "none") == playerName then
                     raidIndex = i
                     break
                 end
             end
         end
-        if not raidIndex and UnitName("player") == playerName then raidIndex = 0 end
+        if not raidIndex and UnitNameCompat("player") == playerName then raidIndex = 0 end
     end
 
     if not raidIndex then
@@ -829,10 +895,10 @@ end
 -- Candidate list (raid)
 local function BuildCandidateList()
     local candidates = {}
-    if IsInRaid() then
-        local num = GetNumGroupMembers and GetNumGroupMembers() or 0
+    if IsInRaidCompat() then
+        local num = GetNumGroupMembersCompat()
         for i=1, num do
-            local name = GetRaidRosterInfo(i)
+            local name = GetRaidRosterNameCompat(i)
             if name and name ~= "" then table.insert(candidates, { name = Ambiguate(name, "none"), index = i }) end
         end
     end
