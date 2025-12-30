@@ -1,7 +1,7 @@
 -- rollsystem.lua
 -- Module for handling mob drops, roll sessions and loot assignment in raids (LootAdmin)
--- Updated: tolerant IsLootAdmin (handles masterUnit == 0), debug messages, manual test slash commands.
--- English UI/texts.
+-- Updated: replaced '#' operator usages with table-safe getn() for compatibility.
+-- English comments/strings. Italian explanation provided externally.
 -- Target: Retail-like (Turtle WoW 1.12). Adjust APIs if necessary.
 
 local RollSystem = {}
@@ -35,11 +35,24 @@ local ROLL_TYPE_MAP = {
 }
 local TYPE_PRIORITY = { SR=4, MS=3, OS=2, Tmog=1 }
 
+-- Compatibility: provide getn function without using '#'
+local function safe_getn(t)
+    if not t then return 0 end
+    if table.getn then
+        -- old-style
+        return table.getn(t)
+    end
+    -- fallback: count array part
+    local count = 0
+    for _ in ipairs(t) do count = count + 1 end
+    return count
+end
+
 -- Utilities
 local function pushQueue(tbl, entry, maxSize)
     if not tbl then tbl = {} end
     table.insert(tbl, 1, entry)
-    while #tbl > (maxSize or 10) do table.remove(tbl) end
+    while safe_getn(tbl) > (maxSize or 10) do table.remove(tbl) end
     return tbl
 end
 
@@ -122,11 +135,11 @@ function RollSystem:TryMatchForPlayer(player)
     local sysQ = self.systemRolls[player]
     if not annQ or not sysQ then return end
 
-    local i = #sysQ
+    local i = safe_getn(sysQ)
     while i >= 1 do
         local sys = sysQ[i]
         local bestAnnIdx, bestAnn, bestDt
-        for j = 1, #annQ do
+        for j = 1, safe_getn(annQ) do
             local ann = annQ[j]
             if ann.min and ann.max and sys.min and sys.max and tonumber(ann.min) == tonumber(sys.min) and tonumber(ann.max) == tonumber(sys.max) then
                 local dt = math.abs((sys.ts or 0) - (ann.ts or 0))
@@ -134,7 +147,7 @@ function RollSystem:TryMatchForPlayer(player)
             end
         end
         if not bestAnn then
-            for j = 1, #annQ do
+            for j = 1, safe_getn(annQ) do
                 local ann = annQ[j]
                 local dt = math.abs((sys.ts or 0) - (ann.ts or 0))
                 if dt <= MATCH_WINDOW then
@@ -155,8 +168,8 @@ function RollSystem:TryMatchForPlayer(player)
         end
     end
 
-    if annQ and #annQ == 0 then self.announcements[player] = nil end
-    if sysQ and #sysQ == 0 then self.systemRolls[player] = nil end
+    if annQ and safe_getn(annQ) == 0 then self.announcements[player] = nil end
+    if sysQ and safe_getn(sysQ) == 0 then self.systemRolls[player] = nil end
 end
 
 -- Cleanup
@@ -168,12 +181,12 @@ local function cleanupOld()
     for player, q in pairs(RollSystem.announcements) do
         local newq = {}
         for _, v in ipairs(q) do if now - (v.ts or 0) <= (MATCH_WINDOW*3) then table.insert(newq, v) end end
-        if #newq == 0 then RollSystem.announcements[player] = nil else RollSystem.announcements[player] = newq end
+        if safe_getn(newq) == 0 then RollSystem.announcements[player] = nil else RollSystem.announcements[player] = newq end
     end
     for player, q in pairs(RollSystem.systemRolls) do
         local newq = {}
         for _, v in ipairs(q) do if now - (v.ts or 0) <= (MATCH_WINDOW*3) then table.insert(newq, v) end end
-        if #newq == 0 then RollSystem.systemRolls[player] = nil else RollSystem.systemRolls[player] = newq end
+        if safe_getn(newq) == 0 then RollSystem.systemRolls[player] = nil else RollSystem.systemRolls[player] = newq end
     end
 end
 
@@ -272,7 +285,7 @@ end
 
 -- Admin & LootAdmin checks (robust)
 function RollSystem.IsPlayerAddonAdmin()
-    -- TODO: replace with real check (guild rank or admin list)
+    -- TODO: replace with real check (guild rank or persisted list)
     if IsInGuild() then return true end
     return false
 end
@@ -285,11 +298,8 @@ function RollSystem.IsLootAdmin()
     local playerName = UnitName("player")
     -- handle different masterUnit types: string, number, or 0 sentinel
     if masterUnit == 0 or masterUnit == nil then
-        -- some servers return 0 for master looter (interpreted as leader/master)
-        -- allow if player is raid leader or master looter per other checks
         if UnitIsGroupLeader("player") then return true end
     elseif type(masterUnit) == "string" then
-        -- could be a unit token like "player" or "raid3", or a player name
         local masterName = nil
         if masterUnit:match("^raid") or masterUnit:match("^party") or masterUnit == "player" then
             masterName = UnitName(masterUnit)
@@ -298,7 +308,6 @@ function RollSystem.IsLootAdmin()
         end
         if masterName and masterName == playerName then return true end
     elseif type(masterUnit) == "number" then
-        -- some APIs may return numeric raid index
         local index = masterUnit
         if index == 0 then
             if UnitIsGroupLeader("player") then return true end
@@ -339,7 +348,7 @@ end
 
 -- Announce loot found
 local function AnnounceLootFound(lootItems)
-    if not lootItems or #lootItems == 0 then return end
+    if not lootItems or safe_getn(lootItems) == 0 then return end
     local sendChannel = IsInRaid() and "RAID" or "SAY"
     SendChatMessage("LOOT FOUND:", sendChannel)
     for _, it in ipairs(lootItems) do
@@ -403,7 +412,7 @@ function RollSystem:OpenCustomLootFrame(lootItems, mobGUID)
         btn:Show()
 
         local sr = RollSystem.GetSoftReservesForItem(item.itemID, item.itemLink and tostring(item.itemLink))
-        if sr and #sr > 0 then
+        if sr and safe_getn(sr) > 0 then
             local txt = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             local names = {}
             for _,r in ipairs(sr) do table.insert(names, r.attendee) end
@@ -440,7 +449,7 @@ function RollSystem:OnLootItemClicked(btn)
     EasyMenu(dropdown, self._itemMenu, "cursor", 0 , 0, "MENU")
 end
 
--- Start / RollTable / CloseRolls (kept)
+-- Start / RollTable / CloseRolls (kept similar)
 function RollSystem:StartRollSession(itemLink, itemID, slot)
     self.db.activeSession = {
         itemLink = itemLink,
@@ -556,7 +565,7 @@ end
 function RollSystem:DetermineWinner()
     local session = self.db.activeSession
     if not session then return nil end
-    if #session.rolls == 0 then return nil end
+    if safe_getn(session.rolls) == 0 then return nil end
     table.sort(session.rolls, function(a,b)
         if a.priority ~= b.priority then return a.priority > b.priority
         elseif a.value ~= b.value then return a.value > b.value
@@ -729,7 +738,7 @@ function RollSystem:PopulateGiveMemberList(frame, itemLink, itemID)
         table.insert(frame.memberButtons, btn)
     end
 
-    content:SetHeight(math.max(1, #members * 26))
+    content:SetHeight(math.max(1, safe_getn(members) * 26))
 end
 
 function RollSystem:GiveItemToPlayer(itemLink, itemID, playerName)
@@ -804,7 +813,7 @@ local function EnsureMasterLootFrame()
             btn:Show()
             table.insert(container.candidateButtons, btn)
         end
-        local height = 24 + (#candidates * 26)
+        local height = 24 + (safe_getn(candidates) * 26)
         container:SetHeight(math.max(40, height))
     end
 
@@ -849,7 +858,7 @@ local function find_and_hook_buttons(self)
                             return
                         end
                         local candidates = BuildCandidateList()
-                        if #candidates == 0 then
+                        if safe_getn(candidates) == 0 then
                             if orig then orig(selfButton, ...) end
                             return
                         end
@@ -892,7 +901,7 @@ local function find_and_hook_buttons(self)
                         return
                     end
                     local candidates = BuildCandidateList()
-                    if #candidates == 0 then
+                    if safe_getn(candidates) == 0 then
                         if orig then orig(selfButton, ...) end
                         return
                     end
@@ -926,7 +935,6 @@ function RollSystem:HookLootButtons()
     if self.buttonsHooked then return end
     local num = GetNumLootItems and GetNumLootItems() or (C_Loot and C_Loot.GetNumLootItems and C_Loot.GetNumLootItems() or 0)
     if num <= 0 then
-        -- nothing to hook right now
         return
     end
     local hooked = find_and_hook_buttons(self)
