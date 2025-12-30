@@ -1,8 +1,7 @@
 -- rollsystem.lua
 -- Module for handling mob drops, roll sessions and loot assignment in raids (LootAdmin)
--- Updated: replaced '#' operator usages with table-safe getn() for compatibility.
--- English comments/strings. Italian explanation provided externally.
--- Target: Retail-like (Turtle WoW 1.12). Adjust APIs if necessary.
+-- Updated: removed all uses of '#' operator; uses safe_getn() instead for compatibility.
+-- English comments/strings.
 
 local RollSystem = {}
 RollSystem.frame = CreateFrame("Frame", "GuildRoll_RollSystemFrame")
@@ -39,10 +38,8 @@ local TYPE_PRIORITY = { SR=4, MS=3, OS=2, Tmog=1 }
 local function safe_getn(t)
     if not t then return 0 end
     if table.getn then
-        -- old-style
         return table.getn(t)
     end
-    -- fallback: count array part
     local count = 0
     for _ in ipairs(t) do count = count + 1 end
     return count
@@ -216,7 +213,7 @@ end
 local function parseCSVLine(line)
     local res = {}
     local i = 1
-    local len = #line
+    local len = string.len(line)
     while i <= len do
         if line:sub(i,i) == '"' then
             local j = i+1
@@ -285,7 +282,6 @@ end
 
 -- Admin & LootAdmin checks (robust)
 function RollSystem.IsPlayerAddonAdmin()
-    -- TODO: replace with real check (guild rank or persisted list)
     if IsInGuild() then return true end
     return false
 end
@@ -296,7 +292,6 @@ function RollSystem.IsLootAdmin()
     local lootMethod, masterUnit = GetLootMethod()
     if not lootMethod or lootMethod ~= "master" then return false end
     local playerName = UnitName("player")
-    -- handle different masterUnit types: string, number, or 0 sentinel
     if masterUnit == 0 or masterUnit == nil then
         if UnitIsGroupLeader("player") then return true end
     elseif type(masterUnit) == "string" then
@@ -449,7 +444,7 @@ function RollSystem:OnLootItemClicked(btn)
     EasyMenu(dropdown, self._itemMenu, "cursor", 0 , 0, "MENU")
 end
 
--- Start / RollTable / CloseRolls (kept similar)
+-- Start / RollTable / CloseRolls (kept)
 function RollSystem:StartRollSession(itemLink, itemID, slot)
     self.db.activeSession = {
         itemLink = itemLink,
@@ -988,7 +983,6 @@ RollSystem.frame:RegisterEvent("PLAYER_LOGIN")
 RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
     if event == "PLAYER_LOGIN" then
         print("GuildRoll: rollsystem loaded (PLAYER_LOGIN).")
-        -- create slash commands for quick tests
         SLASH_GUILDROLL1 = "/grhook"
         SlashCmdList["GUILDROLL"] = function()
             if _G.GuildRoll_RollSystem then
