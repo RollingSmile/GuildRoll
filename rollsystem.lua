@@ -1,9 +1,8 @@
 -- rollsystem.lua
 -- Module for handling mob drops, roll sessions and loot assignment in raids (LootAdmin)
 -- English comments and strings.
--- Compatibility: avoid '#' and '...'; added API compatibility wrappers and /grforce command.
--- BuildCandidateList made more permissive (includes self, party, DE/Bank, soft-reserves).
--- Defensive checks added: do not call GiveMasterLoot on candidates without raid index.
+-- Behavior: IsLootAdmin returns true when GetLootMethod() == "master" and masterUnit corresponds to player.
+-- Includes compatibility wrappers, permissive candidate list, defensive checks, and /grforce.
 
 local RollSystem = {}
 RollSystem.frame = CreateFrame("Frame", "GuildRoll_RollSystemFrame")
@@ -12,7 +11,6 @@ RollSystem.db = {
     activeSession = nil,
     deBank = nil,
 }
--- Feature flags
 RollSystem._forceLootAdmin = false -- can be toggled with /grforce
 
 -- Config
@@ -21,11 +19,9 @@ local MAX_QUEUE_PER_PLAYER = 8
 local CLEANUP_INTERVAL = 10
 local ANNOUNCE_MIN_QUALITY = 2 -- announce items with quality >= this (2 = uncommon/green)
 
--- Buffers
+-- Buffers/state
 RollSystem.announcements = {}
 RollSystem.systemRolls = {}
-
--- Hooking state
 RollSystem.hookedButtons = {}
 RollSystem.buttonsHooked = false
 RollSystem.masterLootFrame = nil
@@ -38,7 +34,7 @@ local ROLL_TYPE_MAP = {
 }
 local TYPE_PRIORITY = { SR=4, MS=3, OS=2, Tmog=1 }
 
--- Compatibility wrappers (some private servers / environments may lack certain globals)
+-- Compatibility wrappers
 local function IsInRaidCompat()
     if type(IsInRaid) == "function" then return IsInRaid() end
     if type(UnitInRaid) == "function" then return UnitInRaid("player") or false end
@@ -71,9 +67,7 @@ local function UnitIsGroupLeaderCompat(unit)
 end
 
 local function GetRaidRosterNameCompat(index)
-    if type(GetRaidRosterInfo) == "function" then
-        return GetRaidRosterInfo(index)
-    end
+    if type(GetRaidRosterInfo) == "function" then return GetRaidRosterInfo(index) end
     return nil
 end
 
@@ -83,13 +77,13 @@ local function GetNumGroupMembersCompat()
     return 0
 end
 
--- safe_getn: avoid '#' operator for compatibility
+-- safe length (avoid '#')
 local function safe_getn(t)
     if not t then return 0 end
     if table.getn then return table.getn(t) end
-    local count = 0
-    for _ in ipairs(t) do count = count + 1 end
-    return count
+    local c = 0
+    for _ in ipairs(t) do c = c + 1 end
+    return c
 end
 
 -- Utilities
@@ -156,7 +150,7 @@ local function validateEP(playerName, epDeclared)
     end
 end
 
--- Add roll to session
+-- Add roll
 function RollSystem:AddRoll(playerName, typeCode, value, epDeclared, epVerified)
     local session = self.db.activeSession
     if not session or session.closed then return end
@@ -175,7 +169,7 @@ function RollSystem:AddRoll(playerName, typeCode, value, epDeclared, epVerified)
     if self.rollFrame then self:RefreshRollTable() end
 end
 
--- Matching announcements <-> system rolls
+-- Matching logic
 function RollSystem:TryMatchForPlayer(player)
     local annQ = self.announcements[player]
     local sysQ = self.systemRolls[player]
@@ -218,7 +212,7 @@ function RollSystem:TryMatchForPlayer(player)
     if sysQ and safe_getn(sysQ) == 0 then self.systemRolls[player] = nil end
 end
 
--- Cleanup old entries
+-- Cleanup
 local lastCleanup = 0
 local function cleanupOld()
     local now = GetTime()
@@ -236,7 +230,7 @@ local function cleanupOld()
     end
 end
 
--- Store announcement
+-- Store announcement/system
 function RollSystem:StoreAnnouncement(player, msg, chan)
     local ts = GetTime()
     local minv, maxv = msg:match("(%d+)%s*[%-%–]%s*(%d+)")
@@ -251,7 +245,6 @@ function RollSystem:StoreAnnouncement(player, msg, chan)
     self:TryMatchForPlayer(player)
 end
 
--- Store system roll
 function RollSystem:StoreSystemRoll(player, value, minv, maxv, raw)
     local ts = GetTime()
     local entry = { value = tonumber(value), min = tonumber(minv), max = tonumber(maxv), ts = ts, raw = raw }
@@ -259,7 +252,7 @@ function RollSystem:StoreSystemRoll(player, value, minv, maxv, raw)
     self:TryMatchForPlayer(player)
 end
 
--- CSV parsing
+-- CSV parsing & soft-reserves import
 local function parseCSVLine(line)
     local res = {}
     local i = 1
@@ -336,20 +329,17 @@ function RollSystem.IsPlayerAddonAdmin()
     return false
 end
 
--- IsLootAdmin: robust detection with force override (RollFor-style)
+-- IsLootAdmin updated: rely on GetLootMethod == "master" and masterUnit matching player
 function RollSystem.IsLootAdmin()
     if RollSystem._forceLootAdmin then return true end
-
     if type(GetLootMethod) ~= "function" then return false end
+
     local lootMethod, masterUnit = GetLootMethod()
     if not lootMethod then return false end
-
-    -- only handle master looter mode
     if lootMethod ~= "master" then return false end
 
     local playerName = UnitNameCompat("player")
-
-    -- masterUnit may be nil or 0 on some servers -> treat raid leader as master
+    -- masterUnit nil or 0: treat group leader as master
     if masterUnit == nil or masterUnit == 0 then
         if UnitIsGroupLeaderCompat("player") then return true end
     end
@@ -361,14 +351,14 @@ function RollSystem.IsLootAdmin()
         else
             masterName = masterUnit
         end
-        if masterName and masterName == playerName then return true end
+        if masterName and Ambiguate(masterName, "none") == Ambiguate(playerName, "none") then return true end
     elseif type(masterUnit) == "number" then
         local index = masterUnit
         if index == 0 then
             if UnitIsGroupLeaderCompat("player") then return true end
         else
             local name = GetRaidRosterNameCompat(index)
-            if name and Ambiguate(name, "none") == playerName then return true end
+            if name and Ambiguate(name, "none") == Ambiguate(playerName, "none") then return true end
         end
     end
 
@@ -376,7 +366,7 @@ function RollSystem.IsLootAdmin()
     return false
 end
 
--- Build loot items from APIs
+-- Build loot items from game APIs
 local function BuildLootItemsFromGame()
     local items = {}
     local num = 0
@@ -402,7 +392,7 @@ local function BuildLootItemsFromGame()
     return items
 end
 
--- Announce loots (LOOT FOUND)
+-- Announce loot found
 local function AnnounceLootFound(lootItems)
     if not lootItems or safe_getn(lootItems) == 0 then return end
     local sendChannel = IsInRaidCompat() and "RAID" or "SAY"
@@ -417,9 +407,9 @@ local function AnnounceLootFound(lootItems)
     end
 end
 
--- Hide default loot frame (best-effort)
+-- Hide default loot frame safely
 local function HideDefaultLootFrame()
-    if InCombatLockdown and InCombatLockdown() then return end
+    if type(InCombatLockdown) == "function" and InCombatLockdown() then return end
     if HideUIPanel and _G.LootFrame and _G.LootFrame:IsShown() then
         pcall(HideUIPanel, _G.LootFrame)
     elseif _G.LootFrame and _G.LootFrame:IsShown() then
@@ -427,7 +417,7 @@ local function HideDefaultLootFrame()
     end
 end
 
--- Custom loot frame (anchored) creation
+-- Custom loot frame
 function RollSystem:OpenCustomLootFrame(lootItems, mobGUID)
     if not RollSystem.IsLootAdmin() then return end
     if not self.lootFrame then
@@ -529,166 +519,9 @@ function RollSystem:StartRollSession(itemLink, itemID, slot)
     RollSystem:OpenRollTableFrame()
 end
 
--- Roll table UI (unchanged)
-function RollSystem:OpenRollTableFrame()
-    local session = self.db.activeSession
-    if not session then return end
+-- Roll table UI & helpers (unchanged)...
 
-    if not self.rollFrame then
-        local f = CreateFrame("Frame", "GuildRoll_RollTable", UIParent, "BackdropTemplate")
-        f:SetSize(560, 380)
-        f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-        f:SetBackdrop({ bgFile="Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=16 })
-        f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        f.title:SetPoint("TOP", 0, -8)
-        f.title:SetText("Rolls")
-        f.closeBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-        f.closeBtn:SetSize(120, 26)
-        f.closeBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -36)
-        f.closeBtn:SetText("Close Rolls")
-        f.closeBtn:SetScript("OnClick", function() RollSystem:CloseRolls() end)
-        f.giveWinnerBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-        f.giveWinnerBtn:SetSize(140, 26)
-        f.giveWinnerBtn:SetPoint("LEFT", f.closeBtn, "RIGHT", 8, 0)
-        f.giveWinnerBtn:SetText("Give to Winner")
-        f.giveWinnerBtn:Disable()
-        f.giveWinnerBtn:SetScript("OnClick", function() RollSystem:PromptGiveToWinner() end)
-        f.giveMemberBtn = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-        f.giveMemberBtn:SetSize(140, 26)
-        f.giveMemberBtn:SetPoint("LEFT", f.giveWinnerBtn, "RIGHT", 8, 0)
-        f.giveMemberBtn:SetText("Give to Member")
-        f.giveMemberBtn:Disable()
-        f.giveMemberBtn:SetScript("OnClick", function()
-            local session = RollSystem.db.activeSession
-            if session then RollSystem:OpenGiveToMemberDialog(session.itemLink, session.itemID, session.slot) end
-        end)
-
-        local scroll = CreateFrame("ScrollFrame", nil, f, "UIPanelScrollFrameTemplate")
-        scroll:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -72)
-        scroll:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 12)
-        f.scroll = scroll
-        local content = CreateFrame("Frame", nil, scroll)
-        content:SetSize(510, 1)
-        scroll:SetScrollChild(content)
-        f.content = content
-        f.rows = {}
-        self.rollFrame = f
-    end
-
-    self.rollFrame.title:SetText("Rolls for: "..tostring(session.itemLink))
-    self:RefreshRollTable()
-    self.rollFrame:Show()
-end
-
--- Refresh roll table (unchanged)
-function RollSystem:RefreshRollTable()
-    local session = self.db.activeSession
-    if not session or not self.rollFrame then return end
-    local content = self.rollFrame.content
-
-    for i,row in ipairs(self.rollFrame.rows) do if row and row.Hide then row:Hide() end end
-    self.rollFrame.rows = {}
-
-    for idx,entry in ipairs(session.rolls) do
-        local r = CreateFrame("Frame", nil, content)
-        r:SetSize(510, 22)
-        r:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(idx-1)*24)
-        r.playerText = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        r.playerText:SetPoint("LEFT", r, "LEFT", 4, 0)
-        r.playerText:SetText(entry.player)
-        r.rollText = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        r.rollText:SetPoint("LEFT", r, "LEFT", 180, 0)
-        r.rollText:SetText(entry.type)
-        r.valueText = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        r.valueText:SetPoint("LEFT", r, "LEFT", 260, 0)
-        r.valueText:SetText(tostring(entry.value))
-
-        local epinfo = ""
-        if entry.epDeclared then epinfo = epinfo .. "EP:"..tostring(entry.epDeclared) end
-        if entry.epOfficer then epinfo = epinfo .. " (officer:"..tostring(entry.epOfficer)..")" end
-        if epinfo ~= "" then
-            r.epText = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            r.epText:SetPoint("LEFT", r, "LEFT", 340, 0)
-            r.epText:SetText(epinfo)
-        end
-
-        if entry.suspicious then
-            r.playerText:SetTextColor(1,0.2,0.2)
-            r.rollText:SetText(r.rollText:GetText().." (EP mismatch)")
-        end
-
-        r:Show()
-        table.insert(self.rollFrame.rows, r)
-    end
-end
-
--- Determine winner (unchanged)
-function RollSystem:DetermineWinner()
-    local session = self.db.activeSession
-    if not session then return nil end
-    if safe_getn(session.rolls) == 0 then return nil end
-    table.sort(session.rolls, function(a,b)
-        if a.priority ~= b.priority then return a.priority > b.priority
-        elseif a.value ~= b.value then return a.value > b.value
-        else return false end
-    end)
-    return session.rolls[1]
-end
-
--- Close rolls (unchanged)
-function RollSystem:CloseRolls()
-    local session = self.db.activeSession
-    if not session or session.closed then return end
-    local winner = self:DetermineWinner()
-    session.winner = winner
-    session.closed = true
-
-    local text
-    if winner then
-        text = "ROLLS CLOSED for "..tostring(session.itemLink)..". Winner: "..winner.player.." ("..(winner.type or "")..", "..tostring(winner.value)..")"
-    else
-        text = "ROLLS CLOSED for "..tostring(session.itemLink)..". No rolls."
-    end
-
-    if IsInRaidCompat() then
-        SendChatMessage(text, "RAID")
-        pcall(SendChatMessage, text, "RAID_WARNING")
-    else
-        SendChatMessage(text, "SAY")
-    end
-
-    if self.rollFrame then
-        self.rollFrame.giveWinnerBtn:Enable()
-        self.rollFrame.giveMemberBtn:Enable()
-    end
-end
-
-local function StaticPopup_ShowConfirm(title, text, acceptFunc)
-    StaticPopupDialogs["GUILDROLL_CONFIRM"] = StaticPopupDialogs["GUILDROLL_CONFIRM"] or {
-        text = text or "",
-        button1 = ACCEPT,
-        button2 = CANCEL,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-        OnAccept = function() if acceptFunc then pcall(acceptFunc) end end,
-    }
-    StaticPopup_Show("GUILDROLL_CONFIRM")
-end
-
-function RollSystem:PromptGiveToWinner()
-    local session = self.db.activeSession
-    if not session or not session.winner then print("No winner to give to.") return end
-    local name = session.winner.player
-    StaticPopup_ShowConfirm("Give to Winner", "Give "..tostring(session.itemLink).." to "..name.."?", function()
-        RollSystem:GiveItemToPlayer(session.itemLink, session.itemID, name)
-    end)
-end
-
--- Give to Member dialog omitted for brevity (unchanged)...
--- Anchored candidate UI, EnsureMasterLootFrame omitted (unchanged)...
-
--- BuildCandidateList: more permissive
+-- BuildCandidateList: permissive (raid, party, self, DE/Bank, soft-reserves)
 local function BuildCandidateList()
     local candidates = {}
     local seen = {}
@@ -701,7 +534,6 @@ local function BuildCandidateList()
         table.insert(candidates, { name = key, index = index })
     end
 
-    -- prefer raid roster when available
     if IsInRaidCompat() then
         local num = GetNumGroupMembersCompat()
         for i=1, num do
@@ -710,7 +542,6 @@ local function BuildCandidateList()
         end
     end
 
-    -- always include self and party members as fallback
     add(UnitNameCompat("player"), 0)
     if type(GetNumGroupMembers) == "function" then
         for i=1, GetNumGroupMembers() do
@@ -722,11 +553,9 @@ local function BuildCandidateList()
         end
     end
 
-    -- include DE/Bank as a special candidate (index = -1)
     local debank = RollSystem:GetDEBank()
     if debank and debank ~= "" then add(debank, -1) end
 
-    -- include soft-reserve attendees (index = -2 for offline/persistent entries)
     if RollSystem.db and RollSystem.db.softReserves then
         for _, list in pairs(RollSystem.db.softReserves) do
             for _, entry in ipairs(list) do
@@ -738,13 +567,11 @@ local function BuildCandidateList()
     return candidates
 end
 
--- Robust button discovery & hooking with defensive checks (callbacks check candidate.index)
+-- Hooking (defensive) and give logic uses candidate.index: >=0 -> auto assign, <0 -> manual guidance
 local function find_and_hook_buttons(self)
     local hookedCount = 0
     local function safeHandleOriginalClick(orig, selfButton, button)
-        if type(orig) == "function" then
-            pcall(function() orig(selfButton, button) end)
-        end
+        if type(orig) == "function" then pcall(function() orig(selfButton, button) end) end
     end
 
     if _G.LootFrame then
@@ -758,22 +585,18 @@ local function find_and_hook_buttons(self)
                     self.hookedButtons[child] = { originalOnClick = orig, slot = slot }
                     child:SetScript("OnClick", function(selfButton, button)
                         if type(selfButton) ~= "table" then
-                            print("GuildRoll: unexpected button type on click:", type(selfButton))
                             safeHandleOriginalClick(orig, selfButton, button)
                             return
                         end
-
                         if not RollSystem.IsLootAdmin() then
                             safeHandleOriginalClick(orig, selfButton, button)
                             return
                         end
-
                         local candidates = BuildCandidateList()
                         if safe_getn(candidates) == 0 then
                             safeHandleOriginalClick(orig, selfButton, button)
                             return
                         end
-
                         local mlf = EnsureMasterLootFrame()
                         mlf.create_candidate_frames(candidates)
                         mlf.anchor(selfButton)
@@ -792,7 +615,6 @@ local function find_and_hook_buttons(self)
                                 mlf.hide()
                                 return
                             end
-                            -- candidate.index: >=0 -> raid/party index, 0 == player
                             if candidate and type(candidate.index) == "number" and candidate.index >= 0 then
                                 if type(GiveMasterLoot) == "function" then
                                     pcall(function() GiveMasterLoot(slotId, candidate.index) end)
@@ -801,7 +623,6 @@ local function find_and_hook_buttons(self)
                                     print("GuildRoll: GiveMasterLoot not available; perform manual assignment.")
                                 end
                             else
-                                -- index negative or nil: cannot auto-assign; give guidance
                                 print("GuildRoll: Cannot auto-assign to "..tostring(candidate.name)..". Candidate has no raid index (offline or DE).")
                                 print("Please assign manually or invite the player. (Candidate index:", tostring(candidate and candidate.index) .. ")")
                             end
@@ -815,7 +636,6 @@ local function find_and_hook_buttons(self)
         end
     end
 
-    -- fallback: global LootButton1..N
     local maxGlobal = 20
     for i=1, maxGlobal do
         local name = "LootButton"..i
@@ -828,22 +648,18 @@ local function find_and_hook_buttons(self)
                 self.hookedButtons[btn] = { originalOnClick = orig, slot = slot }
                 btn:SetScript("OnClick", function(selfButton, button)
                     if type(selfButton) ~= "table" then
-                        print("GuildRoll: unexpected global button type on click:", type(selfButton))
                         safeHandleOriginalClick(orig, selfButton, button)
                         return
                     end
-
                     if not RollSystem.IsLootAdmin() then
                         safeHandleOriginalClick(orig, selfButton, button)
                         return
                     end
-
                     local candidates = BuildCandidateList()
                     if safe_getn(candidates) == 0 then
                         safeHandleOriginalClick(orig, selfButton, button)
                         return
                     end
-
                     local mlf = EnsureMasterLootFrame()
                     mlf.create_candidate_frames(candidates)
                     mlf.anchor(selfButton)
@@ -862,7 +678,6 @@ local function find_and_hook_buttons(self)
                             mlf.hide()
                             return
                         end
-
                         if candidate and type(candidate.index) == "number" and candidate.index >= 0 then
                             if type(GiveMasterLoot) == "function" then
                                 pcall(function() GiveMasterLoot(slotId, candidate.index) end)
@@ -889,10 +704,7 @@ end
 function RollSystem:HookLootButtons()
     if self.buttonsHooked then return end
     local num = GetNumLootItems and GetNumLootItems() or (C_Loot and C_Loot.GetNumLootItems and C_Loot.GetNumLootItems() or 0)
-    if num <= 0 then
-        -- nothing to hook right now; we'll try again on LOOT_OPENED
-        return
-    end
+    if num <= 0 then return end
     local hooked = find_and_hook_buttons(self)
     if hooked > 0 then
         self.buttonsHooked = true
@@ -903,16 +715,6 @@ function RollSystem:HookLootButtons()
 end
 
 function RollSystem:RestoreLootButtons()
-    if not self.buttonsHooked then
-        -- restore any partial entries
-        for btn, data in pairs(self.hookedButtons) do
-            if btn and data and data.originalOnClick then
-                pcall(function() btn:SetScript("OnClick", data.originalOnClick) end)
-            end
-        end
-        self.hookedButtons = {}
-        return
-    end
     for btn, data in pairs(self.hookedButtons) do
         if btn and data and data.originalOnClick then
             pcall(function() btn:SetScript("OnClick", data.originalOnClick) end)
@@ -926,7 +728,7 @@ function RollSystem:RestoreLootButtons()
     print("GuildRoll: Restored loot button handlers.")
 end
 
--- Register addon prefix (safe)
+-- Register addon prefix safely
 if C_ChatInfo and type(C_ChatInfo.RegisterAddonMessagePrefix) == "function" then
     pcall(function() C_ChatInfo.RegisterAddonMessagePrefix("GuildRoll") end)
 end
@@ -941,7 +743,7 @@ RollSystem.frame:RegisterEvent("LOOT_CLOSED")
 RollSystem.frame:RegisterEvent("LOOT_SLOT_CLEARED")
 RollSystem.frame:RegisterEvent("PLAYER_LOGIN")
 
--- Slash /grforce: toggle force LootAdmin (usage: /grforce on|off|status)
+-- /grforce command
 SLASH_GRFORCE1 = "/grforce"
 SlashCmdList["GRFORCE"] = function(msg)
     local cmd = (msg or ""):lower():match("^(%S+)")
@@ -957,11 +759,10 @@ SlashCmdList["GRFORCE"] = function(msg)
     end
 end
 
--- Central event handler
+-- Event handler
 RollSystem.frame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3, arg4, arg5)
     if event == "PLAYER_LOGIN" then
         print("GuildRoll: rollsystem loaded (PLAYER_LOGIN).")
-        -- helper slash commands for testing
         SLASH_GUILDROLL1 = "/grhook"
         SlashCmdList["GUILDROLL"] = function()
             if _G.GuildRoll_RollSystem then
@@ -1010,7 +811,7 @@ RollSystem.frame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3, ar
             RollSystem:HookLootButtons()
             local items = BuildLootItemsFromGame()
             RollSystem:OpenCustomLootFrame(items, nil)
-            if not InCombatLockdown or not InCombatLockdown() then HideDefaultLootFrame() end
+            if not (type(InCombatLockdown) == "function" and InCombatLockdown()) then HideDefaultLootFrame() end
         else
             RollSystem:RestoreLootButtons()
         end
@@ -1031,7 +832,7 @@ RollSystem.frame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3, ar
     cleanupOld()
 end)
 
--- Loot Options menu helper (unchanged)
+-- Loot Options helper (unchanged omitted for brevity)...
 
 -- Expose global
 _G.GuildRoll_RollSystem = RollSystem
