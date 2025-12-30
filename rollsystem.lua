@@ -1,7 +1,8 @@
 -- rollsystem.lua
 -- Module for handling mob drops, roll sessions and loot assignment in raids (LootAdmin)
--- Updated: removed all uses of '#' operator; uses safe_getn() instead for compatibility.
--- English comments/strings.
+-- Full file, English comments and strings.
+-- Compatibility adjustments: avoid '#' operator and vararg '...' usages to work on legacy Lua environments.
+-- Target: Retail-like (Turtle WoW 1.12). Adjust APIs if necessary.
 
 local RollSystem = {}
 RollSystem.frame = CreateFrame("Frame", "GuildRoll_RollSystemFrame")
@@ -417,7 +418,9 @@ function RollSystem:OpenCustomLootFrame(lootItems, mobGUID)
             txt:SetWidth(320)
         end
 
-        btn:SetScript("OnClick", function() RollSystem:OnLootItemClicked(btn) end)
+        btn:SetScript("OnClick", function(selfButton, button)
+            RollSystem:OnLootItemClicked(btn)
+        end)
         table.insert(f.items, btn)
     end
 
@@ -444,7 +447,7 @@ function RollSystem:OnLootItemClicked(btn)
     EasyMenu(dropdown, self._itemMenu, "cursor", 0 , 0, "MENU")
 end
 
--- Start / RollTable / CloseRolls (kept)
+-- Start / RollTable / CloseRolls
 function RollSystem:StartRollSession(itemLink, itemID, slot)
     self.db.activeSession = {
         itemLink = itemLink,
@@ -633,8 +636,8 @@ function RollSystem:OpenGiveToMemberDialog(itemLink, itemID, slot)
         f.searchBox:SetSize(200, 24)
         f.searchBox:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -40)
         f.searchBox:SetAutoFocus(false)
-        f.searchBox:SetScript("OnTextChanged", function(_, user)
-            if not user then return end
+        f.searchBox:SetScript("OnTextChanged", function(self)
+            -- call populate using explicit frame references
             RollSystem:PopulateGiveMemberList(f, f.currentItemLink, f.currentItemID)
         end)
 
@@ -847,14 +850,14 @@ local function find_and_hook_buttons(self)
                 if slot and slot > 0 and not self.hookedButtons[child] then
                     local orig = child:GetScript("OnClick")
                     self.hookedButtons[child] = { originalOnClick = orig, slot = slot }
-                    child:SetScript("OnClick", function(selfButton, ...)
+                    child:SetScript("OnClick", function(selfButton, button)
                         if not RollSystem.IsLootAdmin() then
-                            if orig then orig(selfButton, ...) end
+                            if orig then orig(selfButton, button) end
                             return
                         end
                         local candidates = BuildCandidateList()
                         if safe_getn(candidates) == 0 then
-                            if orig then orig(selfButton, ...) end
+                            if orig then orig(selfButton, button) end
                             return
                         end
                         local mlf = EnsureMasterLootFrame()
@@ -890,14 +893,14 @@ local function find_and_hook_buttons(self)
             if slot and not self.hookedButtons[btn] then
                 local orig = btn:GetScript("OnClick")
                 self.hookedButtons[btn] = { originalOnClick = orig, slot = slot }
-                btn:SetScript("OnClick", function(selfButton, ...)
+                btn:SetScript("OnClick", function(selfButton, button)
                     if not RollSystem.IsLootAdmin() then
-                        if orig then orig(selfButton, ...) end
+                        if orig then orig(selfButton, button) end
                         return
                     end
                     local candidates = BuildCandidateList()
                     if safe_getn(candidates) == 0 then
-                        if orig then orig(selfButton, ...) end
+                        if orig then orig(selfButton, button) end
                         return
                     end
                     local mlf = EnsureMasterLootFrame()
@@ -979,8 +982,8 @@ RollSystem.frame:RegisterEvent("LOOT_CLOSED")
 RollSystem.frame:RegisterEvent("LOOT_SLOT_CLEARED")
 RollSystem.frame:RegisterEvent("PLAYER_LOGIN")
 
--- Event handler
-RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
+-- Central event handler with explicit args
+RollSystem.frame:SetScript("OnEvent", function(self, event, arg1, arg2, arg3, arg4, arg5)
     if event == "PLAYER_LOGIN" then
         print("GuildRoll: rollsystem loaded (PLAYER_LOGIN).")
         SLASH_GUILDROLL1 = "/grhook"
@@ -997,8 +1000,12 @@ RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
                 print("GuildRoll: opened mock loot for testing.")
             end
         end
+
     elseif event == "CHAT_MSG_ADDON" then
-        local prefix, msg, channel, sender = ...
+        local prefix = arg1
+        local msg = arg2
+        local channel = arg3
+        local sender = arg4
         if prefix == "GuildRoll" and msg then
             local parts = {}
             for s in string.gmatch(msg, "([^:]+)") do table.insert(parts, s) end
@@ -1011,7 +1018,7 @@ RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
         end
 
     elseif event == "CHAT_MSG_SYSTEM" then
-        local msg = ...
+        local msg = arg1
         local player, rolls, minStr, maxStr = msg:match("^(.+) rolls (%d+) %((%d+)%-(%d+)%)$")
         if player and rolls then
             player = Ambiguate(player, "none")
@@ -1019,7 +1026,8 @@ RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
         end
 
     elseif event == "CHAT_MSG_SAY" or event == "CHAT_MSG_RAID" then
-        local msg, sender = ...
+        local msg = arg1
+        local sender = arg2
         local sname = Ambiguate(sender, "none")
         if not msg or not sname then return end
         RollSystem:StoreAnnouncement(sname, msg, event)
@@ -1041,7 +1049,7 @@ RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
         if RollSystem.lootFrame and RollSystem.lootFrame:IsShown() then RollSystem.lootFrame:Hide() end
 
     elseif event == "LOOT_SLOT_CLEARED" then
-        local slot = ...
+        local slot = arg1
         if RollSystem.lootFrame and RollSystem.lootFrame:IsShown() then
             local items = BuildLootItemsFromGame()
             RollSystem:OpenCustomLootFrame(items, nil)
