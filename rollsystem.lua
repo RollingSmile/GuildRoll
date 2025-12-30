@@ -1,6 +1,6 @@
 -- rollsystem.lua
 -- Module for handling mob drops, roll sessions and loot assignment in raids (LootAdmin)
--- Updated: more robust loot-button discovery & hooking, explicit loot announce, debug messages.
+-- Updated: tolerant IsLootAdmin (handles masterUnit == 0), debug messages, manual test slash commands.
 -- English UI/texts.
 -- Target: Retail-like (Turtle WoW 1.12). Adjust APIs if necessary.
 
@@ -23,7 +23,7 @@ RollSystem.announcements = {}
 RollSystem.systemRolls = {}
 
 -- Hooking state
-RollSystem.hookedButtons = {} -- map button => { originalOnClick = fn, slot = n }
+RollSystem.hookedButtons = {}
 RollSystem.buttonsHooked = false
 RollSystem.masterLootFrame = nil
 
@@ -97,7 +97,7 @@ local function validateEP(playerName, epDeclared)
     end
 end
 
--- Roll storage & UI update
+-- Add roll
 function RollSystem:AddRoll(playerName, typeCode, value, epDeclared, epVerified)
     local session = self.db.activeSession
     if not session or session.closed then return end
@@ -116,6 +116,7 @@ function RollSystem:AddRoll(playerName, typeCode, value, epDeclared, epVerified)
     if self.rollFrame then self:RefreshRollTable() end
 end
 
+-- Matching logic
 function RollSystem:TryMatchForPlayer(player)
     local annQ = self.announcements[player]
     local sysQ = self.systemRolls[player]
@@ -176,7 +177,7 @@ local function cleanupOld()
     end
 end
 
--- Announcement & system storage
+-- Store announcement/system
 function RollSystem:StoreAnnouncement(player, msg, chan)
     local ts = GetTime()
     local minv, maxv = msg:match("(%d+)%s*[%-%–]%s*(%d+)")
@@ -269,9 +270,9 @@ function RollSystem:GetDEBank()
     return UnitName("player")
 end
 
--- Admin & LootAdmin checks (customize IsPlayerAddonAdmin)
+-- Admin & LootAdmin checks (robust)
 function RollSystem.IsPlayerAddonAdmin()
-    -- TODO: replace with real check (guild rank or persisted list)
+    -- TODO: replace with real check (guild rank or admin list)
     if IsInGuild() then return true end
     return false
 end
@@ -282,12 +283,29 @@ function RollSystem.IsLootAdmin()
     local lootMethod, masterUnit = GetLootMethod()
     if not lootMethod or lootMethod ~= "master" then return false end
     local playerName = UnitName("player")
-    if masterUnit then
+    -- handle different masterUnit types: string, number, or 0 sentinel
+    if masterUnit == 0 or masterUnit == nil then
+        -- some servers return 0 for master looter (interpreted as leader/master)
+        -- allow if player is raid leader or master looter per other checks
+        if UnitIsGroupLeader("player") then return true end
+    elseif type(masterUnit) == "string" then
+        -- could be a unit token like "player" or "raid3", or a player name
         local masterName = nil
-        if type(masterUnit) == "string" then
-            if masterUnit:match("^raid") or masterUnit:match("^party") then masterName = UnitName(masterUnit) else masterName = masterUnit end
+        if masterUnit:match("^raid") or masterUnit:match("^party") or masterUnit == "player" then
+            masterName = UnitName(masterUnit)
+        else
+            masterName = masterUnit
         end
         if masterName and masterName == playerName then return true end
+    elseif type(masterUnit) == "number" then
+        -- some APIs may return numeric raid index
+        local index = masterUnit
+        if index == 0 then
+            if UnitIsGroupLeader("player") then return true end
+        else
+            local name = GetRaidRosterInfo(index)
+            if name and Ambiguate(name, "none") == playerName then return true end
+        end
     end
     if UnitIsGroupLeader("player") then return true end
     return false
@@ -306,7 +324,6 @@ local function BuildLootItemsFromGame()
         local itemLink = nil
         if GetLootSlotLink then itemLink = GetLootSlotLink(slot)
         elseif C_Loot and C_Loot.GetLootSlotLink then itemLink = C_Loot.GetLootSlotLink(slot) end
-        -- try GetLootSlotInfo quality if available
         local quality = nil
         if GetLootSlotInfo then
             local _, _, _, q = GetLootSlotInfo(slot)
@@ -320,7 +337,7 @@ local function BuildLootItemsFromGame()
     return items
 end
 
--- Announce loot links (LOOT FOUND) — sends "LOOT FOUND:" then per-line item links for quality >= ANNOUNCE_MIN_QUALITY
+-- Announce loot found
 local function AnnounceLootFound(lootItems)
     if not lootItems or #lootItems == 0 then return end
     local sendChannel = IsInRaid() and "RAID" or "SAY"
@@ -335,7 +352,7 @@ local function AnnounceLootFound(lootItems)
     end
 end
 
--- Hide default loot frame (limited by combat restrictions)
+-- Hide default loot frame (limited by combat)
 local function HideDefaultLootFrame()
     if InCombatLockdown() then return end
     if HideUIPanel and _G.LootFrame and _G.LootFrame:IsShown() then
@@ -345,7 +362,7 @@ local function HideDefaultLootFrame()
     end
 end
 
--- Custom loot frame (list + announcements). Same as before.
+-- Custom loot frame (summary + announce)
 function RollSystem:OpenCustomLootFrame(lootItems, mobGUID)
     if not RollSystem.IsLootAdmin() then return end
     if not self.lootFrame then
@@ -400,9 +417,7 @@ function RollSystem:OpenCustomLootFrame(lootItems, mobGUID)
         table.insert(f.items, btn)
     end
 
-    -- announce links (only for LootAdmin; adapt if you want announcement for everyone)
     AnnounceLootFound(lootItems)
-
     f:Show()
 end
 
@@ -425,7 +440,7 @@ function RollSystem:OnLootItemClicked(btn)
     EasyMenu(dropdown, self._itemMenu, "cursor", 0 , 0, "MENU")
 end
 
--- Start / RollTable / AddRoll / CloseRolls etc. (kept same as previous implementation)
+-- Start / RollTable / CloseRolls (kept)
 function RollSystem:StartRollSession(itemLink, itemID, slot)
     self.db.activeSession = {
         itemLink = itemLink,
@@ -599,10 +614,9 @@ function RollSystem:PromptGiveToWinner()
     end)
 end
 
--- Give to Member UI (keeps same behavior)
+-- Give to Member dialog
 function RollSystem:OpenGiveToMemberDialog(itemLink, itemID, slot)
     if not self.giveMemberFrame then
-        -- create frame (same as previous implementation)
         local f = CreateFrame("Frame", "GuildRoll_GiveMemberFrame", UIParent, "BackdropTemplate")
         f:SetSize(340, 420)
         f:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
@@ -763,7 +777,7 @@ function RollSystem:GiveItemToPlayer(itemLink, itemID, playerName)
     end
 end
 
--- Master loot anchored candidate UI
+-- Anchored candidate UI
 local function EnsureMasterLootFrame()
     if RollSystem.masterLootFrame then return RollSystem.masterLootFrame end
     local container = CreateFrame("Frame", "GuildRoll_MasterLootFrame", UIParent, "BackdropTemplate")
@@ -806,7 +820,7 @@ local function EnsureMasterLootFrame()
     return container
 end
 
--- Build candidate list (simple: uses raid roster)
+-- Candidate list (raid)
 local function BuildCandidateList()
     local candidates = {}
     if IsInRaid() then
@@ -819,10 +833,9 @@ local function BuildCandidateList()
     return candidates
 end
 
--- Robust loot button discovery and hooking
+-- Robust button discovery & hooking
 local function find_and_hook_buttons(self)
     local hookedCount = 0
-    -- 1) scan children of LootFrame (preferred)
     if _G.LootFrame then
         for _, child in ipairs({ _G.LootFrame:GetChildren() }) do
             if child and type(child.GetID) == "function" then
@@ -864,7 +877,6 @@ local function find_and_hook_buttons(self)
         end
     end
 
-    -- 2) fallback: check global LootButton1..N
     local maxGlobal = 20
     for i=1, maxGlobal do
         local name = "LootButton"..i
@@ -910,7 +922,6 @@ local function find_and_hook_buttons(self)
     return hookedCount
 end
 
--- Hook loot buttons entry
 function RollSystem:HookLootButtons()
     if self.buttonsHooked then return end
     local num = GetNumLootItems and GetNumLootItems() or (C_Loot and C_Loot.GetNumLootItems and C_Loot.GetNumLootItems() or 0)
@@ -927,10 +938,8 @@ function RollSystem:HookLootButtons()
     end
 end
 
--- Restore original handlers
 function RollSystem:RestoreLootButtons()
     if not self.buttonsHooked then
-        -- still may have entries (partial) — restore all if present
         for btn, data in pairs(self.hookedButtons) do
             if btn and data and data.originalOnClick then btn:SetScript("OnClick", data.originalOnClick) end
         end
@@ -950,7 +959,7 @@ function RollSystem:RestoreLootButtons()
     print("GuildRoll: Restored loot button handlers.")
 end
 
--- Register addon message prefix
+-- Register addon prefix
 if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
     C_ChatInfo.RegisterAddonMessagePrefix("GuildRoll")
 else
@@ -965,10 +974,28 @@ RollSystem.frame:RegisterEvent("CHAT_MSG_RAID")
 RollSystem.frame:RegisterEvent("LOOT_OPENED")
 RollSystem.frame:RegisterEvent("LOOT_CLOSED")
 RollSystem.frame:RegisterEvent("LOOT_SLOT_CLEARED")
+RollSystem.frame:RegisterEvent("PLAYER_LOGIN")
 
 -- Event handler
 RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
-    if event == "CHAT_MSG_ADDON" then
+    if event == "PLAYER_LOGIN" then
+        print("GuildRoll: rollsystem loaded (PLAYER_LOGIN).")
+        -- create slash commands for quick tests
+        SLASH_GUILDROLL1 = "/grhook"
+        SlashCmdList["GUILDROLL"] = function()
+            if _G.GuildRoll_RollSystem then
+                _G.GuildRoll_RollSystem:HookLootButtons()
+                print("GuildRoll: manual HookLootButtons() called.")
+            end
+        end
+        SLASH_GUILDROLLMOCK1 = "/grmockloot"
+        SlashCmdList["GUILDROLLMOCK"] = function()
+            if _G.GuildRoll_RollSystem then
+                _G.GuildRoll_RollSystem:OpenCustomLootFrame({{slot=1, itemLink="|cff1eff00|Hitem:12345:0:0:0|h[Test Item]|h|r", itemID=12345, quality=2}}, "mock")
+                print("GuildRoll: opened mock loot for testing.")
+            end
+        end
+    elseif event == "CHAT_MSG_ADDON" then
         local prefix, msg, channel, sender = ...
         if prefix == "GuildRoll" and msg then
             local parts = {}
@@ -996,16 +1023,13 @@ RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
         RollSystem:StoreAnnouncement(sname, msg, event)
 
     elseif event == "LOOT_OPENED" then
-        print("GuildRoll: LOOT_OPENED event received. IsLootAdmin:", tostring(RollSystem.IsLootAdmin()))
+        print("GuildRoll: LOOT_OPENED event. IsLootAdmin:", tostring(RollSystem.IsLootAdmin()))
         if RollSystem.IsLootAdmin() then
-            -- Hook buttons
             RollSystem:HookLootButtons()
-            -- Build and show custom loot frame summary + announce links
             local items = BuildLootItemsFromGame()
             RollSystem:OpenCustomLootFrame(items, nil)
             if not InCombatLockdown() then HideDefaultLootFrame() end
         else
-            -- Ensure we don't keep hooks if not admin
             RollSystem:RestoreLootButtons()
         end
 
@@ -1025,7 +1049,7 @@ RollSystem.frame:SetScript("OnEvent", function(_, event, ...)
     cleanupOld()
 end)
 
--- Loot Options menu helper (same as before)
+-- Loot Options menu helper
 function RollSystem.RegisterLootOptionsMenu(parentMenu)
     if not RollSystem.IsPlayerAddonAdmin() then return end
     local btn = CreateFrame("Button", "GuildRoll_LootOptionsButton", parentMenu, "UIPanelButtonTemplate")
