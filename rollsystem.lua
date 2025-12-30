@@ -637,7 +637,6 @@ function RollSystem:OpenGiveToMemberDialog(itemLink, itemID, slot)
         f.searchBox:SetPoint("TOPLEFT", f, "TOPLEFT", 12, -40)
         f.searchBox:SetAutoFocus(false)
         f.searchBox:SetScript("OnTextChanged", function(self)
-            -- call populate using explicit frame references
             RollSystem:PopulateGiveMemberList(f, f.currentItemLink, f.currentItemID)
         end)
 
@@ -965,11 +964,9 @@ function RollSystem:RestoreLootButtons()
     print("GuildRoll: Restored loot button handlers.")
 end
 
--- Register addon prefix
-if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
-    C_ChatInfo.RegisterAddonMessagePrefix("GuildRoll")
-else
-    RegisterAddonMessagePrefix("GuildRoll")
+-- Register addon prefix (safe: only use API if available)
+if C_ChatInfo and type(C_ChatInfo.RegisterAddonMessagePrefix) == "function" then
+    pcall(function() C_ChatInfo.RegisterAddonMessagePrefix("GuildRoll") end)
 end
 
 -- Events
