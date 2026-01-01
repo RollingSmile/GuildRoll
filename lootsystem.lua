@@ -249,7 +249,7 @@ function RollParser:AddRoll(roll)
     if not roll then return end
     
     -- Keep only recent rolls
-    if #self.recentRolls >= self.maxRolls then
+    if table.getn(self.recentRolls) >= self.maxRolls then
         table.remove(self.recentRolls, 1)
     end
     
@@ -305,8 +305,8 @@ function RollParser:Cleanup()
     end
     
     -- Clean up old rolls
-    if #self.recentRolls > self.maxRolls then
-        while #self.recentRolls > self.maxRolls do
+    if table.getn(self.recentRolls) > self.maxRolls then
+        while table.getn(self.recentRolls) > self.maxRolls do
             table.remove(self.recentRolls, 1)
         end
     end
@@ -690,14 +690,14 @@ function DroppedLootAnnounce:on_loot_opened()
     end
     
     -- Announce items (if any)
-    if #announcements > 0 then
+    if table.getn(announcements) > 0 then
         self:announce_items(announcements)
     end
 end
 
 -- Announce items to raid/party
 function DroppedLootAnnounce:announce_items(announcements)
-    if not announcements or #announcements == 0 then
+    if not announcements or table.getn(announcements) == 0 then
         return
     end
     
