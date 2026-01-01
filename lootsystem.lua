@@ -329,11 +329,13 @@ _G.GuildRoll_RollParser = GuildRoll_RollParser
 if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] RollParser loaded")
 end
-return GuildRoll_RollParser
+-- Module continues - do not return here
 
+-- =============================================================================
 -- MasterLootTracker.lua
 -- Tracks slot -> item mapping for master loot
 -- Stores item.id, name, link, quality for each loot slot
+-- =============================================================================
 
 if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootTracker.lua is loading...")
@@ -394,11 +396,13 @@ _G.MasterLootTracker = MasterLootTracker
 if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootTracker exported to _G")
 end
-return MasterLootTracker
+-- Module continues - do not return here
 
+-- =============================================================================
 -- DroppedLoot.lua
 -- Persists dropped items across sessions
 -- Uses GuildRoll saved variables
+-- =============================================================================
 
 local DroppedLoot = {}
 DroppedLoot.__index = DroppedLoot
@@ -486,8 +490,9 @@ _G.DroppedLoot = DroppedLoot
 if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] DroppedLoot exported to _G")
 end
-return DroppedLoot
+-- Module continues - do not return here
 
+-- =============================================================================
 -- AwardedLoot.lua
 -- Tracks awarded items to avoid double-awarding
 -- Persists to saved variables
@@ -576,8 +581,9 @@ _G.AwardedLoot = AwardedLoot
 if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] AwardedLoot exported to _G")
 end
-return AwardedLoot
+-- Module continues - do not return here
 
+-- =============================================================================
 -- DroppedLootAnnounce.lua
 -- Scans loot on LOOT_OPENED and populates MasterLootTracker
 -- Filters by loot threshold and announces items
@@ -719,8 +725,9 @@ _G.DroppedLootAnnounce = DroppedLootAnnounce
 if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] DroppedLootAnnounce exported to _G")
 end
-return DroppedLootAnnounce
+-- Module continues - do not return here
 
+-- =============================================================================
 -- MasterLootFrame.lua
 -- UI for displaying loot candidates and handling selections
 -- Creates, anchors and shows candidate UI
@@ -991,8 +998,9 @@ _G.MasterLootFrame = MasterLootFrame
 if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootFrame exported to _G")
 end
-return MasterLootFrame
+-- Module continues - do not return here
 
+-- =============================================================================
 -- MasterLoot.lua
 -- Orchestrates master loot flow
 -- Handles LOOT_OPENED, LOOT_CLOSED, LOOT_SLOT_CLEARED, and error messages
@@ -1171,8 +1179,9 @@ _G.MasterLoot = MasterLoot
 if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] MasterLoot loaded")
 end
-return MasterLoot
+-- Module continues - do not return here
 
+-- =============================================================================
 -- MasterLootWarning.lua
 -- Optional: Creates on-screen warning if not master looter in raids
 
