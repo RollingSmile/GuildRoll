@@ -978,6 +978,51 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
       end
     end)
   end
+  
+  -- Initialize Master Loot System
+  if MasterLootTracker and DroppedLoot and AwardedLoot and DroppedLootAnnounce and MasterLootFrame and MasterLoot then
+    -- Create instances
+    self._masterLootTracker = MasterLootTracker.new()
+    self._droppedLoot = DroppedLoot.new()
+    self._awardedLoot = AwardedLoot.new()
+    self._droppedLootAnnounce = DroppedLootAnnounce.new(self._masterLootTracker, self._droppedLoot)
+    self._masterLootFrame = MasterLootFrame.new()
+    self._masterLoot = MasterLoot.new(self._masterLootFrame, self._masterLootTracker, self._awardedLoot)
+    
+    -- Register loot events
+    self:RegisterEvent("LOOT_OPENED", function()
+      if self._droppedLootAnnounce then
+        self._droppedLootAnnounce:on_loot_opened()
+      end
+      if self._masterLoot then
+        self._masterLoot:on_loot_opened()
+      end
+    end)
+    
+    self:RegisterEvent("LOOT_CLOSED", function()
+      if self._masterLoot then
+        self._masterLoot:on_loot_closed()
+      end
+    end)
+    
+    self:RegisterEvent("LOOT_SLOT_CLEARED", function()
+      if self._masterLoot and arg1 then
+        self._masterLoot:on_loot_slot_cleared(arg1)
+      end
+    end)
+    
+    self:RegisterEvent("UI_ERROR_MESSAGE", function()
+      if self._masterLoot and arg1 then
+        self._masterLoot:on_error_message(arg1)
+      end
+    end)
+    
+    -- Optional: Initialize and start master loot warning
+    if MasterLootWarning then
+      self._masterLootWarning = MasterLootWarning.new()
+      -- Uncomment to enable warning: self._masterLootWarning:start_checking()
+    end
+  end
 
   -- Auto-enable AdminLog module for admins
   if self:IsAdmin() then
