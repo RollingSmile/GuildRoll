@@ -21,7 +21,7 @@ function MasterLootFrame:hook_loot_buttons()
     
     -- Hook LootButton click handlers
     for i = 1, LOOTFRAME_NUMBUTTONS or 4 do
-        local button = getglobal("LootButton" .. i)
+        local button = _G["LootButton" .. i]
         if button then
             -- Store original handler
             self.original_click_handlers[i] = button:GetScript("OnClick")
@@ -41,7 +41,7 @@ function MasterLootFrame:restore_loot_buttons()
     if not self.hooked then return end
     
     for i = 1, LOOTFRAME_NUMBUTTONS or 4 do
-        local button = getglobal("LootButton" .. i)
+        local button = _G["LootButton" .. i]
         if button and self.original_click_handlers[i] then
             button:SetScript("OnClick", self.original_click_handlers[i])
         end
@@ -158,7 +158,6 @@ function MasterLootFrame:hide_candidate_selection()
     for slot, frame in pairs(self.frames) do
         if frame then
             frame:Hide()
-            frame = nil
         end
     end
     self.frames = {}

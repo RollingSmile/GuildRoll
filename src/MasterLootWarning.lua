@@ -24,7 +24,6 @@ function MasterLootWarning:should_show_warning()
     if loot_method == "master" then
         -- Check if we're the master looter
         local player_name = UnitName("player")
-        local _, _, master_name = GetLootMethod()
         
         -- In 1.12, master_raid is the raid index
         if master_raid then
