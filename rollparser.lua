@@ -107,12 +107,7 @@ function RollParser:ParseRoll(message)
     end
     
     -- Clean up player name (remove server name if present)
-    -- Use utility function if available, otherwise inline pattern
-    if GuildRoll and GuildRoll.stripRealmName then
-        playerName = GuildRoll:stripRealmName(playerName)
-    else
-        playerName = string.gsub(playerName, "%-[^%-]+$", "")
-    end
+    playerName = string.gsub(playerName, "%-[^%-]+$", "")
     
     minRoll = tonumber(minRoll)
     maxRoll = tonumber(maxRoll)
@@ -136,8 +131,8 @@ function RollParser:ParseRoll(message)
 end
 
 -- Determine EP from roll range
--- CSR: 100+ EP to 200+ EP (SR bonus + CSR bonus)
--- SR: 100+ EP to 200+ EP
+-- CSR: 101+ EP to 200+ EP (SR base + CSR bonus)
+-- SR: 101+ EP to 200+ EP
 -- MS: 1+ EP to 100+ EP
 function RollParser:DetermineEPFromRoll(roll)
     if not roll then return nil, nil end
@@ -263,6 +258,14 @@ end
 function RollParser:HandleChatMessage(message, sender, msgType)
     if not message then return end
     
+    -- Periodically clean up old data (every 100 messages)
+    if not self.messageCount then self.messageCount = 0 end
+    self.messageCount = self.messageCount + 1
+    if self.messageCount >= 100 then
+        self:Cleanup()
+        self.messageCount = 0
+    end
+    
     -- Try to parse as submission first
     local submission = self:ParseSubmission(message, sender)
     if submission then
@@ -314,14 +317,8 @@ end
 function RollParser:Initialize()
     debugPrint("RollParser initialized")
     
-    -- Set up periodic cleanup
-    if not self.cleanupScheduled then
-        self.cleanupScheduled = true
-        -- Schedule cleanup every 60 seconds
-        if GuildRoll and GuildRoll.ScheduleRepeatingEvent then
-            GuildRoll:ScheduleRepeatingEvent("RollParserCleanup", function() RollParser:Cleanup() end, 60)
-        end
-    end
+    -- Note: Periodic cleanup could be added here using a timer system
+    -- For now, cleanup is called manually when needed
 end
 
 -- Export functions to GuildRoll namespace
