@@ -19,8 +19,8 @@ local RollParser = GuildRoll_RollParser
 
 -- Debug helper
 local function debugPrint(msg)
-    if GuildRoll and GuildRoll.DEBUG then
-        print("|cff9664c8RollParser:|r " .. tostring(msg))
+    if GuildRoll and GuildRoll.DEBUG and GuildRoll.debugPrint then
+        GuildRoll:debugPrint("RollParser: " .. tostring(msg))
     end
 end
 
@@ -107,7 +107,12 @@ function RollParser:ParseRoll(message)
     end
     
     -- Clean up player name (remove server name if present)
-    playerName = string.gsub(playerName, "%-[^%-]+$", "")
+    -- Use utility function if available, otherwise inline pattern
+    if GuildRoll and GuildRoll.stripRealmName then
+        playerName = GuildRoll:stripRealmName(playerName)
+    else
+        playerName = string.gsub(playerName, "%-[^%-]+$", "")
+    end
     
     minRoll = tonumber(minRoll)
     maxRoll = tonumber(maxRoll)
@@ -144,10 +149,10 @@ function RollParser:DetermineEPFromRoll(roll)
     local ep = 0
     local rollType = nil
     
-    if min >= 100 and max >= 200 then
-        -- SR or CSR range (100+EP to 200+EP)
-        -- Base EP is min - 100
-        ep = min - 100
+    if min >= 101 and max >= 200 then
+        -- SR or CSR range (101+EP to 200+EP)
+        -- Base EP is min - 101
+        ep = min - 101
         
         -- Check if it's CSR (has additional bonus beyond 100)
         local totalBonus = max - min
@@ -157,7 +162,7 @@ function RollParser:DetermineEPFromRoll(roll)
         else
             rollType = "SR"
         end
-    elseif min >= 1 and max >= 100 and max < 200 then
+    elseif min >= 1 and max >= 100 and max <= 200 then
         -- MS range (1+EP to 100+EP)
         ep = min - 1
         rollType = "MS"
@@ -165,10 +170,6 @@ function RollParser:DetermineEPFromRoll(roll)
         -- Standard roll (no EP)
         ep = 0
         rollType = "Standard"
-    elseif min == 1 and max == 101 then
-        -- SR without EP
-        ep = 0
-        rollType = "SR"
     elseif min == 1 and max == 99 then
         -- OS/Alt roll
         ep = 0
@@ -318,7 +319,7 @@ function RollParser:Initialize()
         self.cleanupScheduled = true
         -- Schedule cleanup every 60 seconds
         if GuildRoll and GuildRoll.ScheduleRepeatingEvent then
-            GuildRoll:ScheduleRepeatingEvent("RollParserCleanup", self.Cleanup, 60, self)
+            GuildRoll:ScheduleRepeatingEvent("RollParserCleanup", function() RollParser:Cleanup() end, 60)
         end
     end
 end
