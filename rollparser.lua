@@ -43,7 +43,7 @@ function RollParser:ParseSubmission(message, sender)
     local playerName, itemInfo, rollType = string.match(message, "%[RL%]%s*([^:]+):%s*(.-)%s*%-%s*(%w+)%s*$")
     
     if not playerName or not itemInfo or not rollType then
-        -- Try alternative pattern without item info
+        -- Try alternative pattern without item info: [RL] PlayerName: RollType
         playerName, rollType = string.match(message, "%[RL%]%s*([^:]+):%s*(%w+)%s*$")
         itemInfo = ""
     end
@@ -60,7 +60,7 @@ function RollParser:ParseSubmission(message, sender)
     -- Normalize roll type
     rollType = string.upper(rollType)
     
-    -- Validate roll type
+    -- Validate roll type before proceeding
     local validTypes = {
         MS = true,
         SR = true,
@@ -72,7 +72,7 @@ function RollParser:ParseSubmission(message, sender)
     }
     
     if not validTypes[rollType] then
-        debugPrint("Invalid roll type: " .. rollType)
+        debugPrint("Invalid roll type: " .. rollType .. " from message: " .. message)
         return nil
     end
     
@@ -158,7 +158,9 @@ function RollParser:DetermineEPFromRoll(roll)
     elseif min == 1 and max == 98 then
         ep = 0
         rollType = "Transmog"
-    -- EP-aware rolls (range is 99-100, allowing for small variations)
+    -- EP-aware rolls (range is 99-100)
+    -- Note: Allowing 100 to handle edge cases but this may classify some
+    -- invalid rolls. For strict validation, use rangeSize == 99.
     elseif rangeSize >= 99 and rangeSize <= 100 then
         if min >= 101 then
             -- SR range (101+EP to 200+EP)
