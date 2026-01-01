@@ -35,14 +35,14 @@ Libs\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
 Libs\ChatThrottleLib.lua
 
 localization.lua
-lootsystem/rollparser.lua
-lootsystem/MasterLootTracker.lua
-lootsystem/DroppedLoot.lua
-lootsystem/AwardedLoot.lua
-lootsystem/DroppedLootAnnounce.lua
-lootsystem/MasterLootFrame.lua
-lootsystem/MasterLoot.lua
-lootsystem/MasterLootWarning.lua
+rollparser.lua
+MasterLootTracker.lua
+DroppedLoot.lua
+AwardedLoot.lua
+DroppedLootAnnounce.lua
+MasterLootFrame.lua
+MasterLoot.lua
+MasterLootWarning.lua
 guildroll.lua
 utils.lua
 ui_helpers.lua
