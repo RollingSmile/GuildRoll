@@ -901,6 +901,57 @@ function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
   self:RegisterEvent("CHAT_MSG_ADDON",function() 
         GuildRollMSG:OnCHAT_MSG_ADDON( arg1, arg2, arg3, arg4)
     end)
+  
+  -- Register chat events for RollParser
+  self:RegisterEvent("CHAT_MSG_SYSTEM", function()
+      if GuildRoll_RollParser and arg1 then
+        GuildRoll_RollParser:HandleChatMessage(arg1, nil, "SYSTEM")
+      end
+    end)
+  self:RegisterEvent("CHAT_MSG_RAID", function()
+      if GuildRoll_RollParser and arg1 and arg2 then
+        GuildRoll_RollParser:HandleChatMessage(arg1, arg2, "RAID")
+      end
+    end)
+  self:RegisterEvent("CHAT_MSG_RAID_LEADER", function()
+      if GuildRoll_RollParser and arg1 and arg2 then
+        GuildRoll_RollParser:HandleChatMessage(arg1, arg2, "RAID_LEADER")
+      end
+    end)
+  self:RegisterEvent("CHAT_MSG_PARTY", function()
+      if GuildRoll_RollParser and arg1 and arg2 then
+        GuildRoll_RollParser:HandleChatMessage(arg1, arg2, "PARTY")
+      end
+    end)
+  
+  -- Register loot events for Master Loot System
+  self:RegisterEvent("LOOT_OPENED", function()
+      if self._droppedLootAnnounce then
+        self._droppedLootAnnounce:on_loot_opened()
+      end
+      if self._masterLoot then
+        self._masterLoot:on_loot_opened()
+      end
+    end)
+  
+  self:RegisterEvent("LOOT_CLOSED", function()
+      if self._masterLoot then
+        self._masterLoot:on_loot_closed()
+      end
+    end)
+  
+  self:RegisterEvent("LOOT_SLOT_CLEARED", function()
+      if self._masterLoot and arg1 then
+        self._masterLoot:on_loot_slot_cleared(arg1)
+      end
+    end)
+  
+  self:RegisterEvent("UI_ERROR_MESSAGE", function()
+      if self._masterLoot and arg1 then
+        self._masterLoot:on_error_message(arg1)
+      end
+    end)
+  
   self:RegisterEvent("RAID_ROSTER_UPDATE",function()
       GuildRoll:SetRefresh(true)
     end)
@@ -951,6 +1002,28 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
   end
 
   self:testMain()
+  
+  -- Initialize RollParser
+  if GuildRoll_RollParser then
+    GuildRoll_RollParser:Initialize()
+  end
+  
+  -- Initialize Master Loot System
+  if MasterLootTracker and DroppedLoot and AwardedLoot and DroppedLootAnnounce and MasterLootFrame and MasterLoot then
+    -- Create instances
+    self._masterLootTracker = MasterLootTracker.new()
+    self._droppedLoot = DroppedLoot.new()
+    self._awardedLoot = AwardedLoot.new()
+    self._droppedLootAnnounce = DroppedLootAnnounce.new(self._masterLootTracker, self._droppedLoot)
+    self._masterLootFrame = MasterLootFrame.new()
+    self._masterLoot = MasterLoot.new(self._masterLootFrame, self._masterLootTracker, self._awardedLoot)
+    
+    -- Optional: Initialize master loot warning (disabled by default)
+    if MasterLootWarning then
+      self._masterLootWarning = MasterLootWarning.new()
+      -- Uncomment to enable warning: self._masterLootWarning:start_checking()
+    end
+  end
 
   -- Auto-enable AdminLog module for admins
   if self:IsAdmin() then
@@ -3183,6 +3256,33 @@ function GuildRoll:GetReward()
     return isMainStanding , reward
   end
 
+end
+
+-- Callback for RollParser when a loot roll is detected and associated
+function GuildRoll:OnLootRoll(rollData)
+  if not rollData then return end
+  
+  -- Log the loot roll for debugging
+  if GuildRoll.DEBUG then
+    local msg = string.format(
+      "Loot roll detected: %s rolled %s (%d-%d = %d) for %s with %d EP",
+      rollData.player,
+      rollData.rollType,
+      rollData.rollMin,
+      rollData.rollMax,
+      rollData.rollResult,
+      rollData.itemInfo or "unknown item",
+      rollData.ep or 0
+    )
+    self:debugPrint(msg)
+  end
+  
+  -- Could add additional processing here:
+  -- - Track roll history
+  -- - Validate roll ranges
+  -- - Award loot automatically
+  -- - Log to admin log
+  -- For now, just log the detection
 end
 
 function GuildRoll:GetGuildName()

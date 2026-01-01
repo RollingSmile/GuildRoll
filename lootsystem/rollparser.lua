@@ -315,4 +315,5 @@ if GuildRoll then
 end
 
 _G.GuildRoll_RollParser = GuildRoll_RollParser
+DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] RollParser loaded")
 return GuildRoll_RollParser

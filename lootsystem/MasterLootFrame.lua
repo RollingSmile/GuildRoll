@@ -12,39 +12,88 @@ function MasterLootFrame.new()
     self.frames = {}  -- slot -> frame mapping
     self.hooked = false
     self.original_click_handlers = {}
+    self.lootframe_onshow_hooked = false
     return self
 end
 
--- Hook loot buttons to show candidate selection
-function MasterLootFrame:hook_loot_buttons()
-    if self.hooked then return end
+-- Try to hook loot buttons (internal helper)
+local function try_hook_buttons(self)
+    local found_any = false
     
-    -- Hook LootButton click handlers
-    for i = 1, LOOTFRAME_NUMBUTTONS or 4 do
+    -- Try to find and hook LootButton1..20
+    for i = 1, 20 do
         local button = _G["LootButton" .. i]
         if button then
-            -- Store original handler
-            self.original_click_handlers[i] = button:GetScript("OnClick")
-            
-            -- Set new handler
-            button:SetScript("OnClick", function()
-                self:on_loot_button_click(this, arg1)
-            end)
+            found_any = true
+            -- Only hook if not already hooked
+            if not self.original_click_handlers[i] then
+                -- Store original handler
+                self.original_click_handlers[i] = button:GetScript("OnClick")
+                
+                -- Set new handler
+                button:SetScript("OnClick", function()
+                    self:on_loot_button_click(this, arg1)
+                end)
+            end
         end
     end
     
-    self.hooked = true
+    if found_any then
+        self.hooked = true
+    end
+    
+    return found_any
+end
+
+-- Hook loot buttons to show candidate selection (robust version)
+function MasterLootFrame:hook_loot_buttons()
+    if self.hooked then return end
+    
+    -- Try to hook buttons now
+    local found = try_hook_buttons(self)
+    
+    -- If no buttons found yet, hook LootFrame OnShow to retry when it appears
+    if not found and not self.lootframe_onshow_hooked then
+        local lootFrame = _G["LootFrame"]
+        if lootFrame then
+            -- Store original OnShow handler
+            self.original_lootframe_onshow = lootFrame:GetScript("OnShow")
+            
+            -- Set new OnShow that retries hooking
+            lootFrame:SetScript("OnShow", function()
+                -- Call original handler first
+                if self.original_lootframe_onshow then
+                    self.original_lootframe_onshow()
+                end
+                
+                -- Try to hook buttons
+                try_hook_buttons(self)
+            end)
+            
+            self.lootframe_onshow_hooked = true
+        end
+    end
 end
 
 -- Restore original loot button handlers
 function MasterLootFrame:restore_loot_buttons()
-    if not self.hooked then return end
+    if not self.hooked and not self.lootframe_onshow_hooked then return end
     
-    for i = 1, LOOTFRAME_NUMBUTTONS or 4 do
+    -- Restore button handlers
+    for i = 1, 20 do
         local button = _G["LootButton" .. i]
         if button and self.original_click_handlers[i] then
             button:SetScript("OnClick", self.original_click_handlers[i])
         end
+    end
+    
+    -- Restore LootFrame OnShow if we hooked it
+    if self.lootframe_onshow_hooked then
+        local lootFrame = _G["LootFrame"]
+        if lootFrame and self.original_lootframe_onshow then
+            lootFrame:SetScript("OnShow", self.original_lootframe_onshow)
+        end
+        self.lootframe_onshow_hooked = false
     end
     
     self.hooked = false
