@@ -5,11 +5,11 @@ world of warcraft addon data
 ## X-Website: https://github.com/RollingSmile/GuildEP
 ## X-Category: Guild
 ## X-Credits: Roadblock, Qcat, Excinerus
-## Version: 1.4.0a
+## Version: 1.5.4a
 ## X-Alpha: Test
 ## OptionalDeps: Ace2
 ## Notes: EP rolls - Basic Effort Points manager for TurtleWoW
-## SavedVariables: GuildRoll_saychannel, GuildRoll_groupbyclass, GuildRoll_groupbyarmor, GuildRoll_groupbyrole, GuildRoll_dbver, GuildRoll_debug, GuildRoll_fubar, GuildRoll_VARS, GuildRoll_adminLogSaved, GuildRoll_adminLogOrder, GuildRoll_debugAdminLog, GuildRoll_showAllRollButtons
+## SavedVariables: GuildRoll_saychannel, GuildRoll_groupbyclass, GuildRoll_groupbyarmor, GuildRoll_groupbyrole, GuildRoll_dbver, GuildRoll_debug, GuildRoll_fubar, GuildRoll_VARS, GuildRoll_adminLogSaved, GuildRoll_adminLogOrder, GuildRoll_debugAdminLog, GuildRoll_showAllRollButtons, GuildRoll_DroppedLoot, GuildRoll_AwardedLoot
 ## SavedVariablesPerCharacter: GuildRoll_main, GuildRoll_decay, GuildRoll_minPE, GuildRoll_progress, GuildRoll_discount, GuildRollAltspool, GuildRoll_altpercent, GuildRoll_RollPos, GuildRoll_showRollWindow, GuildRoll_personalLogSaved, GuildRoll_CSRThreshold
 
 Libs\AceLibrary\AceLibrary.lua
@@ -35,6 +35,14 @@ Libs\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
 Libs\ChatThrottleLib.lua
 
 localization.lua
+lootsystem/rollparser.lua
+lootsystem/MasterLootTracker.lua
+lootsystem/DroppedLoot.lua
+lootsystem/AwardedLoot.lua
+lootsystem/DroppedLootAnnounce.lua
+lootsystem/MasterLootFrame.lua
+lootsystem/MasterLoot.lua
+lootsystem/MasterLootWarning.lua
 guildroll.lua
 utils.lua
 ui_helpers.lua
