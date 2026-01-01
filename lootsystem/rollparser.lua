@@ -2,8 +2,6 @@
 -- Parses RollFor-style loot submissions and system roll messages
 -- Supports CSR/SR/MS roll types with EP integration
 
-local L = AceLibrary("AceLocale-2.2"):new("guildroll")
-
 -- Module state
 GuildRoll_RollParser = {
     -- Track active loot submissions by player name for fast lookup
