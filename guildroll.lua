@@ -951,6 +951,33 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
   end
 
   self:testMain()
+  
+  -- Initialize RollParser
+  if RollParser then
+    local function on_roll_callback(player, normalized, min, max, metadata)
+      -- Since no RollingLogic module exists, just print debug info
+      DEFAULT_CHAT_FRAME:AddMessage(string.format(
+        "[GuildRoll] Roll from %s: %d (normalized from %d in range %d-%d), type=%s, ep=%d",
+        player, normalized, metadata.raw_total, metadata.raw_min, metadata.raw_max,
+        metadata.type, metadata.ep
+      ))
+      
+      -- TODO: Forward to RollingLogic.on_roll when implemented
+      -- if RollingLogic and RollingLogic.on_roll then
+      --   RollingLogic.on_roll(player, normalized, min, max, metadata)
+      -- end
+    end
+    
+    self._rollParser = RollParser.new(on_roll_callback, { debug = true })
+    
+    -- Register CHAT_MSG_SYSTEM event
+    self:RegisterEvent("CHAT_MSG_SYSTEM", function()
+      if self._rollParser then
+        self._rollParser:on_chat_msg_system(arg1, arg2)
+        self._rollParser:cleanup()
+      end
+    end)
+  end
 
   -- Auto-enable AdminLog module for admins
   if self:IsAdmin() then
