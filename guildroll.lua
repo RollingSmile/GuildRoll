@@ -926,11 +926,15 @@ function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
   
   -- Register loot events for Master Loot System
   self:RegisterEvent("LOOT_OPENED", function()
+      DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll] LOOT_OPENED event fired")
       if self._droppedLootAnnounce then
         self._droppedLootAnnounce:on_loot_opened()
       end
       if self._masterLoot then
+        DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll] Calling _masterLoot:on_loot_opened()")
         self._masterLoot:on_loot_opened()
+      else
+        DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll] ERROR: _masterLoot is nil!")
       end
     end)
   
@@ -1009,7 +1013,9 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
   end
   
   -- Initialize Master Loot System
+  DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll] Checking for Master Loot modules...")
   if MasterLootTracker and DroppedLoot and AwardedLoot and DroppedLootAnnounce and MasterLootFrame and MasterLoot then
+    DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll] Creating Master Loot instances...")
     -- Create instances
     self._masterLootTracker = MasterLootTracker.new()
     self._droppedLoot = DroppedLoot.new()
@@ -1017,12 +1023,21 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
     self._droppedLootAnnounce = DroppedLootAnnounce.new(self._masterLootTracker, self._droppedLoot)
     self._masterLootFrame = MasterLootFrame.new()
     self._masterLoot = MasterLoot.new(self._masterLootFrame, self._masterLootTracker, self._awardedLoot)
+    DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll] Master Loot system initialized successfully")
     
     -- Optional: Initialize master loot warning (disabled by default)
     if MasterLootWarning then
       self._masterLootWarning = MasterLootWarning.new()
       -- Uncomment to enable warning: self._masterLootWarning:start_checking()
     end
+  else
+    DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll] ERROR: Master Loot modules not found!")
+    if not MasterLootTracker then DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll]   - MasterLootTracker missing") end
+    if not DroppedLoot then DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll]   - DroppedLoot missing") end
+    if not AwardedLoot then DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll]   - AwardedLoot missing") end
+    if not DroppedLootAnnounce then DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll]   - DroppedLootAnnounce missing") end
+    if not MasterLootFrame then DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll]   - MasterLootFrame missing") end
+    if not MasterLoot then DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll]   - MasterLoot missing") end
   end
 
   -- Auto-enable AdminLog module for admins

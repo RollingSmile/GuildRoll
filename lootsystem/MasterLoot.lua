@@ -29,9 +29,14 @@ end
 
 -- On LOOT_OPENED event
 function MasterLoot:on_loot_opened()
+    DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] on_loot_opened() called")
+    
     -- Check if we're the master looter
     local loot_method, master_party, master_raid = GetLootMethod()
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("[MasterLoot] Loot method: %s", tostring(loot_method)))
+    
     if loot_method ~= "master" then
+        DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] Not master loot, exiting")
         return
     end
     
@@ -39,7 +44,10 @@ function MasterLoot:on_loot_opened()
     
     -- Show frame
     if self.frame then
+        DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] Calling frame:show()")
         self.frame:show()
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] ERROR: frame is nil!")
     end
 end
 

@@ -20,6 +20,8 @@ end
 local function try_hook_buttons(self)
     local found_any = false
     
+    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Attempting to hook loot buttons...")
+    
     -- Try to find and hook LootButton1..20
     for i = 1, 20 do
         local button = _G["LootButton" .. i]
@@ -30,8 +32,14 @@ local function try_hook_buttons(self)
                 -- Store original handler
                 self.original_click_handlers[i] = button:GetScript("OnClick")
                 
-                -- Set new handler
+                DEFAULT_CHAT_FRAME:AddMessage(string.format("[MasterLootFrame] Hooked LootButton%d", i))
+                
+                -- Set new handler - must capture self in closure properly
+                -- In WoW 1.12, 'this' and 'arg1' are global variables set by the event system
                 button:SetScript("OnClick", function()
+                    -- 'this' refers to the button that was clicked
+                    -- 'arg1' is the mouse button ("LeftButton", "RightButton", etc.)
+                    DEFAULT_CHAT_FRAME:AddMessage(string.format("[MasterLootFrame] Button clicked: slot=%s, mouse=%s", tostring(this and this:GetID()), tostring(arg1)))
                     self:on_loot_button_click(this, arg1)
                 end)
             end
@@ -40,6 +48,9 @@ local function try_hook_buttons(self)
     
     if found_any then
         self.hooked = true
+        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Buttons hooked successfully")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] No buttons found to hook")
     end
     
     return found_any
@@ -47,13 +58,19 @@ end
 
 -- Hook loot buttons to show candidate selection (robust version)
 function MasterLootFrame:hook_loot_buttons()
-    if self.hooked then return end
+    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] hook_loot_buttons() called")
+    
+    if self.hooked then 
+        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Already hooked, returning")
+        return 
+    end
     
     -- Try to hook buttons now
     local found = try_hook_buttons(self)
     
     -- If no buttons found yet, hook LootFrame OnShow to retry when it appears
     if not found and not self.lootframe_onshow_hooked then
+        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Setting up LootFrame OnShow hook")
         local lootFrame = _G["LootFrame"]
         if lootFrame then
             -- Store original OnShow handler
@@ -61,6 +78,7 @@ function MasterLootFrame:hook_loot_buttons()
             
             -- Set new OnShow that retries hooking
             lootFrame:SetScript("OnShow", function()
+                DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] LootFrame OnShow triggered")
                 -- Call original handler first
                 if self.original_lootframe_onshow then
                     self.original_lootframe_onshow()
@@ -71,6 +89,8 @@ function MasterLootFrame:hook_loot_buttons()
             end)
             
             self.lootframe_onshow_hooked = true
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] LootFrame not found!")
         end
     end
 end
@@ -233,6 +253,7 @@ end
 
 -- Show the frame
 function MasterLootFrame:show()
+    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] show() called")
     self:hook_loot_buttons()
 end
 
