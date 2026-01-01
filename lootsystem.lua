@@ -1,6 +1,19 @@
+-- =============================================================================
+-- LOOTSYSTEM.LUA - Consolidated Master Loot System for GuildRoll
+-- =============================================================================
+-- This file contains all lootsystem modules in a single file to ensure
+-- reliable loading in WoW addon system.
+-- =============================================================================
+
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[LOOTSYSTEM] lootsystem.lua is loading...")
+end
+
+-- =============================================================================
 -- RollParser Module for GuildRoll
 -- Parses RollFor-style loot submissions and system roll messages
 -- Supports CSR/SR/MS roll types with EP integration
+-- =============================================================================
 
 -- Module state
 GuildRoll_RollParser = {
@@ -1290,4 +1303,12 @@ _G.MasterLootWarning = MasterLootWarning
 if DEFAULT_CHAT_FRAME then
     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootWarning exported to _G")
 end
+
+-- =============================================================================
+-- END OF LOOTSYSTEM.LUA
+-- =============================================================================
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[LOOTSYSTEM] lootsystem.lua loaded successfully - all 8 modules exported")
+end
+
 return MasterLootWarning
