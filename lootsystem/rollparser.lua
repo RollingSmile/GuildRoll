@@ -167,14 +167,14 @@ function RollParser:DetermineEPFromRoll(roll)
         ep = 0
         rollType = "Transmog"
     -- EP-aware rolls: Standard range is 99 (e.g., 1-100 MS, 101-200 SR)
-    -- Accept range of 100 to handle CSR cumulative bonuses which may increase range slightly
+    -- Accept range of 99-100 to handle CSR cumulative bonuses which may extend range
     elseif rangeSize >= 99 and rangeSize <= 100 then
         if min >= 101 then
             -- SR/CSR range: 101+EP to 200+EP (or higher with cumulative bonuses)
             rollType = "SR"
             ep = min - 101
-        elseif min >= 1 and min <= 100 then
-            -- MS range: 1+EP to 100+EP
+        elseif min >= 1 and max <= 100 then
+            -- MS range: 1+EP to 100+EP (max must be <= 100 to distinguish from SR)
             rollType = "MS"
             ep = min - 1
         else
