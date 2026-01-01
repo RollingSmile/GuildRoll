@@ -901,6 +901,29 @@ function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
   self:RegisterEvent("CHAT_MSG_ADDON",function() 
         GuildRollMSG:OnCHAT_MSG_ADDON( arg1, arg2, arg3, arg4)
     end)
+  
+  -- Register chat events for RollParser
+  self:RegisterEvent("CHAT_MSG_SYSTEM", function()
+      if GuildRoll_RollParser and arg1 then
+        GuildRoll_RollParser:HandleChatMessage(arg1, nil, "SYSTEM")
+      end
+    end)
+  self:RegisterEvent("CHAT_MSG_RAID", function()
+      if GuildRoll_RollParser and arg1 and arg2 then
+        GuildRoll_RollParser:HandleChatMessage(arg1, arg2, "RAID")
+      end
+    end)
+  self:RegisterEvent("CHAT_MSG_RAID_LEADER", function()
+      if GuildRoll_RollParser and arg1 and arg2 then
+        GuildRoll_RollParser:HandleChatMessage(arg1, arg2, "RAID_LEADER")
+      end
+    end)
+  self:RegisterEvent("CHAT_MSG_PARTY", function()
+      if GuildRoll_RollParser and arg1 and arg2 then
+        GuildRoll_RollParser:HandleChatMessage(arg1, arg2, "PARTY")
+      end
+    end)
+  
   self:RegisterEvent("RAID_ROSTER_UPDATE",function()
       GuildRoll:SetRefresh(true)
     end)
@@ -957,6 +980,11 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
     pcall(function()
       self:ToggleModuleActive("GuildRoll_AdminLog", true)
     end)
+  end
+  
+  -- Initialize RollParser
+  if GuildRoll_RollParser then
+    GuildRoll_RollParser:Initialize()
   end
 
   local delay = 2
@@ -3115,6 +3143,33 @@ if bonus > 0 then
   
   -- Send the message
   SendChatMessage(message, chatType)
+end
+
+-- Callback for RollParser when a loot roll is detected and associated
+function GuildRoll:OnLootRoll(rollData)
+  if not rollData then return end
+  
+  -- Log the loot roll for debugging
+  if GuildRoll.DEBUG then
+    local msg = string.format(
+      "Loot roll detected: %s rolled %s (%d-%d = %d) for %s with %d EP",
+      rollData.player,
+      rollData.rollType,
+      rollData.rollMin,
+      rollData.rollMax,
+      rollData.rollResult,
+      rollData.itemInfo or "unknown item",
+      rollData.ep or 0
+    )
+    self:debugPrint(msg)
+  end
+  
+  -- Could add additional processing here:
+  -- - Track roll history
+  -- - Validate roll ranges
+  -- - Award loot automatically
+  -- - Log to admin log
+  -- For now, just log the detection
 end
 
 RaidKey = {[L["Molten Core"]]="MC",[L["Onyxia\'s Lair"]]="ONY",[L["Blackwing Lair"]]="BWL",[L["Ahn\'Qiraj"]]="AQ40",[L["Naxxramas"]]="NAX",["Tower of Karazhan"]="K10",["Upper Tower of Karazhan"]="K40",["???"]="K40"}

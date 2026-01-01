@@ -40,6 +40,7 @@ utils.lua
 ui_helpers.lua
 notes_v3.lua
 roll.lua
+rollparser.lua
 migrations.lua 
 standings.lua 
 alts.lua
