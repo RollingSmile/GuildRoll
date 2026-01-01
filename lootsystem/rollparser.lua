@@ -17,6 +17,24 @@ GuildRoll_RollParser = {
 
 local RollParser = GuildRoll_RollParser
 
+-- Valid roll types (constant)
+local VALID_ROLL_TYPES = {
+    MS = true,
+    SR = true,
+    CSR = true,
+    MAINSPEC = true,
+    SECONDARYSPEC = true,
+    OFFSPEC = true,
+    OS = true,
+}
+
+-- Roll type mapping
+local ROLL_TYPE_MAP = {
+    MAINSPEC = "MS",
+    SECONDARYSPEC = "SR",
+    OFFSPEC = "OS",
+}
+
 -- Debug helper
 local function debugPrint(msg)
     if GuildRoll and GuildRoll.DEBUG and GuildRoll.debugPrint then
@@ -61,25 +79,15 @@ function RollParser:ParseSubmission(message, sender)
     rollType = string.upper(rollType)
     
     -- Validate roll type before proceeding
-    local validTypes = {
-        MS = true,
-        SR = true,
-        CSR = true,
-        MAINSPEC = true,
-        SECONDARYSPEC = true,
-        OFFSPEC = true,
-        OS = true,
-    }
-    
-    if not validTypes[rollType] then
+    if not VALID_ROLL_TYPES[rollType] then
         debugPrint("Invalid roll type: " .. rollType .. " from message: " .. message)
         return nil
     end
     
     -- Map alternative names to standard types
-    if rollType == "MAINSPEC" then rollType = "MS" end
-    if rollType == "SECONDARYSPEC" then rollType = "SR" end
-    if rollType == "OFFSPEC" then rollType = "OS" end
+    if ROLL_TYPE_MAP[rollType] then
+        rollType = ROLL_TYPE_MAP[rollType]
+    end
     
     local submission = {
         player = playerName,
@@ -158,17 +166,15 @@ function RollParser:DetermineEPFromRoll(roll)
     elseif min == 1 and max == 98 then
         ep = 0
         rollType = "Transmog"
-    -- EP-aware rolls (range is 99-100)
-    -- Note: Allowing 100 to handle edge cases but this may classify some
-    -- invalid rolls. For strict validation, use rangeSize == 99.
+    -- EP-aware rolls: Standard range is 99 (e.g., 1-100 MS, 101-200 SR)
+    -- Accept range of 100 to handle CSR cumulative bonuses which may increase range slightly
     elseif rangeSize >= 99 and rangeSize <= 100 then
         if min >= 101 then
-            -- SR range (101+EP to 200+EP)
-            -- Note: Could be CSR if bonus > 0, but we mark as SR generically
+            -- SR/CSR range: 101+EP to 200+EP (or higher with cumulative bonuses)
             rollType = "SR"
             ep = min - 101
         elseif min >= 1 and min <= 100 then
-            -- MS range (1+EP to 100+EP)
+            -- MS range: 1+EP to 100+EP
             rollType = "MS"
             ep = min - 1
         else
