@@ -131,9 +131,9 @@ function RollParser:ParseRoll(message)
 end
 
 -- Determine EP from roll range
--- CSR: 101+ EP to 200+ EP (SR base + CSR bonus)
--- SR: 101+ EP to 200+ EP
--- MS: 1+ EP to 100+ EP
+-- MS: 1+EP to 100+EP (range of 100)
+-- SR: 101+EP to 200+EP (range of 100)
+-- CSR: (101+EP+bonus) to (200+EP+bonus) - same range but shifted higher
 function RollParser:DetermineEPFromRoll(roll)
     if not roll then return nil, nil end
     
@@ -144,23 +144,31 @@ function RollParser:DetermineEPFromRoll(roll)
     local ep = 0
     local rollType = nil
     
-    if min >= 101 and max >= 200 then
-        -- SR or CSR range (101+EP to 200+EP)
-        -- Base EP is min - 101
-        ep = min - 101
-        
-        -- Check if it's CSR (has additional bonus beyond 100)
-        local totalBonus = max - min
-        if totalBonus > 100 then
-            -- CSR with bonus weeks
-            rollType = "CSR"
+    -- Check the range to determine type
+    local rangeSize = max - min
+    
+    if rangeSize >= 99 and rangeSize <= 100 then
+        -- Range is around 100, could be MS, SR, or CSR
+        if min >= 101 then
+            -- SR or CSR range (101+EP+bonus to 200+EP+bonus)
+            -- Base EP calculation: min - 101 gives us base EP
+            -- If min > 200, it's likely CSR with bonus weeks
+            if min > 200 then
+                rollType = "CSR"
+                -- EP is min - 101 (includes CSR bonus)
+                ep = min - 101
+            else
+                rollType = "SR"
+                ep = min - 101
+            end
+        elseif min >= 1 and min <= 100 then
+            -- MS range (1+EP to 100+EP)
+            ep = min - 1
+            rollType = "MS"
         else
-            rollType = "SR"
+            -- Unknown range
+            rollType = "Unknown"
         end
-    elseif min >= 1 and max >= 100 and max <= 200 then
-        -- MS range (1+EP to 100+EP)
-        ep = min - 1
-        rollType = "MS"
     elseif min == 1 and max == 100 then
         -- Standard roll (no EP)
         ep = 0
