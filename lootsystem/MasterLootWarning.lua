@@ -123,5 +123,9 @@ function MasterLootWarning:stop_checking()
     self:hide_warning()
 end
 
+-- Export to global namespace
 _G.MasterLootWarning = MasterLootWarning
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootWarning exported to _G")
+end
 return MasterLootWarning

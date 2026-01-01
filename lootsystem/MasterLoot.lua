@@ -173,5 +173,7 @@ function MasterLoot:on_unknown_error_message(msg)
 end
 
 _G.MasterLoot = MasterLoot
-DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] MasterLoot loaded")
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] MasterLoot loaded")
+end
 return MasterLoot

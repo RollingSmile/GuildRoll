@@ -263,5 +263,9 @@ function MasterLootFrame:hide()
     self:restore_loot_buttons()
 end
 
+-- Export to global namespace
 _G.MasterLootFrame = MasterLootFrame
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootFrame exported to _G")
+end
 return MasterLootFrame

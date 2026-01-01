@@ -315,5 +315,7 @@ if GuildRoll then
 end
 
 _G.GuildRoll_RollParser = GuildRoll_RollParser
-DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] RollParser loaded")
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] RollParser loaded")
+end
 return GuildRoll_RollParser

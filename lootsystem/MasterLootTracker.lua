@@ -2,6 +2,10 @@
 -- Tracks slot -> item mapping for master loot
 -- Stores item.id, name, link, quality for each loot slot
 
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootTracker.lua is loading...")
+end
+
 local MasterLootTracker = {}
 MasterLootTracker.__index = MasterLootTracker
 
@@ -52,5 +56,9 @@ function MasterLootTracker:has_slot(slot)
     return self.slots[slot] ~= nil
 end
 
+-- Export to global namespace
 _G.MasterLootTracker = MasterLootTracker
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootTracker exported to _G")
+end
 return MasterLootTracker

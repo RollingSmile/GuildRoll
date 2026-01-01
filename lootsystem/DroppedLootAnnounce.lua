@@ -134,5 +134,9 @@ function DroppedLootAnnounce:announce_items(announcements)
     SendChatMessage(msg, channel)
 end
 
+-- Export to global namespace
 _G.DroppedLootAnnounce = DroppedLootAnnounce
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] DroppedLootAnnounce exported to _G")
+end
 return DroppedLootAnnounce

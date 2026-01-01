@@ -1014,6 +1014,13 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
   
   -- Initialize Master Loot System
   DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll] Checking for Master Loot modules...")
+  DEFAULT_CHAT_FRAME:AddMessage(string.format("[GuildRoll] MasterLootTracker=%s", tostring(MasterLootTracker ~= nil)))
+  DEFAULT_CHAT_FRAME:AddMessage(string.format("[GuildRoll] DroppedLoot=%s", tostring(DroppedLoot ~= nil)))
+  DEFAULT_CHAT_FRAME:AddMessage(string.format("[GuildRoll] AwardedLoot=%s", tostring(AwardedLoot ~= nil)))
+  DEFAULT_CHAT_FRAME:AddMessage(string.format("[GuildRoll] DroppedLootAnnounce=%s", tostring(DroppedLootAnnounce ~= nil)))
+  DEFAULT_CHAT_FRAME:AddMessage(string.format("[GuildRoll] MasterLootFrame=%s", tostring(MasterLootFrame ~= nil)))
+  DEFAULT_CHAT_FRAME:AddMessage(string.format("[GuildRoll] MasterLoot=%s", tostring(MasterLoot ~= nil)))
+  
   if MasterLootTracker and DroppedLoot and AwardedLoot and DroppedLootAnnounce and MasterLootFrame and MasterLoot then
     DEFAULT_CHAT_FRAME:AddMessage("[GuildRoll] Creating Master Loot instances...")
     -- Create instances

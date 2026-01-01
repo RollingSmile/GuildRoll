@@ -83,5 +83,9 @@ function DroppedLoot:persist()
     GuildRoll_DroppedLoot = self.items
 end
 
+-- Export to global namespace
 _G.DroppedLoot = DroppedLoot
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] DroppedLoot exported to _G")
+end
 return DroppedLoot

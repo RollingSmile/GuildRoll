@@ -81,5 +81,9 @@ function AwardedLoot:get_all()
     return self.awarded
 end
 
+-- Export to global namespace
 _G.AwardedLoot = AwardedLoot
+if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] AwardedLoot exported to _G")
+end
 return AwardedLoot
