@@ -60,8 +60,7 @@ function RollParser:ParseSubmission(message, sender)
     if not message then return nil end
     
     -- Check for [RL] prefix
-    local rlMatch = string.match(message, "^%[RL%]")
-    if not rlMatch then
+    if not string.find(message, "^%[RL%]") then
         return nil
     end
     
@@ -69,11 +68,11 @@ function RollParser:ParseSubmission(message, sender)
     
     -- Parse the submission
     -- Pattern: [RL] PlayerName: ItemInfo - RollType
-    local playerName, itemInfo, rollType = string.match(message, "%[RL%]%s*([^:]+):%s*(.-)%s*%-%s*(%w+)%s*$")
+    local _, _, playerName, itemInfo, rollType = string.find(message, "%[RL%]%s*([^:]+):%s*(.-)%s*%-%s*(%w+)%s*$")
     
     if not playerName or not itemInfo or not rollType then
         -- Try alternative pattern without item info: [RL] PlayerName: RollType
-        playerName, rollType = string.match(message, "%[RL%]%s*([^:]+):%s*(%w+)%s*$")
+        _, _, playerName, rollType = string.find(message, "%[RL%]%s*([^:]+):%s*(%w+)%s*$")
         itemInfo = ""
     end
     
@@ -119,7 +118,7 @@ function RollParser:ParseRoll(message)
     if not message then return nil end
     
     -- Pattern: PlayerName rolls min-max (result)
-    local playerName, minRoll, maxRoll, result = string.match(message, "^(.+) rolls (%d+)%-(%d+) %((%d+)%)%.?$")
+    local _, _, playerName, minRoll, maxRoll, result = string.find(message, "^(.+) rolls (%d+)%-(%d+) %((%d+)%)%.?$")
     
     if not playerName or not minRoll or not maxRoll or not result then
         return nil
@@ -616,7 +615,7 @@ end
 local function parse_item_id(link)
     if not link then return nil end
     
-    local item_id = string.match(link, "item:(%d+)")
+    local _, _, item_id = string.find(link, "item:(%d+)")
     return tonumber(item_id)
 end
 
