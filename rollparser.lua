@@ -6,8 +6,8 @@ local L = AceLibrary("AceLocale-2.2"):new("guildroll")
 
 -- Module state
 GuildRoll_RollParser = {
-    -- Track active loot submissions
-    activeLoot = {},
+    -- Track active loot submissions by player name for fast lookup
+    activeSubmissions = {},
     -- Track recent rolls
     recentRolls = {},
     -- Settings
@@ -131,9 +131,10 @@ function RollParser:ParseRoll(message)
 end
 
 -- Determine EP from roll range
--- MS: 1+EP to 100+EP (range of 100)
--- SR: 101+EP to 200+EP (range of 100)
--- CSR: (101+EP+bonus) to (200+EP+bonus) - same range but shifted higher
+-- MS: 1+EP to 100+EP (range of 99)
+-- SR/CSR: 101+EP+bonus to 200+EP+bonus (range of 99)
+-- Note: CSR is SR with a cumulative bonus, but we can't distinguish them
+-- from the roll range alone without knowing the player's exact EP.
 function RollParser:DetermineEPFromRoll(roll)
     if not roll then return nil, nil end
     
@@ -147,42 +148,32 @@ function RollParser:DetermineEPFromRoll(roll)
     -- Check the range to determine type
     local rangeSize = max - min
     
-    if rangeSize >= 99 and rangeSize <= 100 then
-        -- Range is around 100, could be MS, SR, or CSR
-        if min >= 101 then
-            -- SR or CSR range (101+EP+bonus to 200+EP+bonus)
-            -- Base EP calculation: min - 101 gives us base EP
-            -- If min > 200, it's likely CSR with bonus weeks
-            if min > 200 then
-                rollType = "CSR"
-                -- EP is min - 101 (includes CSR bonus)
-                ep = min - 101
-            else
-                rollType = "SR"
-                ep = min - 101
-            end
-        elseif min >= 1 and min <= 100 then
-            -- MS range (1+EP to 100+EP)
-            ep = min - 1
-            rollType = "MS"
-        else
-            -- Unknown range
-            rollType = "Unknown"
-        end
-    elseif min == 1 and max == 100 then
-        -- Standard roll (no EP)
+    -- Standard fixed rolls (no EP)
+    if min == 1 and max == 100 then
         ep = 0
         rollType = "Standard"
     elseif min == 1 and max == 99 then
-        -- OS/Alt roll
         ep = 0
         rollType = "OS"
     elseif min == 1 and max == 98 then
-        -- Transmog roll
         ep = 0
         rollType = "Transmog"
+    -- EP-aware rolls (range is 99-100, allowing for small variations)
+    elseif rangeSize >= 99 and rangeSize <= 100 then
+        if min >= 101 then
+            -- SR range (101+EP to 200+EP)
+            -- Note: Could be CSR if bonus > 0, but we mark as SR generically
+            rollType = "SR"
+            ep = min - 101
+        elseif min >= 1 and min <= 100 then
+            -- MS range (1+EP to 100+EP)
+            rollType = "MS"
+            ep = min - 1
+        else
+            rollType = "Unknown"
+        end
     else
-        -- Unknown roll type
+        -- Unknown roll type or invalid range
         rollType = "Unknown"
     end
     
@@ -193,38 +184,33 @@ end
 function RollParser:AssociateRollWithSubmission(roll)
     if not roll then return nil end
     
-    -- Find matching submission for this player
+    -- Find matching submission for this player using hash table lookup
     local playerName = roll.player
-    local matchingSubmission = nil
-    
-    for i = #self.activeLoot, 1, -1 do
-        local submission = self.activeLoot[i]
-        if submission.player == playerName then
-            -- Check if submission is not too old
-            if (time() - submission.timestamp) <= self.timeout then
-                matchingSubmission = submission
-                break
-            end
-        end
-    end
+    local matchingSubmission = self.activeSubmissions[playerName]
     
     if matchingSubmission then
-        debugPrint(string.format("Associated roll from %s with submission (%s)", playerName, matchingSubmission.rollType))
-        
-        -- Determine EP from roll
-        local ep, detectedRollType = self:DetermineEPFromRoll(roll)
-        
-        return {
-            player = playerName,
-            rollType = matchingSubmission.rollType,
-            itemInfo = matchingSubmission.itemInfo,
-            rollResult = roll.result,
-            rollMin = roll.min,
-            rollMax = roll.max,
-            ep = ep,
-            detectedRollType = detectedRollType,
-            timestamp = time(),
-        }
+        -- Check if submission is not too old
+        if (time() - matchingSubmission.timestamp) <= self.timeout then
+            debugPrint(string.format("Associated roll from %s with submission (%s)", playerName, matchingSubmission.rollType))
+            
+            -- Determine EP from roll
+            local ep, detectedRollType = self:DetermineEPFromRoll(roll)
+            
+            return {
+                player = playerName,
+                rollType = matchingSubmission.rollType,
+                itemInfo = matchingSubmission.itemInfo,
+                rollResult = roll.result,
+                rollMin = roll.min,
+                rollMax = roll.max,
+                ep = ep,
+                detectedRollType = detectedRollType,
+                timestamp = time(),
+            }
+        else
+            -- Submission is too old, clean it up
+            self.activeSubmissions[playerName] = nil
+        end
     end
     
     return nil
@@ -234,20 +220,9 @@ end
 function RollParser:AddSubmission(submission)
     if not submission then return end
     
-    -- Clean up old submissions
-    local currentTime = time()
-    local i = 1
-    while i <= #self.activeLoot do
-        if (currentTime - self.activeLoot[i].timestamp) > self.timeout then
-            table.remove(self.activeLoot, i)
-        else
-            i = i + 1
-        end
-    end
-    
-    -- Add new submission
-    table.insert(self.activeLoot, submission)
-    debugPrint(string.format("Added submission for %s (%s) - total active: %d", submission.player, submission.rollType, #self.activeLoot))
+    -- Add/update submission in hash table keyed by player name
+    self.activeSubmissions[submission.player] = submission
+    debugPrint(string.format("Added submission for %s (%s)", submission.player, submission.rollType))
 end
 
 -- Add a roll to tracking
@@ -266,10 +241,10 @@ end
 function RollParser:HandleChatMessage(message, sender, msgType)
     if not message then return end
     
-    -- Periodically clean up old data (every 100 messages)
+    -- Periodically clean up old data (every 500 messages to reduce overhead)
     if not self.messageCount then self.messageCount = 0 end
     self.messageCount = self.messageCount + 1
-    if self.messageCount >= 100 then
+    if self.messageCount >= 500 then
         self:Cleanup()
         self.messageCount = 0
     end
@@ -303,13 +278,10 @@ end
 function RollParser:Cleanup()
     local currentTime = time()
     
-    -- Clean up old submissions
-    local i = 1
-    while i <= #self.activeLoot do
-        if (currentTime - self.activeLoot[i].timestamp) > self.timeout then
-            table.remove(self.activeLoot, i)
-        else
-            i = i + 1
+    -- Clean up old submissions from hash table
+    for playerName, submission in pairs(self.activeSubmissions) do
+        if (currentTime - submission.timestamp) > self.timeout then
+            self.activeSubmissions[playerName] = nil
         end
     end
     
