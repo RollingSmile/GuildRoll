@@ -728,251 +728,618 @@ end
 
 -- =============================================================================
 -- MasterLootFrame.lua
--- UI for displaying loot candidates and handling selections
--- Creates, anchors and shows candidate UI
--- Provides hook_loot_buttons/restore_loot_buttons
+-- Custom Loot UI with Roll System
+-- Replaces Blizzard LootFrame with custom interface
+-- Supports roll sessions with SR/MS/OS/Tmog priority ranking
 
 local MasterLootFrame = {}
 MasterLootFrame.__index = MasterLootFrame
 
+-- Roll type priorities (lower = higher priority)
+local ROLL_PRIORITIES = {
+    SR = 1,   -- Soft Reserve: CSR, SR, 101
+    MS = 2,   -- Main Spec: EP, 100
+    OS = 3,   -- Off Spec: 99
+    Tmog = 4, -- Transmog: 98
+}
+
+-- Determine roll type from roll value
+local function get_roll_type(roll_value)
+    if roll_value == 101 then
+        return "SR"
+    elseif roll_value == 100 then
+        return "MS"
+    elseif roll_value == 99 then
+        return "OS"
+    elseif roll_value == 98 then
+        return "Tmog"
+    elseif roll_value >= 101 then
+        return "SR" -- CSR or SR with EP
+    elseif roll_value >= 1 and roll_value <= 100 then
+        -- Could be MS with EP, default to MS
+        return "MS"
+    end
+    return "MS" -- Default
+end
+
 -- Constructor
 function MasterLootFrame.new()
     local self = setmetatable({}, MasterLootFrame)
-    self.frames = {}  -- slot -> frame mapping
-    self.hooked = false
-    self.original_click_handlers = {}
-    self.lootframe_onshow_hooked = false
+    self.mainFrame = nil
+    self.itemButtons = {}
+    self.activeRollSession = nil -- {slot, itemLink, rolls={}}
+    self.rankingFrame = nil
+    self.isShown = false
     return self
 end
 
--- Try to hook loot buttons (internal helper)
-local function try_hook_buttons(self)
-    local found_any = false
+-- Create the custom loot frame
+function MasterLootFrame:create_loot_frame()
+    if self.mainFrame then
+        return self.mainFrame
+    end
     
-    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Attempting to hook loot buttons...")
+    -- Main frame
+    local frame = CreateFrame("Frame", "GuildRoll_CustomLootFrame", UIParent)
+    frame:SetWidth(300)
+    frame:SetHeight(400)
+    frame:SetPoint("CENTER", UIParent, "CENTER", -200, 0)
+    frame:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+    frame:SetFrameStrata("DIALOG")
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function() this:StartMoving() end)
+    frame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+    frame:Hide()
     
-    -- Try to find and hook LootButton1..20
-    for i = 1, 20 do
-        local button = _G["LootButton" .. i]
-        if button then
-            found_any = true
-            -- Only hook if not already hooked
-            if not self.original_click_handlers[i] then
-                -- Store original handler
-                self.original_click_handlers[i] = button:GetScript("OnClick")
-                
-                DEFAULT_CHAT_FRAME:AddMessage(string.format("[MasterLootFrame] Hooked LootButton%d", i))
-                
-                -- Set new handler - must capture self in closure properly
-                -- In WoW 1.12, 'this' and 'arg1' are global variables set by the event system
-                button:SetScript("OnClick", function()
-                    -- 'this' refers to the button that was clicked
-                    -- 'arg1' is the mouse button ("LeftButton", "RightButton", etc.)
-                    DEFAULT_CHAT_FRAME:AddMessage(string.format("[MasterLootFrame] Button clicked: slot=%s, mouse=%s", tostring(this and this:GetID()), tostring(arg1)))
-                    self:on_loot_button_click(this, arg1)
-                end)
+    -- Title
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOP", 0, -15)
+    title:SetText("Master Loot")
+    frame.title = title
+    
+    -- Close button
+    local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", -5, -5)
+    closeBtn:SetScript("OnClick", function()
+        self:hide()
+    end)
+    
+    -- Scroll frame for items
+    local scrollFrame = CreateFrame("ScrollFrame", "GuildRoll_LootScrollFrame", frame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 20, -50)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 20)
+    frame.scrollFrame = scrollFrame
+    
+    -- Content frame for items
+    local content = CreateFrame("Frame", nil, scrollFrame)
+    content:SetWidth(250)
+    content:SetHeight(1) -- Will resize based on items
+    scrollFrame:SetScrollChild(content)
+    frame.content = content
+    
+    self.mainFrame = frame
+    return frame
+end
+
+-- Populate loot items
+function MasterLootFrame:populate_loot_items()
+    if not self.mainFrame then return end
+    
+    local content = self.mainFrame.content
+    
+    -- Clear existing buttons
+    for _, btn in ipairs(self.itemButtons) do
+        btn:Hide()
+        btn:SetParent(nil)
+    end
+    self.itemButtons = {}
+    
+    -- Get number of loot items
+    local numItems = GetNumLootItems()
+    
+    if numItems == 0 then
+        return
+    end
+    
+    -- Create item buttons
+    local yOffset = 0
+    for slot = 1, numItems do
+        local itemLink = GetLootSlotLink(slot)
+        local icon, name, quantity, quality = GetLootSlotInfo(slot)
+        
+        if itemLink and name then
+            local btn = self:create_item_button(content, slot, itemLink, icon, name, quantity, quality)
+            btn:SetPoint("TOPLEFT", 0, -yOffset)
+            table.insert(self.itemButtons, btn)
+            yOffset = yOffset + 45
+        end
+    end
+    
+    -- Resize content
+    content:SetHeight(math.max(yOffset, 1))
+end
+
+-- Create an item button
+function MasterLootFrame:create_item_button(parent, slot, itemLink, icon, name, quantity, quality)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetWidth(240)
+    btn:SetHeight(40)
+    btn:SetNormalFontObject("GameFontNormal")
+    
+    -- Background
+    local bg = btn:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetTexture(0.1, 0.1, 0.1, 0.8)
+    
+    -- Icon
+    local iconTex = btn:CreateTexture(nil, "ARTWORK")
+    iconTex:SetWidth(32)
+    iconTex:SetHeight(32)
+    iconTex:SetPoint("LEFT", 4, 0)
+    iconTex:SetTexture(icon)
+    
+    -- Item name
+    local nameText = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    nameText:SetPoint("LEFT", iconTex, "RIGHT", 5, 0)
+    nameText:SetPoint("RIGHT", -5, 0)
+    nameText:SetJustifyH("LEFT")
+    nameText:SetText(name .. (quantity > 1 and (" x" .. quantity) or ""))
+    
+    -- Set color based on quality
+    if quality then
+        local r, g, b = GetItemQualityColor(quality)
+        nameText:SetTextColor(r, g, b)
+    end
+    
+    -- Highlight
+    local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints()
+    hl:SetTexture(0.3, 0.3, 0.3, 0.5)
+    
+    -- Click handler
+    btn:SetScript("OnClick", function()
+        self:show_item_menu(slot, itemLink, btn)
+    end)
+    
+    btn.slot = slot
+    btn.itemLink = itemLink
+    
+    return btn
+end
+
+-- Show item context menu
+function MasterLootFrame:show_item_menu(slot, itemLink, anchorFrame)
+    -- Create menu frame if needed
+    if not self.menuFrame then
+        local menu = CreateFrame("Frame", "GuildRoll_ItemMenu", UIParent)
+        menu:SetWidth(120)
+        menu:SetHeight(60)
+        menu:SetBackdrop({
+            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true, tileSize = 16, edgeSize = 16,
+            insets = { left = 4, right = 4, top = 4, bottom = 4 }
+        })
+        menu:SetFrameStrata("FULLSCREEN_DIALOG")
+        menu:Hide()
+        
+        -- Start Rolls button
+        local startBtn = CreateFrame("Button", nil, menu)
+        startBtn:SetWidth(100)
+        startBtn:SetHeight(25)
+        startBtn:SetPoint("TOP", 0, -10)
+        startBtn:SetNormalFontObject("GameFontNormal")
+        startBtn:SetText("Start Rolls")
+        
+        local startBg = startBtn:CreateTexture(nil, "BACKGROUND")
+        startBg:SetAllPoints()
+        startBg:SetTexture(0.2, 0.6, 0.2, 0.8)
+        
+        local startHl = startBtn:CreateTexture(nil, "HIGHLIGHT")
+        startHl:SetAllPoints()
+        startHl:SetTexture(0.3, 0.8, 0.3, 0.8)
+        
+        startBtn:SetScript("OnClick", function()
+            menu:Hide()
+            self:start_roll_session(menu.currentSlot, menu.currentItemLink)
+        end)
+        
+        menu.startBtn = startBtn
+        self.menuFrame = menu
+    end
+    
+    local menu = self.menuFrame
+    menu.currentSlot = slot
+    menu.currentItemLink = itemLink
+    
+    -- Position menu
+    menu:ClearAllPoints()
+    menu:SetPoint("LEFT", anchorFrame, "RIGHT", 5, 0)
+    menu:Show()
+    
+    -- Hide menu after delay or on next click
+    menu:SetScript("OnUpdate", function()
+        if not MouseIsOver(menu) and not MouseIsOver(anchorFrame) then
+            menu:Hide()
+            menu:SetScript("OnUpdate", nil)
+        end
+    end)
+end
+
+-- Start a roll session
+function MasterLootFrame:start_roll_session(slot, itemLink)
+    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Starting roll session for slot " .. slot)
+    
+    -- Close existing session
+    if self.activeRollSession then
+        self:close_roll_session()
+    end
+    
+    -- Create new session
+    self.activeRollSession = {
+        slot = slot,
+        itemLink = itemLink,
+        rolls = {}, -- {player, rollType, result, timestamp}
+        startTime = time()
+    }
+    
+    -- Show ranking frame
+    self:show_ranking_frame()
+    
+    -- Hook chat to capture rolls
+    self:hook_roll_messages()
+end
+
+-- Show ranking frame
+function MasterLootFrame:show_ranking_frame()
+    if self.rankingFrame then
+        self.rankingFrame:Show()
+        self:update_ranking_display()
+        return
+    end
+    
+    -- Create ranking frame
+    local frame = CreateFrame("Frame", "GuildRoll_RankingFrame", UIParent)
+    frame:SetWidth(400)
+    frame:SetHeight(400)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 250, 0)
+    frame:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+    frame:SetFrameStrata("DIALOG")
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", function() this:StartMoving() end)
+    frame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+    
+    -- Title
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    title:SetPoint("TOP", 0, -15)
+    title:SetText("Roll Rankings")
+    frame.title = title
+    
+    -- Item name
+    local itemName = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    itemName:SetPoint("TOP", title, "BOTTOM", 0, -5)
+    itemName:SetWidth(360)
+    itemName:SetJustifyH("CENTER")
+    frame.itemName = itemName
+    
+    -- Headers
+    local headerFrame = CreateFrame("Frame", nil, frame)
+    headerFrame:SetPoint("TOPLEFT", 20, -60)
+    headerFrame:SetPoint("TOPRIGHT", -20, -60)
+    headerFrame:SetHeight(20)
+    
+    local nameHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    nameHeader:SetPoint("LEFT", 5, 0)
+    nameHeader:SetText("Player")
+    
+    local typeHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    typeHeader:SetPoint("LEFT", 150, 0)
+    typeHeader:SetText("Type")
+    
+    local resultHeader = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    resultHeader:SetPoint("LEFT", 250, 0)
+    resultHeader:SetText("Roll")
+    
+    -- Scroll frame for rankings
+    local scrollFrame = CreateFrame("ScrollFrame", "GuildRoll_RankingScrollFrame", frame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 20, -85)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 50)
+    frame.scrollFrame = scrollFrame
+    
+    -- Content frame
+    local content = CreateFrame("Frame", nil, scrollFrame)
+    content:SetWidth(340)
+    content:SetHeight(1)
+    scrollFrame:SetScrollChild(content)
+    frame.content = content
+    
+    -- Close Rolls button
+    local closeRollsBtn = CreateFrame("Button", nil, frame)
+    closeRollsBtn:SetWidth(120)
+    closeRollsBtn:SetHeight(30)
+    closeRollsBtn:SetPoint("BOTTOM", 0, 12)
+    closeRollsBtn:SetNormalFontObject("GameFontNormal")
+    closeRollsBtn:SetText("Close Rolls")
+    
+    local closeBg = closeRollsBtn:CreateTexture(nil, "BACKGROUND")
+    closeBg:SetAllPoints()
+    closeBg:SetTexture(0.6, 0.2, 0.2, 0.8)
+    
+    local closeHl = closeRollsBtn:CreateTexture(nil, "HIGHLIGHT")
+    closeHl:SetAllPoints()
+    closeHl:SetTexture(0.8, 0.3, 0.3, 0.8)
+    
+    closeRollsBtn:SetScript("OnClick", function()
+        self:confirm_close_rolls()
+    end)
+    
+    frame.closeRollsBtn = closeRollsBtn
+    frame.rollRows = {}
+    
+    self.rankingFrame = frame
+    frame:Show()
+    
+    self:update_ranking_display()
+end
+
+-- Update ranking display
+function MasterLootFrame:update_ranking_display()
+    if not self.rankingFrame or not self.activeRollSession then
+        return
+    end
+    
+    local frame = self.rankingFrame
+    local content = frame.content
+    
+    -- Update item name
+    if self.activeRollSession.itemLink then
+        frame.itemName:SetText(self.activeRollSession.itemLink)
+    end
+    
+    -- Clear existing rows
+    for _, row in ipairs(frame.rollRows) do
+        row:Hide()
+        row:SetParent(nil)
+    end
+    frame.rollRows = {}
+    
+    -- Sort rolls by priority
+    local sortedRolls = {}
+    for _, roll in ipairs(self.activeRollSession.rolls) do
+        table.insert(sortedRolls, roll)
+    end
+    
+    table.sort(sortedRolls, function(a, b)
+        local aPriority = ROLL_PRIORITIES[a.rollType] or 999
+        local bPriority = ROLL_PRIORITIES[b.rollType] or 999
+        
+        if aPriority ~= bPriority then
+            return aPriority < bPriority
+        end
+        
+        return a.result > b.result
+    end)
+    
+    -- Create rows
+    local yOffset = 0
+    for i, roll in ipairs(sortedRolls) do
+        local row = self:create_roll_row(content, roll, i)
+        row:SetPoint("TOPLEFT", 0, -yOffset)
+        table.insert(frame.rollRows, row)
+        yOffset = yOffset + 25
+    end
+    
+    -- Resize content
+    content:SetHeight(math.max(yOffset, 1))
+end
+
+-- Create a roll row
+function MasterLootFrame:create_roll_row(parent, roll, index)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetWidth(340)
+    row:SetHeight(22)
+    
+    -- Background (alternate colors)
+    local bg = row:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    if index % 2 == 0 then
+        bg:SetTexture(0.15, 0.15, 0.15, 0.8)
+    else
+        bg:SetTexture(0.1, 0.1, 0.1, 0.8)
+    end
+    
+    -- Player name
+    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    nameText:SetPoint("LEFT", 5, 0)
+    nameText:SetWidth(140)
+    nameText:SetJustifyH("LEFT")
+    nameText:SetText(roll.player)
+    
+    -- Roll type with color
+    local typeText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    typeText:SetPoint("LEFT", 150, 0)
+    typeText:SetText(roll.rollType)
+    
+    -- Color by priority
+    if roll.rollType == "SR" then
+        typeText:SetTextColor(1, 0.5, 0) -- Orange
+    elseif roll.rollType == "MS" then
+        typeText:SetTextColor(0, 1, 0) -- Green
+    elseif roll.rollType == "OS" then
+        typeText:SetTextColor(0.5, 0.5, 1) -- Light blue
+    elseif roll.rollType == "Tmog" then
+        typeText:SetTextColor(0.8, 0.8, 0.8) -- Gray
+    end
+    
+    -- Roll result
+    local resultText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    resultText:SetPoint("LEFT", 250, 0)
+    resultText:SetText(tostring(roll.result))
+    
+    return row
+end
+
+-- Hook roll messages
+function MasterLootFrame:hook_roll_messages()
+    -- Use existing RollParser if available
+    if not GuildRoll_RollParser then
+        return
+    end
+    
+    -- Set up event listener for system messages
+    if not self.rollEventFrame then
+        self.rollEventFrame = CreateFrame("Frame")
+        self.rollEventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
+        
+        self.rollEventFrame:SetScript("OnEvent", function()
+            if event == "CHAT_MSG_SYSTEM" and arg1 then
+                self:on_roll_message(arg1)
             end
-        end
-    end
-    
-    if found_any then
-        self.hooked = true
-        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Buttons hooked successfully")
-    else
-        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] No buttons found to hook")
-    end
-    
-    return found_any
-end
-
--- Hook loot buttons to show candidate selection (robust version)
-function MasterLootFrame:hook_loot_buttons()
-    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] hook_loot_buttons() called")
-    
-    if self.hooked then 
-        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Already hooked, returning")
-        return 
-    end
-    
-    -- Try to hook buttons now
-    local found = try_hook_buttons(self)
-    
-    -- If no buttons found yet, hook LootFrame OnShow to retry when it appears
-    if not found and not self.lootframe_onshow_hooked then
-        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Setting up LootFrame OnShow hook")
-        local lootFrame = _G["LootFrame"]
-        if lootFrame then
-            -- Store original OnShow handler
-            self.original_lootframe_onshow = lootFrame:GetScript("OnShow")
-            
-            -- Set new OnShow that retries hooking
-            lootFrame:SetScript("OnShow", function()
-                DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] LootFrame OnShow triggered")
-                -- Call original handler first
-                if self.original_lootframe_onshow then
-                    self.original_lootframe_onshow()
-                end
-                
-                -- Try to hook buttons
-                try_hook_buttons(self)
-            end)
-            
-            self.lootframe_onshow_hooked = true
-        else
-            DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] LootFrame not found!")
-        end
+        end)
     end
 end
 
--- Restore original loot button handlers
-function MasterLootFrame:restore_loot_buttons()
-    if not self.hooked and not self.lootframe_onshow_hooked then return end
+-- Handle roll message
+function MasterLootFrame:on_roll_message(message)
+    if not self.activeRollSession then
+        return
+    end
     
-    -- Restore button handlers
-    for i = 1, 20 do
-        local button = _G["LootButton" .. i]
-        if button and self.original_click_handlers[i] then
-            button:SetScript("OnClick", self.original_click_handlers[i])
+    -- Parse roll using RollParser
+    local roll = GuildRoll_RollParser:ParseRoll(message)
+    
+    if not roll then
+        return
+    end
+    
+    -- Determine roll type
+    local rollType = get_roll_type(roll.result)
+    
+    -- Check if player already rolled
+    for i, existingRoll in ipairs(self.activeRollSession.rolls) do
+        if existingRoll.player == roll.player then
+            -- Update existing roll
+            self.activeRollSession.rolls[i] = {
+                player = roll.player,
+                rollType = rollType,
+                result = roll.result,
+                timestamp = time()
+            }
+            self:update_ranking_display()
+            return
         end
     end
     
-    -- Restore LootFrame OnShow if we hooked it
-    if self.lootframe_onshow_hooked then
-        local lootFrame = _G["LootFrame"]
-        if lootFrame and self.original_lootframe_onshow then
-            lootFrame:SetScript("OnShow", self.original_lootframe_onshow)
-        end
-        self.lootframe_onshow_hooked = false
-    end
+    -- Add new roll
+    table.insert(self.activeRollSession.rolls, {
+        player = roll.player,
+        rollType = rollType,
+        result = roll.result,
+        timestamp = time()
+    })
     
-    self.hooked = false
-    self.original_click_handlers = {}
+    self:update_ranking_display()
 end
 
--- Handle loot button click
-function MasterLootFrame:on_loot_button_click(button, mouse_button)
-    if not button then return end
+-- Confirm close rolls
+function MasterLootFrame:confirm_close_rolls()
+    if not self.activeRollSession or table.getn(self.activeRollSession.rolls) == 0 then
+        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] No rolls to close")
+        self:close_roll_session()
+        return
+    end
     
-    -- Get slot from button
-    local slot = button:GetID()
-    if not slot then return end
+    -- Get winner (first in sorted list)
+    local sortedRolls = {}
+    for _, roll in ipairs(self.activeRollSession.rolls) do
+        table.insert(sortedRolls, roll)
+    end
     
-    -- Check if shift-click (master loot)
-    if IsShiftKeyDown() and mouse_button == "LeftButton" then
-        -- Show candidate selection
-        self:show_candidate_selection(slot, button)
-    else
-        -- Call original handler if exists
-        local original = self.original_click_handlers[button:GetID()]
-        if original then
-            original()
+    table.sort(sortedRolls, function(a, b)
+        local aPriority = ROLL_PRIORITIES[a.rollType] or 999
+        local bPriority = ROLL_PRIORITIES[b.rollType] or 999
+        
+        if aPriority ~= bPriority then
+            return aPriority < bPriority
         end
+        
+        return a.result > b.result
+    end)
+    
+    local winner = sortedRolls[1]
+    
+    if not winner then
+        self:close_roll_session()
+        return
+    end
+    
+    -- Show confirmation dialog
+    local dialog = StaticPopup_Show("GUILDROLL_CONFIRM_LOOT_ASSIGNMENT")
+    if dialog then
+        dialog.data = {
+            frame = self,
+            slot = self.activeRollSession.slot,
+            winner = winner.player
+        }
     end
 end
 
--- Show candidate selection for a slot
-function MasterLootFrame:show_candidate_selection(slot, anchor_frame)
-    if not slot then return end
-    
-    -- Hide any existing candidate frame
-    self:hide_candidate_selection()
-    
-    -- Get candidates
-    local num_candidates = 0
+-- Assign loot to winner
+function MasterLootFrame:assign_loot_to_winner(slot, winnerName)
+    -- Find candidate index
+    local candidateIndex = nil
     for i = 1, 40 do
-        if GetMasterLootCandidate(i) then
-            num_candidates = num_candidates + 1
-        else
+        local candidateName = GetMasterLootCandidate(i)
+        if candidateName == winnerName then
+            candidateIndex = i
             break
         end
     end
     
-    if num_candidates == 0 then
+    if not candidateIndex then
+        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] ERROR: Winner not found in candidates!")
         return
     end
     
-    -- Create candidate frame
-    local frame = CreateFrame("Frame", "MasterLootCandidateFrame", UIParent)
-    frame:SetWidth(200)
-    frame:SetHeight(math.min(num_candidates * 20 + 10, 400))
-    frame:SetPoint("LEFT", anchor_frame, "RIGHT", 5, 0)
-    frame:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 }
-    })
-    frame:SetFrameStrata("DIALOG")
+    -- Assign loot
+    GiveMasterLoot(slot, candidateIndex)
     
-    -- Create scroll frame for candidates
-    local scroll = CreateFrame("ScrollFrame", "MasterLootCandidateScroll", frame, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 8, -8)
-    scroll:SetPoint("BOTTOMRIGHT", -28, 8)
+    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Assigned loot to " .. winnerName)
     
-    -- Create candidate buttons
-    local content = CreateFrame("Frame", nil, scroll)
-    content:SetWidth(180)
-    content:SetHeight(num_candidates * 20)
-    scroll:SetScrollChild(content)
-    
-    local y_offset = 0
-    for i = 1, num_candidates do
-        local candidate_name = GetMasterLootCandidate(i)
-        if candidate_name then
-            local btn = CreateFrame("Button", nil, content)
-            btn:SetWidth(180)
-            btn:SetHeight(18)
-            btn:SetPoint("TOPLEFT", 0, -y_offset)
-            btn:SetNormalFontObject("GameFontNormal")
-            btn:SetText(candidate_name)
-            
-            -- Button background
-            local bg = btn:CreateTexture(nil, "BACKGROUND")
-            bg:SetAllPoints()
-            bg:SetTexture(0.2, 0.2, 0.2, 0.8)
-            
-            -- Highlight
-            local hl = btn:CreateTexture(nil, "HIGHLIGHT")
-            hl:SetAllPoints()
-            hl:SetTexture(0.4, 0.4, 0.4, 0.8)
-            
-            -- Click handler
-            btn:SetScript("OnClick", function()
-                self:give_loot_to_candidate(slot, i)
-                self:hide_candidate_selection()
-            end)
-            
-            y_offset = y_offset + 20
-        end
-    end
-    
-    -- Store frame
-    self.frames[slot] = frame
-    frame:Show()
-end
-
--- Hide candidate selection
-function MasterLootFrame:hide_candidate_selection()
-    for slot, frame in pairs(self.frames) do
-        if frame then
-            frame:Hide()
-        end
-    end
-    self.frames = {}
-end
-
--- Give loot to candidate
-function MasterLootFrame:give_loot_to_candidate(slot, candidate_index)
-    if not slot or not candidate_index then return end
-    
-    -- Call GiveMasterLoot
-    GiveMasterLoot(slot, candidate_index)
-    
-    -- Notify (optional callback)
+    -- Notify callback
     if self.on_loot_given then
-        local candidate_name = GetMasterLootCandidate(candidate_index)
-        self.on_loot_given(slot, candidate_index, candidate_name)
+        self.on_loot_given(slot, candidateIndex, winnerName)
     end
+    
+    -- Close session
+    self:close_roll_session()
+end
+
+-- Close roll session
+function MasterLootFrame:close_roll_session()
+    if self.rankingFrame then
+        self.rankingFrame:Hide()
+    end
+    
+    if self.rollEventFrame then
+        self.rollEventFrame:UnregisterEvent("CHAT_MSG_SYSTEM")
+    end
+    
+    self.activeRollSession = nil
 end
 
 -- Set callback for when loot is given
@@ -983,14 +1350,59 @@ end
 -- Show the frame
 function MasterLootFrame:show()
     DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] show() called")
-    self:hook_loot_buttons()
+    
+    -- Hide Blizzard LootFrame
+    if LootFrame then
+        LootFrame:Hide()
+    end
+    
+    -- Create and show custom frame
+    self:create_loot_frame()
+    self:populate_loot_items()
+    
+    if self.mainFrame then
+        self.mainFrame:Show()
+        self.isShown = true
+    end
 end
 
 -- Hide the frame
 function MasterLootFrame:hide()
-    self:hide_candidate_selection()
-    self:restore_loot_buttons()
+    if self.mainFrame then
+        self.mainFrame:Hide()
+        self.isShown = false
+    end
+    
+    if self.menuFrame then
+        self.menuFrame:Hide()
+    end
+    
+    -- Close any active roll session
+    self:close_roll_session()
+    
+    -- Show Blizzard LootFrame again
+    if LootFrame then
+        LootFrame:Show()
+    end
 end
+
+-- Register confirmation dialog
+StaticPopupDialogs["GUILDROLL_CONFIRM_LOOT_ASSIGNMENT"] = {
+    text = "Assign %s to %s?",
+    button1 = "Yes",
+    button2 = "No",
+    OnShow = function()
+        local itemLink = this.data.frame.activeRollSession.itemLink or "item"
+        local winner = this.data.winner or "unknown"
+        this.text:SetText(string.format("Assign %s to %s?", itemLink, winner))
+    end,
+    OnAccept = function()
+        this.data.frame:assign_loot_to_winner(this.data.slot, this.data.winner)
+    end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1
+}
 
 -- Export to global namespace
 _G.MasterLootFrame = MasterLootFrame
