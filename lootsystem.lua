@@ -1156,7 +1156,7 @@ function MasterLootFrame:create_roll_row(parent, roll, index)
     -- Background (alternate colors)
     local bg = row:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    if index % 2 == 0 then
+    if mod(index, 2) == 0 then
         bg:SetTexture(0.15, 0.15, 0.15, 0.8)
     else
         bg:SetTexture(0.1, 0.1, 0.1, 0.8)
