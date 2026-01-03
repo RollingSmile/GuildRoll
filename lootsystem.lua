@@ -936,8 +936,11 @@ function MasterLootFrame:show_item_menu(slot, itemLink, anchorFrame)
         startBtn:SetWidth(100)
         startBtn:SetHeight(25)
         startBtn:SetPoint("TOP", 0, -10)
-        -- Note: SetNormalFontObject doesn't exist in WoW 1.12
-        startBtn:SetText("Start Rolls")
+        
+        -- Create text on button (SetText doesn't work in WoW 1.12)
+        local startText = startBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        startText:SetPoint("CENTER")
+        startText:SetText("Start Rolls")
         
         local startBg = startBtn:CreateTexture(nil, "BACKGROUND")
         startBg:SetAllPoints()
@@ -1073,8 +1076,11 @@ function MasterLootFrame:show_ranking_frame()
     closeRollsBtn:SetWidth(120)
     closeRollsBtn:SetHeight(30)
     closeRollsBtn:SetPoint("BOTTOM", 0, 12)
-    -- Note: SetNormalFontObject doesn't exist in WoW 1.12
-    closeRollsBtn:SetText("Close Rolls")
+    
+    -- Create text on button (SetText doesn't work in WoW 1.12)
+    local closeText = closeRollsBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    closeText:SetPoint("CENTER")
+    closeText:SetText("Close Rolls")
     
     local closeBg = closeRollsBtn:CreateTexture(nil, "BACKGROUND")
     closeBg:SetAllPoints()
@@ -1206,9 +1212,12 @@ function MasterLootFrame:hook_roll_messages()
         self.rollEventFrame = CreateFrame("Frame")
         self.rollEventFrame:RegisterEvent("CHAT_MSG_SYSTEM")
         
+        -- Store reference to self for the event handler
+        local mlf = self
         self.rollEventFrame:SetScript("OnEvent", function()
+            -- In WoW 1.12, event arguments are global: event, arg1, arg2, etc.
             if event == "CHAT_MSG_SYSTEM" and arg1 then
-                self:on_roll_message(arg1)
+                mlf:on_roll_message(arg1)
             end
         end)
     end
