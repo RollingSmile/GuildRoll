@@ -939,7 +939,7 @@ function MasterLootFrame:show_item_menu(slot, itemLink, anchorFrame)
         
         -- Create text on button (SetText doesn't work in WoW 1.12)
         local startText = startBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        startText:SetPoint("CENTER")
+        startText:SetPoint("CENTER", startBtn, "CENTER", 0, 0)
         startText:SetText("Start Rolls")
         
         local startBg = startBtn:CreateTexture(nil, "BACKGROUND")
@@ -1079,7 +1079,7 @@ function MasterLootFrame:show_ranking_frame()
     
     -- Create text on button (SetText doesn't work in WoW 1.12)
     local closeText = closeRollsBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    closeText:SetPoint("CENTER")
+    closeText:SetPoint("CENTER", closeRollsBtn, "CENTER", 0, 0)
     closeText:SetText("Close Rolls")
     
     local closeBg = closeRollsBtn:CreateTexture(nil, "BACKGROUND")
@@ -1669,7 +1669,7 @@ function MasterLootWarning:create_warning_frame()
     
     -- Warning text
     local text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    text:SetPoint("CENTER")
+    text:SetPoint("CENTER", frame, "CENTER", 0, 0)
     text:SetText("Not Master Looter!")
     text:SetTextColor(1, 1, 0)
     
