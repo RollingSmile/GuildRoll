@@ -871,7 +871,8 @@ function MasterLootFrame:create_item_button(parent, slot, itemLink, icon, name, 
     local btn = CreateFrame("Button", nil, parent)
     btn:SetWidth(240)
     btn:SetHeight(40)
-    btn:SetNormalFontObject("GameFontNormal")
+    -- Note: SetNormalFontObject doesn't exist in WoW 1.12
+    -- Font is set on the FontString below
     
     -- Background
     local bg = btn:CreateTexture(nil, "BACKGROUND")
@@ -1351,9 +1352,12 @@ end
 function MasterLootFrame:show()
     DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] show() called")
     
-    -- Hide Blizzard LootFrame
+    -- Hide Blizzard LootFrame and prevent errors
     if LootFrame then
         LootFrame:Hide()
+        -- Set page to 1 to prevent arithmetic errors in Blizzard's scripts
+        -- that still run even when frame is hidden
+        LootFrame.page = 1
     end
     
     -- Create and show custom frame
