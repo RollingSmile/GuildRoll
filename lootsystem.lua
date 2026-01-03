@@ -936,7 +936,7 @@ function MasterLootFrame:show_item_menu(slot, itemLink, anchorFrame)
         startBtn:SetWidth(100)
         startBtn:SetHeight(25)
         startBtn:SetPoint("TOP", 0, -10)
-        startBtn:SetNormalFontObject("GameFontNormal")
+        -- Note: SetNormalFontObject doesn't exist in WoW 1.12
         startBtn:SetText("Start Rolls")
         
         local startBg = startBtn:CreateTexture(nil, "BACKGROUND")
@@ -1073,7 +1073,7 @@ function MasterLootFrame:show_ranking_frame()
     closeRollsBtn:SetWidth(120)
     closeRollsBtn:SetHeight(30)
     closeRollsBtn:SetPoint("BOTTOM", 0, 12)
-    closeRollsBtn:SetNormalFontObject("GameFontNormal")
+    -- Note: SetNormalFontObject doesn't exist in WoW 1.12
     closeRollsBtn:SetText("Close Rolls")
     
     local closeBg = closeRollsBtn:CreateTexture(nil, "BACKGROUND")
