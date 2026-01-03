@@ -794,8 +794,8 @@ function MasterLootFrame:create_loot_frame()
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function() this:StartMoving() end)
-    frame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+    frame:SetScript("OnDragStart", function() frame:StartMoving() end)
+    frame:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
     frame:Hide()
     
     -- Title
@@ -1020,8 +1020,8 @@ function MasterLootFrame:show_ranking_frame()
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function() this:StartMoving() end)
-    frame:SetScript("OnDragStop", function() this:StopMovingOrSizing() end)
+    frame:SetScript("OnDragStart", function() frame:StartMoving() end)
+    frame:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
     
     -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
