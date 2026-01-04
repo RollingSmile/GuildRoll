@@ -33,19 +33,21 @@ end
 -- Usage: safe_format("KeyWithFormat", "Default %s", arg1, arg2, ...)
 -- The key should contain format specifiers (%s, %d, etc.) matching the arguments
 local function safe_format(key, fallback, ...)
+  -- Capture varargs to use in nested functions
+  local args = {...}
   local success, result = pcall(function()
     local template = L[key]
     if template == nil or template == "" then
-      return string.format(fallback, ...)
+      return string.format(fallback, unpack(args))
     end
-    return string.format(template, ...)
+    return string.format(template, unpack(args))
   end)
   
   if success then
     return result
   else
     -- If formatting fails, try fallback with pcall
-    local fallbackSuccess, fallbackResult = pcall(string.format, fallback, ...)
+    local fallbackSuccess, fallbackResult = pcall(string.format, fallback, unpack(args))
     if fallbackSuccess then
       return fallbackResult
     else
