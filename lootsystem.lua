@@ -5,9 +5,10 @@
 -- reliable loading in WoW addon system.
 -- =============================================================================
 
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[LOOTSYSTEM] lootsystem.lua is loading...")
-end
+-- Debug messages disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[LOOTSYSTEM] lootsystem.lua is loading...")
+-- end
 
 -- =============================================================================
 -- RollParser Module for GuildRoll
@@ -325,9 +326,10 @@ if GuildRoll then
 end
 
 _G.GuildRoll_RollParser = GuildRoll_RollParser
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] RollParser loaded")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] RollParser loaded")
+-- end
 -- Module continues - do not return here
 
 -- =============================================================================
@@ -336,9 +338,10 @@ end
 -- Stores item.id, name, link, quality for each loot slot
 -- =============================================================================
 
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootTracker.lua is loading...")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootTracker.lua is loading...")
+-- end
 
 local MasterLootTracker = {}
 MasterLootTracker.__index = MasterLootTracker
@@ -392,9 +395,10 @@ end
 
 -- Export to global namespace
 _G.MasterLootTracker = MasterLootTracker
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootTracker exported to _G")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootTracker exported to _G")
+-- end
 -- Module continues - do not return here
 
 -- =============================================================================
@@ -486,9 +490,10 @@ end
 
 -- Export to global namespace
 _G.DroppedLoot = DroppedLoot
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] DroppedLoot exported to _G")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] DroppedLoot exported to _G")
+-- end
 -- Module continues - do not return here
 
 -- =============================================================================
@@ -577,9 +582,10 @@ end
 
 -- Export to global namespace
 _G.AwardedLoot = AwardedLoot
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] AwardedLoot exported to _G")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] AwardedLoot exported to _G")
+-- end
 -- Module continues - do not return here
 
 -- =============================================================================
@@ -721,9 +727,10 @@ end
 
 -- Export to global namespace
 _G.DroppedLootAnnounce = DroppedLootAnnounce
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] DroppedLootAnnounce exported to _G")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] DroppedLootAnnounce exported to _G")
+-- end
 -- Module continues - do not return here
 
 -- =============================================================================
@@ -979,7 +986,8 @@ end
 
 -- Start a roll session
 function MasterLootFrame:start_roll_session(slot, itemLink)
-    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Starting roll session for slot " .. slot)
+    -- Debug message disabled
+    -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Starting roll session for slot " .. slot)
     
     -- Close existing session
     if self.activeRollSession then
@@ -1268,7 +1276,8 @@ end
 -- Confirm close rolls
 function MasterLootFrame:confirm_close_rolls()
     if not self.activeRollSession or table.getn(self.activeRollSession.rolls) == 0 then
-        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] No rolls to close")
+        -- Debug message disabled
+        -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] No rolls to close")
         self:close_roll_session()
         return
     end
@@ -1321,14 +1330,16 @@ function MasterLootFrame:assign_loot_to_winner(slot, winnerName)
     end
     
     if not candidateIndex then
-        DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] ERROR: Winner not found in candidates!")
+        -- Debug message disabled
+        -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] ERROR: Winner not found in candidates!")
         return
     end
     
     -- Assign loot
     GiveMasterLoot(slot, candidateIndex)
     
-    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Assigned loot to " .. winnerName)
+    -- Debug message disabled
+    -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] Assigned loot to " .. winnerName)
     
     -- Notify callback
     if self.on_loot_given then
@@ -1359,7 +1370,8 @@ end
 
 -- Show the frame
 function MasterLootFrame:show()
-    DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] show() called")
+    -- Debug message disabled
+    -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLootFrame] show() called")
     
     -- Hide Blizzard LootFrame and prevent errors
     if LootFrame then
@@ -1419,9 +1431,10 @@ StaticPopupDialogs["GUILDROLL_CONFIRM_LOOT_ASSIGNMENT"] = {
 
 -- Export to global namespace
 _G.MasterLootFrame = MasterLootFrame
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootFrame exported to _G")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootFrame exported to _G")
+-- end
 -- Module continues - do not return here
 
 -- =============================================================================
@@ -1456,14 +1469,17 @@ end
 
 -- On LOOT_OPENED event
 function MasterLoot:on_loot_opened()
-    DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] on_loot_opened() called")
+    -- Debug message disabled
+    -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] on_loot_opened() called")
     
     -- Check if we're the master looter
     local loot_method, master_party, master_raid = GetLootMethod()
-    DEFAULT_CHAT_FRAME:AddMessage(string.format("[MasterLoot] Loot method: %s", tostring(loot_method)))
+    -- Debug message disabled
+    -- DEFAULT_CHAT_FRAME:AddMessage(string.format("[MasterLoot] Loot method: %s", tostring(loot_method)))
     
     if loot_method ~= "master" then
-        DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] Not master loot, exiting")
+        -- Debug message disabled
+        -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] Not master loot, exiting")
         return
     end
     
@@ -1471,10 +1487,12 @@ function MasterLoot:on_loot_opened()
     
     -- Show frame
     if self.frame then
-        DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] Calling frame:show()")
+        -- Debug message disabled
+        -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] Calling frame:show()")
         self.frame:show()
     else
-        DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] ERROR: frame is nil!")
+        -- Debug message disabled
+        -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] ERROR: frame is nil!")
     end
 end
 
@@ -1561,10 +1579,11 @@ function MasterLoot:on_loot_given(slot, candidate_index, candidate_name)
     end
     
     -- Log award
-    DEFAULT_CHAT_FRAME:AddMessage(string.format(
-        "[MasterLoot] Awarded %s to %s",
-        item.link or item.name or "Unknown", candidate_name
-    ))
+    -- Debug message disabled
+    -- DEFAULT_CHAT_FRAME:AddMessage(string.format(
+    --     "[MasterLoot] Awarded %s to %s",
+    --     item.link or item.name or "Unknown", candidate_name
+    -- ))
 end
 
 -- On UI_ERROR_MESSAGE event
@@ -1584,12 +1603,14 @@ end
 
 -- Handler for inventory full error
 function MasterLoot:on_recipient_inventory_full()
-    DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] ERROR: Recipient's inventory is full!")
+    -- Debug message disabled
+    -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] ERROR: Recipient's inventory is full!")
 end
 
 -- Handler for player too far error
 function MasterLoot:on_player_is_too_far()
-    DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] ERROR: Player is too far away!")
+    -- Debug message disabled
+    -- DEFAULT_CHAT_FRAME:AddMessage("[MasterLoot] ERROR: Player is too far away!")
 end
 
 -- Handler for unknown error
@@ -1600,9 +1621,10 @@ function MasterLoot:on_unknown_error_message(msg)
 end
 
 _G.MasterLoot = MasterLoot
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] MasterLoot loaded")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[lootsystem] MasterLoot loaded")
+-- end
 -- Module continues - do not return here
 
 -- =============================================================================
@@ -1733,15 +1755,17 @@ end
 
 -- Export to global namespace
 _G.MasterLootWarning = MasterLootWarning
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootWarning exported to _G")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[DEBUG] MasterLootWarning exported to _G")
+-- end
 
 -- =============================================================================
 -- END OF LOOTSYSTEM.LUA
 -- =============================================================================
-if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("[LOOTSYSTEM] lootsystem.lua loaded successfully - all 8 modules exported")
-end
+-- Debug message disabled
+-- if DEFAULT_CHAT_FRAME then
+--     DEFAULT_CHAT_FRAME:AddMessage("[LOOTSYSTEM] lootsystem.lua loaded successfully - all 8 modules exported")
+-- end
 
 return MasterLootWarning
