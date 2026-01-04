@@ -5,7 +5,7 @@ world of warcraft addon data
 ## X-Website: https://github.com/RollingSmile/GuildEP
 ## X-Category: Guild
 ## X-Credits: Roadblock, Qcat, Excinerus
-## Version: 1.4.0a
+## Version: 1.5.0b
 ## X-Alpha: Test
 ## OptionalDeps: Ace2
 ## Notes: EP rolls - Basic Effort Points manager for TurtleWoW
