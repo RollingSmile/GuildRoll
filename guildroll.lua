@@ -1,4 +1,7 @@
--- Fix: Ensure guildRoll global table is safely initialized to avoid nil reference errors
+-- Fix: Ensure guildRoll global table is safely initialized to avoid parsing errors and nil reference errors.
+-- This defensive initialization prevents runtime exceptions if the addon fails to load properly.
+-- Note: The main addon uses GuildRoll (uppercase), but this provides a safety net for any
+-- code that might reference guildRoll (lowercase).
 guildRoll = guildRoll or {}
 
 GuildRoll = AceLibrary("AceAddon-2.0"):new("AceConsole-2.0", "AceHook-2.1", "AceDB-2.0", "AceDebug-2.0", "AceEvent-2.0", "AceModuleCore-2.0", "FuBarPlugin-2.0")
