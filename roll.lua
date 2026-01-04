@@ -338,6 +338,46 @@ adminOptionsFrame:SetHeight(140)
 adminOptionsFrame:Hide()
 adminOptionsFrame:SetFrameLevel(rollButton:GetFrameLevel() - 1)
 
+-- Helper function: attach delayed mouse leave close behavior to a menu frame
+-- frame: the menu frame to attach the behavior to
+-- anchorFrame: the frame to check for mouse-over (typically the button that opened the menu)
+-- graceSeconds: how long to wait after mouse leaves before hiding (default 0.5 seconds)
+local function attachDelayedMouseLeaveClose(frame, anchorFrame, graceSeconds)
+    if not frame then return end
+    
+    graceSeconds = graceSeconds or 0.5
+    local timeElapsed = 0
+    local isMouseOutside = false
+    
+    -- OnUpdate script to check mouse position and hide after grace period
+    frame:SetScript("OnUpdate", function(self, elapsed)
+        -- Check if mouse is over either the menu frame or the anchor button
+        local mouseOverFrame = MouseIsOver(frame)
+        local mouseOverAnchor = anchorFrame and MouseIsOver(anchorFrame)
+        
+        if mouseOverFrame or mouseOverAnchor then
+            -- Mouse is over the menu or anchor, reset timer
+            timeElapsed = 0
+            isMouseOutside = false
+        else
+            -- Mouse is outside both, start/continue timer
+            if not isMouseOutside then
+                isMouseOutside = true
+                timeElapsed = 0
+            end
+            
+            timeElapsed = timeElapsed + elapsed
+            
+            -- Hide after grace period
+            if timeElapsed >= graceSeconds then
+                frame:Hide()
+                timeElapsed = 0
+                isMouseOutside = false
+            end
+        end
+    end)
+end
+
 -- Tooltip text mapping for roll buttons
 local rollButtonTooltips = {
     ["CSR"] = "Input # of the SR and roll",
@@ -515,8 +555,12 @@ rollButton:SetScript("OnClick", function()
         
         if isAdmin then
             adminOptionsFrame:Show()
+            -- Attach delayed close behavior when showing
+            attachDelayedMouseLeaveClose(adminOptionsFrame, rollButton, 0.5)
         else
             rollOptionsFrame:Show()
+            -- Attach delayed close behavior when showing
+            attachDelayedMouseLeaveClose(rollOptionsFrame, rollButton, 0.5)
         end
     elseif arg1 == "LeftButton" then
         -- Left-click: toggle normal menu, hide admin menu
@@ -525,6 +569,8 @@ rollButton:SetScript("OnClick", function()
             rollOptionsFrame:Hide()
         else
             rollOptionsFrame:Show()
+            -- Attach delayed close behavior when showing
+            attachDelayedMouseLeaveClose(rollOptionsFrame, rollButton, 0.5)
         end
     end
 end)

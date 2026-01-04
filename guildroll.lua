@@ -11,6 +11,44 @@ local BC = AceLibrary("Babble-Class-2.2")
 --local G = AceLibrary("Gratuity-2.0")
 local T = AceLibrary("Tablet-2.0") -- tooltips
 local L = AceLibrary("AceLocale-2.2"):new("guildroll")
+
+-- Safe localization helper: returns localized string or fallback if key is missing/nil
+-- Usage: safe_localize("SomeKey", "Default Text")
+local function safe_localize(key, fallback)
+  if not key then return fallback or "" end
+  local result = L[key]
+  if result == nil or result == "" then
+    return fallback or key
+  end
+  return result
+end
+
+-- Safe format helper: safely formats localized strings with arguments, returns fallback on error
+-- Usage: safe_format("KeyWithFormat", "Default %s", arg1, arg2, ...)
+-- The key should contain format specifiers (%s, %d, etc.) matching the arguments
+local function safe_format(key, fallback, ...)
+  local success, result = pcall(function()
+    local template = L[key]
+    if template == nil or template == "" then
+      return string.format(fallback, ...)
+    end
+    return string.format(template, ...)
+  end)
+  
+  if success then
+    return result
+  else
+    -- If formatting fails, try fallback with pcall
+    local fallbackSuccess, fallbackResult = pcall(string.format, fallback, ...)
+    if fallbackSuccess then
+      return fallbackResult
+    else
+      -- Both failed, return a safe error string
+      return fallback or "Format error"
+    end
+  end
+end
+
 GuildRoll.VARS = {
   CSRWeekBonus = 10,  -- Bonus per week for CSR (weeks 2-15: (weeks-1)*10)
   minPE = 0,
@@ -27,7 +65,7 @@ GuildRoll.VARS = {
 
 GuildRollMSG = {
 	delayedinit = false,
-	dbg= false,
+	dbg = false,  -- Debug messages disabled by default. Set to true in-game to re-enable: /script GuildRollMSG.dbg = true
 	prefix = "RR_",
 	RequestHostInfoUpdate = "RequestHostInfoUpdate",
 	RequestHostInfoUpdateTS = 0,
@@ -1774,14 +1812,14 @@ function GuildRoll:UpdateGiveEPDialog(frame)
     if epSuccess and ep then
       currentEP = ep
     end
-    headerString = string.format(L["GIVING_EP_MAIN_OF_ALT"], mainName, targetName, currentEP)
+    headerString = safe_format("GIVING_EP_MAIN_OF_ALT", "Giving EP to %s (main of %s); current EP: %d", mainName, targetName, currentEP)
   else
     -- This is a main or alt without main found - show "Giving EP to CharName; current EP: X"
     local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(targetName) end)
     if epSuccess and ep then
       currentEP = ep
     end
-    headerString = string.format(L["GIVING_EP_TO_CHAR"], targetName, currentEP)
+    headerString = safe_format("GIVING_EP_TO_CHAR", "Giving EP to %s; current EP: %d", targetName, currentEP)
   end
   
   if textElement then
@@ -2951,7 +2989,7 @@ StaticPopupDialogs["GUILDROLL_CONFIRM_DECAY"] = {
   OnShow = function()
     -- Calculate decay percentage to display
     local decayPercent = (1 - (GuildRoll_decay or GuildRoll.VARS.decay)) * 100
-    local message = string.format(L["Are you sure you want to decay all Standing by %s%%? This cannot be undone."], decayPercent)
+    local message = safe_format("Are you sure you want to decay all Standing by %s%%? This cannot be undone.", "Are you sure you want to decay all Standing by %s%%? This cannot be undone.", decayPercent)
     getglobal(this:GetName().."Text"):SetText(message)
   end,
   OnAccept = function()
@@ -3013,14 +3051,14 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
       if epSuccess and ep then
         currentEP = ep
       end
-      headerString = string.format(L["GIVING_EP_MAIN_OF_ALT"], mainName, targetName, currentEP)
+      headerString = safe_format("GIVING_EP_MAIN_OF_ALT", "Giving EP to %s (main of %s); current EP: %d", mainName, targetName, currentEP)
     else
       -- This is a main or alt without main found - show "Giving EP to CharName; current EP: X"
       local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(targetName) end)
       if epSuccess and ep then
         currentEP = ep
       end
-      headerString = string.format(L["GIVING_EP_TO_CHAR"], targetName, currentEP)
+      headerString = safe_format("GIVING_EP_TO_CHAR", "Giving EP to %s; current EP: %d", targetName, currentEP)
     end
     
     getglobal(this:GetName().."Text"):SetText(headerString)
