@@ -113,12 +113,12 @@ function RollParser:ParseSubmission(message, sender)
 end
 
 -- Parse system roll message
--- Expected format: "PlayerName rolls 1-100 (75)" or "PlayerName rolls 101-200 (150)"
+-- Expected format: "PlayerName rolls 75 (1-100)" - WoW 1.12 format
 function RollParser:ParseRoll(message)
     if not message then return nil end
     
-    -- Pattern: PlayerName rolls min-max (result)
-    local _, _, playerName, minRoll, maxRoll, result = string.find(message, "^(.+) rolls (%d+)%-(%d+) %((%d+)%)%.?$")
+    -- Pattern: PlayerName rolls result (min-max)
+    local _, _, playerName, result, minRoll, maxRoll = string.find(message, "^(.+) rolls (%d+) %((%d+)%-(%d+)%)%.?$")
     
     if not playerName or not minRoll or not maxRoll or not result then
         return nil
