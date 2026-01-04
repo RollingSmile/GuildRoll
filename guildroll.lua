@@ -29,29 +29,29 @@ local function safe_localize(key, fallback)
   return result
 end
 
-local function safe_format(...)
+--local function safe_format(...)
   -- Recupera numero di argomenti e i primi due (key, fallback)
-  local argc = select('#', ...)
-  local key = select(1, ...)
-  local fallback = select(2, ...)
+  --local argc = select('#', ...)
+  --local key = select(1, ...)
+  --local fallback = select(2, ...)
 
   -- Raccogli eventuali argomenti rimanenti in una tabella
-  local args = {}
-  if argc >= 3 then
-    for i = 3, argc do
-      args[i - 2] = select(i, ...)
-    end
-  end
+  --local args = {}
+  --if argc >= 3 then
+    --for i = 3, argc do
+      --args[i - 2] = select(i, ...)
+	--end
+  --end
 
-  local unpack_fn = table.unpack or unpack
+  --local unpack_fn = table.unpack or unpack
 
-  local success, result = pcall(function()
-    local template = L[key]
-    if template == nil or template == "" then
-      return string.format(fallback, unpack_fn(args))
-    end
-    return string.format(template, unpack_fn(args))
-  end)
+  --local success, result = pcall(function()
+    --local template = L[key]
+    --if template == nil or template == "" then
+      --return string.format(fallback, unpack_fn(args))
+    --end
+    --return string.format(template, unpack_fn(args))
+  --end)
 
   if success then
     return result
@@ -64,6 +64,7 @@ local function safe_format(...)
     end
   end
 end
+
 GuildRoll.VARS = {
   CSRWeekBonus = 10,  -- Bonus per week for CSR (weeks 2-15: (weeks-1)*10)
   minPE = 0,
