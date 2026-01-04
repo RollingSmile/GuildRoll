@@ -161,8 +161,8 @@ local CLASS_ROLES = {
 
 -- Flask requirements (name-based matching)
 local FLASKS = {
-  "Flask of Distilled Wisdom",
-  "Flask of Supreme Power",
+  "Distilled Wisdom", --Flask of Distilled Wisdom
+  "Supreme Power", --Flask of Supreme Power
   "Flask of the Titans",
 }
 
