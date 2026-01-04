@@ -12,5 +12,6 @@ GuildRoll is a World of Warcraft addon for managing Effort Points (EP) in guilds
 
 ## Recent Changes
 
-- Added RollWithEP Module for test in live version
+- Minor fixes
+  
 
