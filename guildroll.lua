@@ -1,3 +1,6 @@
+-- Fix: Ensure guildRoll global table is safely initialized to avoid nil reference errors
+guildRoll = guildRoll or {}
+
 GuildRoll = AceLibrary("AceAddon-2.0"):new("AceConsole-2.0", "AceHook-2.1", "AceDB-2.0", "AceDebug-2.0", "AceEvent-2.0", "AceModuleCore-2.0", "FuBarPlugin-2.0")
 GuildRoll:SetModuleMixins("AceDebug-2.0")
 
