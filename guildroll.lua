@@ -53,17 +53,17 @@ end
     --return string.format(template, unpack_fn(args))
   --end)
 
-  if success then
-    return result
-  else
-    local fallbackSuccess, fallbackResult = pcall(string.format, fallback, unpack_fn(args))
-    if fallbackSuccess then
-      return fallbackResult
-    else
-      return fallback or "Format error"
-    end
-  end
-end
+  --if success then
+    --return result
+  --else
+    --local fallbackSuccess, fallbackResult = pcall(string.format, fallback, unpack_fn(args))
+    --if fallbackSuccess then
+      --return fallbackResult
+    --else
+      --return fallback or "Format error"
+    --end
+  --end
+--end
 
 GuildRoll.VARS = {
   CSRWeekBonus = 10,  -- Bonus per week for CSR (weeks 2-15: (weeks-1)*10)
