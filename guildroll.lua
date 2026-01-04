@@ -29,34 +29,41 @@ local function safe_localize(key, fallback)
   return result
 end
 
--- Safe format helper: safely formats localized strings with arguments, returns fallback on error
--- Usage: safe_format("KeyWithFormat", "Default %s", arg1, arg2, ...)
--- The key should contain format specifiers (%s, %d, etc.) matching the arguments
-local function safe_format(key, fallback, ...)
-  -- Capture varargs to use in nested functions
-  local args = {...}
+local function safe_format(...)
+  -- Recupera numero di argomenti e i primi due (key, fallback)
+  local argc = select('#', ...)
+  local key = select(1, ...)
+  local fallback = select(2, ...)
+
+  -- Raccogli eventuali argomenti rimanenti in una tabella
+  local args = {}
+  if argc >= 3 then
+    for i = 3, argc do
+      args[i - 2] = select(i, ...)
+    end
+  end
+
+  local unpack_fn = table.unpack or unpack
+
   local success, result = pcall(function()
     local template = L[key]
     if template == nil or template == "" then
-      return string.format(fallback, unpack(args))
+      return string.format(fallback, unpack_fn(args))
     end
-    return string.format(template, unpack(args))
+    return string.format(template, unpack_fn(args))
   end)
-  
+
   if success then
     return result
   else
-    -- If formatting fails, try fallback with pcall
-    local fallbackSuccess, fallbackResult = pcall(string.format, fallback, unpack(args))
+    local fallbackSuccess, fallbackResult = pcall(string.format, fallback, unpack_fn(args))
     if fallbackSuccess then
       return fallbackResult
     else
-      -- Both failed, return a safe error string
       return fallback or "Format error"
     end
   end
 end
-
 GuildRoll.VARS = {
   CSRWeekBonus = 10,  -- Bonus per week for CSR (weeks 2-15: (weeks-1)*10)
   minPE = 0,
