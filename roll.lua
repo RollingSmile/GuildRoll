@@ -100,12 +100,14 @@ local function IsEPZone()
     end
     
     -- pcall-wrapped call to GetReward
+    -- GetReward returns: isMainStanding, reward
     local rewardSuccess, isMainStanding, reward = pcall(function()
         return GuildRoll:GetReward()
     end)
     
-    -- If GetReward returns a reward value, this is an EP zone
-    if rewardSuccess and reward and tonumber(reward) then
+    -- If GetReward succeeds and isMainStanding is true, this is an EP zone
+    -- (isMainStanding = true means the zone awards EP based on standing)
+    if rewardSuccess and isMainStanding == true then
         return true
     end
     
