@@ -351,11 +351,11 @@ adminOptionsFrame:SetFrameLevel(rollButton:GetFrameLevel() - 1)
 
 -- Tooltip text mapping for roll buttons
 local rollButtonTooltips = {
-    ["CSR"] = "Input # of the SR and roll",
+    ["CSR"] = "Input weeks and roll SR",
     ["SR"] = "Roll SR with EP",
-    ["EP"] = "Roll with EP",
+    ["EP"] = "Roll MS with EP",
     ["101"] = "Roll SR with no EP",
-    ["100"] = "Classic roll",
+    ["100"] = "Roll MS with no EP",
     ["99"] = "For OS and Alts",
     ["Tmog"] = "Roll for Tmog",
     ["Standings"] = "Show standings"
@@ -384,22 +384,7 @@ local function CreateCompactRollButton(name, parent, command)
     if rollButtonTooltips[name] then
         button:SetScript("OnEnter", function()
             GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-            
-            -- Special tooltip for CSR showing rank requirement
-            if name == "CSR" then
-                local threshold = GuildRoll_CSRThreshold or 3
-                local tooltipText = string.format("CSR — requires rank <= %d", threshold)
-                
-                -- If button is disabled, add explanation
-                if not button:IsEnabled() then
-                    tooltipText = tooltipText .. "\n|cffff0000You don't have permission|r"
-                end
-                
-                GameTooltip:SetText(tooltipText, 1, 1, 1)
-            else
-                GameTooltip:SetText(rollButtonTooltips[name], 1, 1, 1)
-            end
-            
+            GameTooltip:SetText(rollButtonTooltips[name], 1, 1, 1)
             GameTooltip:Show()
         end)
         
