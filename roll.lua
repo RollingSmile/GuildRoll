@@ -100,12 +100,14 @@ local function IsEPZone()
     end
     
     -- pcall-wrapped call to GetReward
+    -- GetReward returns: isMainStanding, reward
     local rewardSuccess, isMainStanding, reward = pcall(function()
         return GuildRoll:GetReward()
     end)
     
-    -- If GetReward returns a reward value, this is an EP zone
-    if rewardSuccess and reward and tonumber(reward) then
+    -- If GetReward succeeds and isMainStanding is true, this is an EP zone
+    -- (isMainStanding = true means the zone awards EP based on standing)
+    if rewardSuccess and isMainStanding == true then
         return true
     end
     
@@ -144,7 +146,8 @@ local function ExecuteCommand(command)
         RandomRoll(1, 100)
     elseif command == "roll 99" then
         RandomRoll(1, 99)
-    elseif command == "roll 98" then
+    elseif command == "roll tmog" then
+        -- Tmog roll uses 98 to differentiate from other OS rolls (99)
         RandomRoll(1, 98)
     elseif command == "roll ep" then
         -- EP-aware MainSpec roll (1+EP .. 100+EP)
@@ -322,13 +325,21 @@ rollButton:SetScript("OnDragStop", function()
     end
 end)
 
--- Container for roll buttons, initially hidden
+-- Container for roll buttons popup (two columns), initially hidden
 local rollOptionsFrame = CreateFrame("Frame", "RollOptionsFrame", rollFrame)
 rollOptionsFrame:SetPoint("TOP", rollButton, "BOTTOM", 0, -2)
-rollOptionsFrame:SetWidth(140)
-rollOptionsFrame:SetHeight(140)
+rollOptionsFrame:SetWidth(110)  -- Width for two columns of 48px buttons + padding
+rollOptionsFrame:SetHeight(100)  -- Will be adjusted based on content
 rollOptionsFrame:Hide()
 rollOptionsFrame:SetFrameLevel(rollButton:GetFrameLevel() - 1)
+
+-- Add backdrop to popup
+rollOptionsFrame:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true, tileSize = 32, edgeSize = 16,
+    insets = { left = 4, right = 4, top = 4, bottom = 4 }
+})
 
 -- Container for admin menu buttons, initially hidden
 local adminOptionsFrame = CreateFrame("Frame", "AdminOptionsFrame", rollFrame)
@@ -340,18 +351,56 @@ adminOptionsFrame:SetFrameLevel(rollButton:GetFrameLevel() - 1)
 
 -- Tooltip text mapping for roll buttons
 local rollButtonTooltips = {
-    ["CSR"] = "Input # of the SR and roll",
+    ["CSR"] = "Input weeks and roll SR",
     ["SR"] = "Roll SR with EP",
-    ["EP"] = "Roll with EP",
+    ["EP"] = "Roll MS with EP",
     ["101"] = "Roll SR with no EP",
-    ["100"] = "Classic roll",
+    ["100"] = "Roll MS with no EP",
     ["99"] = "For OS and Alts",
-    ["98"] = "Roll for Tmog",
+    ["Tmog"] = "Roll for Tmog",
     ["Standings"] = "Show standings"
 }
 
--- Function to create roll option buttons
-local function CreateRollButton(name, parent, command, anchor, width, font, isAdminCommand)
+-- Function to create compact roll button for two-column layout
+local function CreateCompactRollButton(name, parent, command)
+    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    button:SetWidth(48)
+    button:SetHeight(22)
+    button:SetText(name)
+    -- Initial position at 0,0 - will be repositioned by RepositionRollButtons()
+    button:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    
+    -- Set small font size
+    pcall(function() 
+        button:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 9) 
+    end)
+    
+    button:SetScript("OnClick", function()
+        ExecuteCommand(command)
+        rollOptionsFrame:Hide()
+    end)
+    
+    -- Add tooltip handlers
+    if rollButtonTooltips[name] then
+        button:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            GameTooltip:SetText(rollButtonTooltips[name], 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        
+        button:SetScript("OnLeave", function()
+            GameTooltip:Hide()
+        end)
+    end
+    
+    return button
+end
+
+-- Storage for button references for easy enable/disable
+local rollPopupButtons = {}
+
+-- Function to create admin button
+local function CreateAdminButton(name, parent, command, anchor, width)
     local buttonFrame = CreateFrame("Frame", nil, parent)
     buttonFrame:SetWidth(120)
     buttonFrame:SetHeight(24)
@@ -369,92 +418,13 @@ local function CreateRollButton(name, parent, command, anchor, width, font, isAd
     button:SetHeight(20)
     button:SetText(name)
     button:SetPoint("CENTER", buttonFrame, "CENTER")
-    if font then
-        pcall(function() button:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 10) end)
-    end
     
     button:SetScript("OnClick", function()
-        if isAdminCommand then
-            ExecuteAdminCommand(command)
-            adminOptionsFrame:Hide()
-        else
-            ExecuteCommand(command)
-            rollOptionsFrame:Hide()
-        end
+        ExecuteAdminCommand(command)
+        adminOptionsFrame:Hide()
     end)
-    
-    -- Add tooltip handlers for roll buttons (not admin buttons)
-    if not isAdminCommand and rollButtonTooltips[name] then
-        button:SetScript("OnEnter", function()
-            GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
-            GameTooltip:SetText(rollButtonTooltips[name], 1, 1, 1)
-            GameTooltip:Show()
-        end)
-        
-        button:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
-    end
 
     return buttonFrame
-end
-
--- Function to build dynamic roll options list
-local function BuildRollOptions()
-    local opts = {}
-    
-    -- Check if player is an admin or showAllRollButtons is enabled
-    local isAdmin = (GuildRoll and GuildRoll.IsAdmin) and GuildRoll:IsAdmin() or false
-    local showAll = GuildRoll_showAllRollButtons == true
-    
-    if isAdmin or showAll then
-        -- show full set: CSR (always when showAll, or if permitted), SR, EP, 101/100/99/98, Standings
-        if showAll or PlayerHasCSRPermission() then
-            table.insert(opts, { "CSR", "roll csr" })
-        end
-        table.insert(opts, { "SR", "roll sr" })
-        table.insert(opts, { "EP", "roll ep" })
-        table.insert(opts, { "101", "roll 101" })
-        table.insert(opts, { "100", "roll 100" })
-        table.insert(opts, { "99", "roll 99" })
-        table.insert(opts, { "98", "roll 98" })
-        table.insert(opts, { "Standings", "show ep" })
-        return opts
-    end
-    
-    -- Check if player is an Alt
-    local isAlt = IsAlt()
-    
-    if isAlt then
-        -- Alts see only: 99, 98, Standings
-        table.insert(opts, { "99", "roll 99" })
-        table.insert(opts, { "98", "roll 98" })
-        table.insert(opts, { "Standings", "show ep" })
-    else
-        -- Player is a Main
-        local isEPZone = IsEPZone()
-        
-        if isEPZone then
-            -- EP zone: show CSR (if permitted), SR, EP, 99, 98, Standings
-            if PlayerHasCSRPermission() then
-                table.insert(opts, { "CSR", "roll csr" })
-            end
-            table.insert(opts, { "SR", "roll sr" })
-            table.insert(opts, { "EP", "roll ep" })
-            table.insert(opts, { "99", "roll 99" })
-            table.insert(opts, { "98", "roll 98" })
-            table.insert(opts, { "Standings", "show ep" })
-        else
-            -- Non-EP zone: show 101, 100, 99, 98, Standings
-            table.insert(opts, { "101", "roll 101" })
-            table.insert(opts, { "100", "roll 100" })
-            table.insert(opts, { "99", "roll 99" })
-            table.insert(opts, { "98", "roll 98" })
-            table.insert(opts, { "Standings", "show ep" })
-        end
-    end
-    
-    return opts
 end
 
 -- Function to build admin menu options
@@ -468,27 +438,144 @@ local function BuildAdminOptions()
     return opts
 end
 
--- Build initial options list
-local options = BuildRollOptions()
+-- Create all roll popup buttons (positioning will be dynamic based on mode)
+local col1X = 6  -- X offset for column 1
+local col2X = 56 -- X offset for column 2 (6 + 48 + 2 padding)
 
--- Create roll buttons dynamically with closer spacing
-local previousButton = rollOptionsFrame
-for _, option in ipairs(options) do
-    local buttonFrame = CreateRollButton(option[1], rollOptionsFrame, option[2], previousButton, option[3] or 110, option[4] or false, false)
+-- Create all buttons we might need (initial position at 0,0, will be repositioned)
+rollPopupButtons.CSR = CreateCompactRollButton("CSR", rollOptionsFrame, "roll csr")
+rollPopupButtons.SR = CreateCompactRollButton("SR", rollOptionsFrame, "roll sr")
+rollPopupButtons.EP = CreateCompactRollButton("EP", rollOptionsFrame, "roll ep")
+rollPopupButtons["101"] = CreateCompactRollButton("101", rollOptionsFrame, "roll 101")
+rollPopupButtons["100"] = CreateCompactRollButton("100", rollOptionsFrame, "roll 100")
+rollPopupButtons["99"] = CreateCompactRollButton("99", rollOptionsFrame, "roll 99")
+rollPopupButtons.Tmog = CreateCompactRollButton("Tmog", rollOptionsFrame, "roll tmog")
+rollPopupButtons.Standings = CreateCompactRollButton("Standings", rollOptionsFrame, "show ep")
 
-    if previousButton == rollOptionsFrame then
-        buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)
+-- Function to reposition and show/hide buttons based on current mode
+local function RepositionRollButtons()
+    local enableRollButtons = GuildRoll_EnableRollButtons == true
+    local buttonSpacing = 24
+    
+    if enableRollButtons then
+        -- Enable ON mode: Col1=[CSR,SR,EP,Standings], Col2=[101,100,99,Tmog]
+        rollPopupButtons.CSR:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col1X, -6)
+        rollPopupButtons.SR:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col1X, -6 - buttonSpacing)
+        rollPopupButtons.EP:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col1X, -6 - buttonSpacing * 2)
+        rollPopupButtons.Standings:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col1X, -6 - buttonSpacing * 3)
+        
+        rollPopupButtons["101"]:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col2X, -6)
+        rollPopupButtons["100"]:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col2X, -6 - buttonSpacing)
+        rollPopupButtons["99"]:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col2X, -6 - buttonSpacing * 2)
+        rollPopupButtons.Tmog:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col2X, -6 - buttonSpacing * 3)
     else
-        buttonFrame:SetPoint("TOP", previousButton, "BOTTOM", 0, 5)
+        -- Normal mode: positions depend on visibility
+        -- For mains in EP zone: Col1=[CSR,SR,EP], Col2=[99,Tmog,Standings]
+        -- For mains in non-EP zone: Col1=[101,100], Col2=[99,Tmog,Standings]
+        -- For alts: Col1=[], Col2=[99,Tmog,Standings]
+        
+        -- Position col1 buttons (CSR, SR, EP for EP zones; 101, 100 for non-EP zones)
+        rollPopupButtons.CSR:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col1X, -6)
+        rollPopupButtons.SR:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col1X, -6 - buttonSpacing)
+        rollPopupButtons.EP:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col1X, -6 - buttonSpacing * 2)
+        
+        rollPopupButtons["101"]:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col1X, -6)
+        rollPopupButtons["100"]:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col1X, -6 - buttonSpacing)
+        
+        -- Position col2 buttons (always 99, Tmog, Standings in normal mode)
+        rollPopupButtons["99"]:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col2X, -6)
+        rollPopupButtons.Tmog:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col2X, -6 - buttonSpacing)
+        rollPopupButtons.Standings:SetPoint("TOPLEFT", rollOptionsFrame, "TOPLEFT", col2X, -6 - buttonSpacing * 2)
     end
-    previousButton = buttonFrame
 end
+
+-- Call reposition on load
+RepositionRollButtons()
+
+-- Function to update visibility and enabled state of roll popup buttons
+local function UpdateRollPopupVisibility()
+    -- First reposition buttons
+    RepositionRollButtons()
+    
+    -- Then update visibility
+    local enableRollButtons = GuildRoll_EnableRollButtons == true
+    local isAlt = IsAlt()
+    local isEPZone = IsEPZone()
+    local hasCSRPerm = PlayerHasCSRPermission()
+    
+    if enableRollButtons then
+        -- Enable ON: show all buttons, all enabled
+        rollPopupButtons.CSR:Show()
+        rollPopupButtons.CSR:Enable()
+        rollPopupButtons.SR:Show()
+        rollPopupButtons.SR:Enable()
+        rollPopupButtons.EP:Show()
+        rollPopupButtons.EP:Enable()
+        rollPopupButtons.Standings:Show()
+        rollPopupButtons.Standings:Enable()
+        rollPopupButtons["101"]:Show()
+        rollPopupButtons["101"]:Enable()
+        rollPopupButtons["100"]:Show()
+        rollPopupButtons["100"]:Enable()
+        rollPopupButtons["99"]:Show()
+        rollPopupButtons["99"]:Enable()
+        rollPopupButtons.Tmog:Show()
+        rollPopupButtons.Tmog:Enable()
+    else
+        -- Normal mode
+        if isAlt then
+            -- Alts: only show col2 (99, Tmog, Standings)
+            rollPopupButtons.CSR:Hide()
+            rollPopupButtons.SR:Hide()
+            rollPopupButtons.EP:Hide()
+            rollPopupButtons["101"]:Hide()
+            rollPopupButtons["100"]:Hide()
+            rollPopupButtons["99"]:Show()
+            rollPopupButtons.Tmog:Show()
+            rollPopupButtons.Standings:Show()
+        else
+            -- Mains
+            if isEPZone then
+                -- EP zone: Col1=[CSR,SR,EP], Col2=[99,Tmog,Standings]
+                rollPopupButtons.CSR:Show()
+                if hasCSRPerm then
+                    rollPopupButtons.CSR:Enable()
+                else
+                    rollPopupButtons.CSR:Disable()
+                end
+                rollPopupButtons.SR:Show()
+                rollPopupButtons.SR:Enable()
+                rollPopupButtons.EP:Show()
+                rollPopupButtons.EP:Enable()
+                rollPopupButtons["101"]:Hide()
+                rollPopupButtons["100"]:Hide()
+            else
+                -- Non-EP zone: Col1=[101,100], Col2=[99,Tmog,Standings]
+                rollPopupButtons.CSR:Hide()
+                rollPopupButtons.SR:Hide()
+                rollPopupButtons.EP:Hide()
+                rollPopupButtons["101"]:Show()
+                rollPopupButtons["101"]:Enable()
+                rollPopupButtons["100"]:Show()
+                rollPopupButtons["100"]:Enable()
+            end
+            
+            -- Col2 always visible for mains
+            rollPopupButtons["99"]:Show()
+            rollPopupButtons.Tmog:Show()
+            rollPopupButtons.Standings:Show()
+        end
+    end
+end
+
+-- Initial visibility update
+UpdateRollPopupVisibility()
 
 -- Create admin option buttons dynamically
 local adminOptions = BuildAdminOptions()
 local previousAdminButton = adminOptionsFrame
 for _, option in ipairs(adminOptions) do
-    local buttonFrame = CreateRollButton(option[1], adminOptionsFrame, option[2], previousAdminButton, 110, false, true)
+    local buttonFrame = CreateAdminButton(option[1], adminOptionsFrame, option[2], previousAdminButton, 110)
     
     if previousAdminButton == adminOptionsFrame then
         buttonFrame:SetPoint("TOP", adminOptionsFrame, "TOP", 0, 0)
@@ -516,6 +603,8 @@ rollButton:SetScript("OnClick", function()
         if isAdmin then
             adminOptionsFrame:Show()
         else
+            -- Update visibility before showing
+            UpdateRollPopupVisibility()
             rollOptionsFrame:Show()
         end
     elseif arg1 == "LeftButton" then
@@ -524,43 +613,17 @@ rollButton:SetScript("OnClick", function()
         if rollOptionsFrame:IsShown() then
             rollOptionsFrame:Hide()
         else
+            -- Update visibility before showing
+            UpdateRollPopupVisibility()
             rollOptionsFrame:Show()
         end
     end
 end)
 
--- Public function to rebuild roll options (called from menu when threshold changes)
+-- Public function to rebuild roll options (called from menu when threshold or settings change)
 function GuildRoll:RebuildRollOptions()
-    -- Clear existing option widgets
-    if rollOptionsFrame then
-        -- Avoid using global select() (some environment may have overwritten it).
-        -- Collect children into a table, then index it directly.
-        local children = { rollOptionsFrame:GetChildren() }
-        -- Use table.getn for compatibility with older Lua versions used in some WoW clients
-        local n = table.getn(children)
-        for i = n, 1, -1 do
-            local child = children[i]
-            if child then
-                child:Hide()
-                child:SetParent(nil)
-            end
-        end
-    end
-    
-    -- Rebuild options list
-    local newOptions = BuildRollOptions()
-    
-    -- Recreate buttons
-    local previousButton = rollOptionsFrame
-    for _, opt in ipairs(newOptions) do
-        local buttonFrame = CreateRollButton(opt[1], rollOptionsFrame, opt[2], previousButton, opt[3] or 110, opt[4] or false, false)
-        if previousButton == rollOptionsFrame then
-            buttonFrame:SetPoint("TOP", rollOptionsFrame, "TOP", 0, 0)
-        else
-            buttonFrame:SetPoint("TOP", previousButton, "BOTTOM", 0, 5)
-        end
-        previousButton = buttonFrame
-    end
+    -- Simply update visibility/enabled state of existing buttons
+    UpdateRollPopupVisibility()
 end
 
 -- Dragging & saving position
@@ -583,32 +646,36 @@ rollFrame:SetScript("OnDragStop", function()
     GuildRoll_RollPos.y = rollFrame:GetTop()
 end)
 
--- Restore saved position on load
+-- Restore saved position on load and handle visibility updates
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+eventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
 
--- Event handler: rebuild options when player logs in or guild roster updates
+-- Event handler: update button visibility on relevant events
 eventFrame:SetScript("OnEvent", function(self, event, ...)
-    if event ~= "GUILD_ROSTER_UPDATE" and event ~= "PLAYER_LOGIN" then
-        return
-    end
+    -- Update roll popup visibility on all relevant events
+    UpdateRollPopupVisibility()
     
     -- Rebuild roll options to update CSR visibility
     if GuildRoll and GuildRoll.RebuildRollOptions then
         GuildRoll:RebuildRollOptions()
     end
 
-    -- Restore saved position behavior
-    if GuildRoll_RollPos.x and GuildRoll_RollPos.y then
-        rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
-    else
-        GuildRoll_RollPos = { x = 400, y = 300 }
-        rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
-    end
-    if not GuildRoll_showRollWindow then
-        rollFrame:Hide()
-    else
-        rollFrame:Show()
+    -- Restore saved position behavior (only on login)
+    if event == "PLAYER_LOGIN" then
+        if GuildRoll_RollPos.x and GuildRoll_RollPos.y then
+            rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
+        else
+            GuildRoll_RollPos = { x = 400, y = 300 }
+            rollFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", GuildRoll_RollPos.x, GuildRoll_RollPos.y)
+        end
+        if not GuildRoll_showRollWindow then
+            rollFrame:Hide()
+        else
+            rollFrame:Show()
+        end
     end
 end)

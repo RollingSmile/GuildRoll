@@ -202,6 +202,8 @@ Results will print here when done.]],
   ["CSR Threshold"] = true,
   ["Maximum rank index allowed to view CSR"] = "Maximum rank index allowed to view CSR (0 = highest rank)",
   ["Show all Roll Buttons"] = "Show all Roll Buttons",
+  ["Enable Roll Buttons"] = true,
+  ["Enable Roll Buttons description"] = "When enabled, all roll buttons are visible and enabled for everyone (override normal restrictions)",
   -- Buff Checks
   ["Buff Checks"] = true,
   ["Admin buff verification tools"] = true,

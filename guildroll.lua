@@ -812,15 +812,23 @@ function GuildRoll:buildMenu()
       end)
     end
     
-    options.args["options_group"].args["show_all_roll_buttons"] = {
+    options.args["options_group"].args["enable_roll_buttons"] = {
       type = "toggle",
-      name = L["Show all Roll Buttons"],
-      desc = "When enabled, shows all roll buttons to everyone (Admin only).",
+      name = L["Enable Roll Buttons"],
+      desc = L["Enable Roll Buttons description"],
       order = 66,
       hidden = function() return not (admin()) end,
-      get = function() return GuildRoll_showAllRollButtons == true end,
+      get = function() return GuildRoll_EnableRollButtons == true end,
       set = function(v)
-        GuildRoll_showAllRollButtons = v
+        GuildRoll_EnableRollButtons = v
+        -- Log feedback to user
+        if GuildRoll and GuildRoll.defaultPrint then
+          if v then
+            GuildRoll:defaultPrint("Enable Roll Buttons: ON - All buttons visible to everyone")
+          else
+            GuildRoll:defaultPrint("Enable Roll Buttons: OFF - Normal visibility rules apply")
+          end
+        end
         if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
         if GuildRoll and GuildRoll.shareSettings then GuildRoll:shareSettings(true) end
       end,
@@ -871,7 +879,18 @@ function GuildRoll:OnInitialize() -- ADDON_LOADED (1) unless LoD
   if GuildRollAltspool == nil then GuildRollAltspool = true end
   if GuildRoll_altpercent == nil then GuildRoll_altpercent = 1.0 end
   if GuildRoll_debug == nil then GuildRoll_debug = {} end
+  
+  -- Migration: Copy old showAllRollButtons to new EnableRollButtons if needed
+  if GuildRoll_EnableRollButtons == nil and GuildRoll_showAllRollButtons ~= nil then
+      GuildRoll_EnableRollButtons = GuildRoll_showAllRollButtons
+  end
+  
+  -- Initialize new variable if still nil
+  if GuildRoll_EnableRollButtons == nil then GuildRoll_EnableRollButtons = false end
+  
+  -- Keep old variable for backward compatibility
   if GuildRoll_showAllRollButtons == nil then GuildRoll_showAllRollButtons = false end
+  
   if GuildRoll_debugAdminLog == nil then GuildRoll_debugAdminLog = false end
   -- Initialize runtime-only raid filter flags (not saved to SavedVariables)
   GuildRoll_memberlist_raidonly = false
