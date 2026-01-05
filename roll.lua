@@ -408,10 +408,7 @@ local function CreateCompactRollButton(name, parent, command, x, y)
 end
 
 -- Storage for button references for easy enable/disable
-local rollPopupButtons = {
-    col1 = {},
-    col2 = {}
-}
+local rollPopupButtons = {}
 
 -- Function to create admin button
 local function CreateAdminButton(name, parent, command, anchor, width)
@@ -439,138 +436,6 @@ local function CreateAdminButton(name, parent, command, anchor, width)
     end)
 
     return buttonFrame
-end
-
--- Function to update visibility and enabled state of roll popup buttons
-local function UpdateRollPopupVisibility()
-    -- Check if EnableRollButtons is active
-    local enableRollButtons = GuildRoll_EnableRollButtons == true
-    
-    -- Check if player is alt
-    local isAlt = IsAlt()
-    
-    -- Check if in EP zone
-    local isEPZone = IsEPZone()
-    
-    -- Check CSR permission
-    local hasCSRPerm = PlayerHasCSRPermission()
-    
-    if enableRollButtons then
-        -- ===== ENABLE ROLL BUTTONS MODE =====
-        -- Column 1: CSR, SR, EP, Standings - all visible and enabled
-        -- Column 2: 101, 100, 99, Tmog - all visible and enabled
-        
-        -- Show all column 1 buttons
-        if rollPopupButtons.col1.CSR then
-            rollPopupButtons.col1.CSR:Show()
-            rollPopupButtons.col1.CSR:Enable()
-        end
-        if rollPopupButtons.col1.SR then
-            rollPopupButtons.col1.SR:Show()
-            rollPopupButtons.col1.SR:Enable()
-        end
-        if rollPopupButtons.col1.EP then
-            rollPopupButtons.col1.EP:Show()
-            rollPopupButtons.col1.EP:Enable()
-        end
-        if rollPopupButtons.col1.Standings then
-            rollPopupButtons.col1.Standings:Show()
-            rollPopupButtons.col1.Standings:Enable()
-        end
-        
-        -- Show all column 2 buttons
-        if rollPopupButtons.col2["101"] then
-            rollPopupButtons.col2["101"]:Show()
-            rollPopupButtons.col2["101"]:Enable()
-        end
-        if rollPopupButtons.col2["100"] then
-            rollPopupButtons.col2["100"]:Show()
-            rollPopupButtons.col2["100"]:Enable()
-        end
-        if rollPopupButtons.col2["99"] then
-            rollPopupButtons.col2["99"]:Show()
-            rollPopupButtons.col2["99"]:Enable()
-        end
-        if rollPopupButtons.col2.Tmog then
-            rollPopupButtons.col2.Tmog:Show()
-            rollPopupButtons.col2.Tmog:Enable()
-        end
-        
-        -- Hide the extra Standings button in col2 (used in normal mode)
-        if rollPopupButtons.col2.Standings then
-            rollPopupButtons.col2.Standings:Hide()
-        end
-    else
-        -- ===== NORMAL MODE =====
-        -- Column 1 (mains only):
-        --   - EP zone: CSR, SR, EP
-        --   - Non-EP zone: 101, 100
-        -- Column 2 (all): 99, Tmog, Standings
-        
-        if isAlt then
-            -- Alts: hide entire column 1, show only column 2 (99, Tmog, Standings)
-            if rollPopupButtons.col1.CSR then rollPopupButtons.col1.CSR:Hide() end
-            if rollPopupButtons.col1.SR then rollPopupButtons.col1.SR:Hide() end
-            if rollPopupButtons.col1.EP then rollPopupButtons.col1.EP:Hide() end
-            if rollPopupButtons.col1.Standings then rollPopupButtons.col1.Standings:Hide() end
-            
-            -- Hide the 101/100 from col2 (they're not for alts in normal mode)
-            if rollPopupButtons.col2["101"] then rollPopupButtons.col2["101"]:Hide() end
-            if rollPopupButtons.col2["100"] then rollPopupButtons.col2["100"]:Hide() end
-            
-            -- Show 99, Tmog, Standings in col2
-            if rollPopupButtons.col2["99"] then rollPopupButtons.col2["99"]:Show() end
-            if rollPopupButtons.col2.Tmog then rollPopupButtons.col2.Tmog:Show() end
-            if rollPopupButtons.col2.Standings then rollPopupButtons.col2.Standings:Show() end
-        else
-            -- Mains: show appropriate buttons based on zone
-            if isEPZone then
-                -- EP zone: Column 1 shows CSR, SR, EP
-                if rollPopupButtons.col1.CSR then
-                    rollPopupButtons.col1.CSR:Show()
-                    if hasCSRPerm then
-                        rollPopupButtons.col1.CSR:Enable()
-                    else
-                        rollPopupButtons.col1.CSR:Disable()
-                    end
-                end
-                if rollPopupButtons.col1.SR then
-                    rollPopupButtons.col1.SR:Show()
-                    rollPopupButtons.col1.SR:Enable()
-                end
-                if rollPopupButtons.col1.EP then
-                    rollPopupButtons.col1.EP:Show()
-                    rollPopupButtons.col1.EP:Enable()
-                end
-                if rollPopupButtons.col1.Standings then rollPopupButtons.col1.Standings:Hide() end
-                
-                -- In EP zone, don't show 101/100 in col2
-                if rollPopupButtons.col2["101"] then rollPopupButtons.col2["101"]:Hide() end
-                if rollPopupButtons.col2["100"] then rollPopupButtons.col2["100"]:Hide() end
-            else
-                -- Non-EP zone: Column 1 shows 101, 100 (we need to move them from col2)
-                -- Hide EP-specific buttons
-                if rollPopupButtons.col1.CSR then rollPopupButtons.col1.CSR:Hide() end
-                if rollPopupButtons.col1.SR then rollPopupButtons.col1.SR:Hide() end
-                if rollPopupButtons.col1.EP then rollPopupButtons.col1.EP:Hide() end
-                if rollPopupButtons.col1.Standings then rollPopupButtons.col1.Standings:Hide() end
-                
-                -- Show 101/100 - they need to be repositioned to column 1
-                -- But they're created in col2. We need to handle this differently.
-                -- Actually, looking at the spec again, in non-EP zone for mains:
-                -- Column 1 should show: 101, 100
-                -- Column 2 should show: 99, Tmog, Standings
-                -- Since we created 101/100 in col2, let's show them there and it works
-                if rollPopupButtons.col2["101"] then rollPopupButtons.col2["101"]:Show() end
-                if rollPopupButtons.col2["100"] then rollPopupButtons.col2["100"]:Show() end
-            end
-            
-            -- Column 2: always show 99, Tmog, Standings for mains
-            if rollPopupButtons.col2["99"] then rollPopupButtons.col2["99"]:Show() end
-            if rollPopupButtons.col2.Tmog then rollPopupButtons.col2.Tmog:Show() end
-            if rollPopupButtons.col2.Standings then rollPopupButtons.col2.Standings:Show() end
-        end
-    end
 end
 
 -- Function to build admin menu options
@@ -638,9 +503,8 @@ end
 -- Call reposition on load
 RepositionRollButtons()
 
--- Update UpdateRollPopupVisibility to call RepositionRollButtons
-local originalUpdateRollPopupVisibility = UpdateRollPopupVisibility
-UpdateRollPopupVisibility = function()
+-- Function to update visibility and enabled state of roll popup buttons
+local function UpdateRollPopupVisibility()
     -- First reposition buttons
     RepositionRollButtons()
     
