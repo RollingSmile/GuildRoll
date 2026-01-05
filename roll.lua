@@ -145,6 +145,7 @@ local function ExecuteCommand(command)
     elseif command == "roll 99" then
         RandomRoll(1, 99)
     elseif command == "roll tmog" then
+        -- Tmog roll uses 98 to differentiate from other OS rolls (99)
         RandomRoll(1, 98)
     elseif command == "roll ep" then
         -- EP-aware MainSpec roll (1+EP .. 100+EP)
@@ -359,12 +360,13 @@ local rollButtonTooltips = {
 }
 
 -- Function to create compact roll button for two-column layout
-local function CreateCompactRollButton(name, parent, command, x, y)
+local function CreateCompactRollButton(name, parent, command)
     local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     button:SetWidth(48)
     button:SetHeight(22)
     button:SetText(name)
-    button:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    -- Initial position at 0,0 - will be repositioned by RepositionRollButtons()
+    button:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
     
     -- Set small font size
     pcall(function() 
@@ -453,15 +455,15 @@ end
 local col1X = 6  -- X offset for column 1
 local col2X = 56 -- X offset for column 2 (6 + 48 + 2 padding)
 
--- Create all buttons we might need
-rollPopupButtons.CSR = CreateCompactRollButton("CSR", rollOptionsFrame, "roll csr", 0, 0)
-rollPopupButtons.SR = CreateCompactRollButton("SR", rollOptionsFrame, "roll sr", 0, 0)
-rollPopupButtons.EP = CreateCompactRollButton("EP", rollOptionsFrame, "roll ep", 0, 0)
-rollPopupButtons["101"] = CreateCompactRollButton("101", rollOptionsFrame, "roll 101", 0, 0)
-rollPopupButtons["100"] = CreateCompactRollButton("100", rollOptionsFrame, "roll 100", 0, 0)
-rollPopupButtons["99"] = CreateCompactRollButton("99", rollOptionsFrame, "roll 99", 0, 0)
-rollPopupButtons.Tmog = CreateCompactRollButton("Tmog", rollOptionsFrame, "roll tmog", 0, 0)
-rollPopupButtons.Standings = CreateCompactRollButton("Standings", rollOptionsFrame, "show ep", 0, 0)
+-- Create all buttons we might need (initial position at 0,0, will be repositioned)
+rollPopupButtons.CSR = CreateCompactRollButton("CSR", rollOptionsFrame, "roll csr")
+rollPopupButtons.SR = CreateCompactRollButton("SR", rollOptionsFrame, "roll sr")
+rollPopupButtons.EP = CreateCompactRollButton("EP", rollOptionsFrame, "roll ep")
+rollPopupButtons["101"] = CreateCompactRollButton("101", rollOptionsFrame, "roll 101")
+rollPopupButtons["100"] = CreateCompactRollButton("100", rollOptionsFrame, "roll 100")
+rollPopupButtons["99"] = CreateCompactRollButton("99", rollOptionsFrame, "roll 99")
+rollPopupButtons.Tmog = CreateCompactRollButton("Tmog", rollOptionsFrame, "roll tmog")
+rollPopupButtons.Standings = CreateCompactRollButton("Standings", rollOptionsFrame, "show ep")
 
 -- Function to reposition and show/hide buttons based on current mode
 local function RepositionRollButtons()
