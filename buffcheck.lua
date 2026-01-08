@@ -92,6 +92,7 @@ local ROLE_CONSUMABLES = {
     "Sour Mountain Berry",
     "Rage of Ages", --R.O.I.D.S.
     "Strike of the Scorpok",
+    "Infallible Mind", --Cerebral Cortex Compound
     "Elemental Sharpening Stone",
     "Well Fed";
   },
@@ -110,19 +111,23 @@ local ROLE_CONSUMABLES = {
     "Elemental Sharpening Stone",
     "Mana Regeneration", --Mageblood Potion
     "Increased Agility", --Sour Mountain Berry
+    "Infallible Mind", --Cerebral Cortex Compound
     "Well Fed"
   },
   CASTER = {
     "Spirit of Zanza",
     "Medivh's Merlot Blue Label",
-    "Cerebral Cortex Compound",
+    "Infallible Mind", --Cerebral Cortex Compound
     "Mana Regeneration", --Mageblood Potion
     "Greater Arcane Elixir",
     "Arcane Elixir",
     "Dreamshard Elixir",
-    "Elixir of Greater Firepower";
-    "Elixir of Frost Power";
-    "Elixir of Shadow Power";
+    "Greater Firepower"; --Elixir of Greater Firepower
+    "Greater Arcane Power"; --Elixir of Greater Arcane Power
+    "Greater Frost Power";
+    "Greater Arcane Power";
+    "Frost Power"; --Elixir of Frost Power
+    "Shadow Power"; --Elixir of Shadow Power
     "Dreamtonic";
     "Brilliant Wizard Oil",
     "Brilliant Mana Oil",
@@ -138,7 +143,7 @@ local ROLE_CONSUMABLES = {
     "Dreamshard Elixir",
     "Medivh's Merlot Blue Label",
     "Danonzo's Tel'Abim Medley",
-    "Cerebral Cortex Compound",
+    "Infallible Mind", --Cerebral Cortex Compound
     "Mana Regeneration", --Mageblood Potion
     "Nightfin Soup",
     "Brilliant Mana Oil",
