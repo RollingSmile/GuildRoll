@@ -82,11 +82,11 @@ local ROLE_CONSUMABLES = {
     "Increased Stamina", -- Hardened Mushroom
     "Juju Might",
     "Juju Power",
-    "Winterfall Firewater";
+    "Winterfall Firewater",
     "Rumsey Rum Black Label",
     "Medivh's Merlot", --Stamina Merlot
     "Elixir of the Giants",
-    "Health II" --Elixir of Fortitude
+    "Health II", --Elixir of Fortitude
     "Gurubashi Gumbo",
     "Le Fishe Au Chocolat",
     "Grilled Squid",
