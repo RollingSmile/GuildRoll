@@ -78,14 +78,15 @@ local ROLE_CONSUMABLES = {
     "Greater Armor", --Elixir of Superior Defense
     "Regeneration", --Major Troll's Blood Potion
     "Dreamshard Elixir",
+    "Greater Intellect",
     "Increased Stamina", -- Hardened Mushroom
     "Juju Might",
     "Juju Power",
     "Winterfall Firewater";
     "Rumsey Rum Black Label",
     "Medivh's Merlot", --Stamina Merlot
-    "Elixir of Giants",
-    "Elixir of Fortitude",    
+    "Elixir of the Giants",
+    "Health II" --Elixir of Fortitude
     "Gurubashi Gumbo",
     "Le Fishe Au Chocolat",
     "Grilled Squid",
@@ -99,7 +100,8 @@ local ROLE_CONSUMABLES = {
   PHYSICAL = {
     "Spirit of Zanza",
     "Elixir of the Mongoose",
-    "Elixir of Giants",
+    "Elixir of the Giants",
+    "Greater Agility", --Elixir of Agility
     "Juju Power",
     "Winterfall Firewater",
     "Juju Might",
@@ -121,6 +123,7 @@ local ROLE_CONSUMABLES = {
     "Mana Regeneration", --Mageblood Potion
     "Greater Arcane Elixir",
     "Arcane Elixir",
+    "Greater Intellect",
     "Dreamshard Elixir",
     "Greater Firepower"; --Elixir of Greater Firepower
     "Greater Arcane Power"; --Elixir of Greater Arcane Power
@@ -140,6 +143,7 @@ local ROLE_CONSUMABLES = {
   },
   HEALER = {
     "Spirit of Zanza",
+    "Greater Intellect",
     "Dreamshard Elixir",
     "Medivh's Merlot Blue Label",
     "Danonzo's Tel'Abim Medley",
