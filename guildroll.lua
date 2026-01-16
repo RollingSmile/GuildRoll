@@ -2762,8 +2762,9 @@ StaticPopupDialogs["GUILDROLL_AWARD_EP_RAID_HELP"] = {
   maxLetters = 10,
   OnShow = function()
     local zoneHelp = {
-      NAX = {prefill = 7, text = "Naxx - 7 EP for FLASK/attendance."},
-      AQ40 = {prefill = 5, text = "AQ40 - 5 EP for FLASK/attendance."},
+	  K40 = {prefill = 8, text = "K40 - 8 EP for FLASK and CONS/attendance."},
+      NAX = {prefill = 5, text = "Naxx - 5 EP for FLASK and CONS/attendance."},
+      AQ40 = {prefill = 4, text = "AQ40 - 4 EP for FLASK and CONS/attendance."},
       BWL = {prefill = 3, text = "BWL - 3 EP for CONSUMMS/attendance."},
       ES = {prefill = 3, text = "ES  - 3 EP for CONSUMMS/attendance."},
       MC = {prefill = 2, text = "MC  - 2 EP for CONSUMMS/attendance."}
