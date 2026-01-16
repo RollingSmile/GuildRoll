@@ -28,10 +28,10 @@ end
 GuildRoll_BuffCheck = GuildRoll:NewModule("GuildRoll_BuffCheck", "AceDB-2.0")
 
 -- Configuration: Missing buff severity threshold for color coding
-local BUFF_MISSING_SEVERITY_THRESHOLD = 2
+local BUFF_MISSING_SEVERITY_THRESHOLD = 1
 
 -- Configuration: Minimum required consumables per player
-local CONSUMABLE_MIN_REQUIRED = 4
+local CONSUMABLE_MIN_REQUIRED = 3
 
 -- Configuration: Minimum required flasks per player
 local FLASK_MIN_REQUIRED = 1
