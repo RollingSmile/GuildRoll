@@ -99,6 +99,8 @@ local ROLE_CONSUMABLES = {
   },
   PHYSICAL = {
     "Spirit of Zanza",
+    "Health II", --Elixir of Fortitude
+    "Rumsey Rum Black Label",
     "Elixir of the Mongoose",
     "Elixir of the Giants",
     "Greater Agility", --Elixir of Agility
@@ -118,6 +120,8 @@ local ROLE_CONSUMABLES = {
   },
   CASTER = {
     "Spirit of Zanza",
+    "Health II", --Elixir of Fortitude
+    "Rumsey Rum Black Label",
     "Medivh's Merlot Blue Label",
     "Infallible Mind", --Cerebral Cortex Compound
     "Mana Regeneration", --Mageblood Potion
@@ -143,6 +147,9 @@ local ROLE_CONSUMABLES = {
   },
   HEALER = {
     "Spirit of Zanza",
+    "Rumsey Rum Black Label",
+    "Kreeg's Stout Beatdown",
+    "Health II", --Elixir of Fortitude
     "Greater Intellect",
     "Dreamshard Elixir",
     "Medivh's Merlot Blue Label",
