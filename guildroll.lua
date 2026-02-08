@@ -3,14 +3,14 @@ GuildRoll:SetModuleMixins("AceDebug-2.0")
 
 -- Global debug flag: set to true to enable debug output
 GuildRoll.DEBUG = false
-local D = AceLibrary("Dewdrop-2.0")-- Standings table
-local BZ = AceLibrary("Babble-Zone-2.2")
-local C = AceLibrary("Crayon-2.0") -- chat color
-local BC = AceLibrary("Babble-Class-2.2") 
---local DF = AceLibrary("Deformat-2.0")
---local G = AceLibrary("Gratuity-2.0")
-local T = AceLibrary("Tablet-2.0") -- tooltips
-local L = AceLibrary("AceLocale-2.2"):new("guildroll")
+
+-- Library imports
+local D = AceLibrary("Dewdrop-2.0")     -- Dropdown menus
+local BZ = AceLibrary("Babble-Zone-2.2") -- Zone name translations
+local C = AceLibrary("Crayon-2.0")      -- Chat color formatting
+local BC = AceLibrary("Babble-Class-2.2") -- Class name translations
+local T = AceLibrary("Tablet-2.0")      -- Tooltip display
+local L = AceLibrary("AceLocale-2.2"):new("guildroll") -- Localization
 GuildRoll.VARS = {
   CSRWeekBonus = 10,  -- Bonus per week for CSR (weeks 2-15: (weeks-1)*10)
   minPE = 0,
@@ -26,15 +26,15 @@ GuildRoll.VARS = {
 }
 
 GuildRollMSG = {
-	delayedinit = false,
-	dbg= false,
-	prefix = "RR_",
-	RequestHostInfoUpdate = "RequestHostInfoUpdate",
-	RequestHostInfoUpdateTS = 0,
-	HostInfoUpdate = "HostInfoUpdate"
+  delayedinit = false,
+  dbg= false,
+  prefix = "RR_",
+  RequestHostInfoUpdate = "RequestHostInfoUpdate",
+  RequestHostInfoUpdateTS = 0,
+  HostInfoUpdate = "HostInfoUpdate"
 
 }
-GuildRoll._playerName = (UnitName("player"))
+GuildRoll._playerName = UnitName("player")
 local out = "|cff9664c8guildroll:|r %s"
 local raidStatus,lastRaidStatus
 local lastUpdate = 0
@@ -885,7 +885,6 @@ end
 
 function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
   GuildRoll._playerLevel = UnitLevel("player")
-  --GuildRoll.extratip = (GuildRoll.extratip) or CreateFrame("GameTooltip","guildroll_tooltip",UIParent,"GameTooltipTemplate")
   GuildRoll._versionString = GetAddOnMetadata("guildroll","Version")
   GuildRoll._websiteString = GetAddOnMetadata("guildroll","X-Website")
   
