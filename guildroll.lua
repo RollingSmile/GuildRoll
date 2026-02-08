@@ -27,7 +27,7 @@ GuildRoll.VARS = {
 
 GuildRollMSG = {
   delayedinit = false,
-  dbg= false,
+  dbg = false,
   prefix = "RR_",
   RequestHostInfoUpdate = "RequestHostInfoUpdate",
   RequestHostInfoUpdateTS = 0,
