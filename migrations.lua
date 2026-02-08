@@ -9,8 +9,8 @@ function GuildRoll:v2tov3()
       -- do nothing, we've migrated already
     elseif epv2 and epv2 > 0 then
       count = count + 1
-      -- Migrate EP only (ignore GP)
-      GuildRoll:update_epgp_v3(epv2,nil,i,name,officernote)
+      -- Migrate EP only
+      GuildRoll:update_epgp_v3(epv2,i,name,officernote)
     end
   end
   self:defaultPrint(string.format(L["Updated %d members to v3 storage."],count))

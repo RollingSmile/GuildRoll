@@ -142,7 +142,7 @@ function GuildRoll_standings:Import()
 end
 
 function GuildRoll_standings.import()
-  -- Import EP-only CSV format: Name;EP (GP is optional, if not provided existing GP is preserved)
+  -- Import EP-only CSV format: Name;EP
   if not IsGuildLeader() then return end
   local text = guildep_export.edit:GetText()
   local t = {}
@@ -150,12 +150,11 @@ function GuildRoll_standings.import()
   for line in string.gfind(text,"[^\r\n]+") do
     -- Skip header line if present
     if not string.match(line, "^Name;EP") then
-      local name, ep, gp = GuildRoll:strsplit(";",line)
+      local name, ep = GuildRoll:strsplit(";",line)
       ep = tonumber(ep)
-      gp = tonumber(gp) -- May be nil if not provided
       -- Only require name and valid EP
       if (name) and (ep) then
-        t[name]={ep,gp}
+        t[name]=ep
         found = true
       end
     end
@@ -165,21 +164,19 @@ function GuildRoll_standings.import()
     guildep_export.edit:SetText("")
     for i=1,GetNumGuildMembers(1) do
       local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
-      local name_epgp = t[name]
-      if (name_epgp) then
+      local ep_value = t[name]
+      if (ep_value) then
         count = count + 1
-        -- Pass gp as nil if not provided to preserve existing GP
-        GuildRoll:update_epgp_v3(name_epgp[1],name_epgp[2],i,name,officernote)
+        -- Update EP value
+        GuildRoll:update_epgp_v3(ep_value,i,name,officernote)
         t[name]=nil
       end
     end
     GuildRoll:defaultPrint(string.format(L["Imported %d members."],count))
     local report = string.format(L["Imported %d members.\n"],count)
     report = string.format(L["%s\nFailed to import:"],report)
-    for name,epgp in pairs(t) do
-      -- Fixed bug: use epgp[1], epgp[2] instead of t[1], t[2]
-      local gpText = epgp[2] and tostring(epgp[2]) or "-"
-      report = string.format("%s%s {%s:%s}\n",report,name,epgp[1],gpText)
+    for name,ep in pairs(t) do
+      report = string.format("%s%s {%s}\n",report,name,ep)
     end
     guildep_export.AddSelectText(report)
   end

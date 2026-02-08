@@ -227,18 +227,6 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       end,
       order = 10,
     },
-    nogp = {
-      type = "text",
-      name = "Migrate to EP-only",
-      desc = "Convert officer notes from {EP:GP} to {EP} format with GP backup. Usage: /groll nogp [throttleDelay]",
-      usage = "[throttleDelay]",
-      get = false,
-      set = function(input)
-        local throttleDelay = tonumber(input) or 0.25
-        GuildRoll:migrateToEPOnly(throttleDelay)
-      end,
-      order = 11,
-    },
   }},
 {type = "group", handler = GuildRoll, args = {
     show = {
@@ -1030,19 +1018,6 @@ function GuildRoll:delayedInit()
   self._options = self:buildMenu()
   self:RegisterChatCommand({"/groll"},self.cmdtable())
   
-  -- Register standalone /grollnogp command for admin-only migration
-  self:RegisterChatCommand({"/grollnogp"}, {
-    type = "text",
-    name = "Migrate to EP-only",
-    desc = "Convert officer notes from {EP:GP} to {EP} format with GP backup",
-    usage = "[throttleDelay]",
-    get = false,
-    set = function(input)
-      local throttleDelay = tonumber(input) or 0.25
-      GuildRoll:migrateToEPOnly(throttleDelay)
-    end,
-  })
-  
   function GuildRoll:calculateBonus(input)
     local number = tonumber(input)
     if not number or number < 0 or number > 15 then
@@ -1114,7 +1089,7 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
         end
       end
     end    
-    -- Check if EP/GP tag was modified (support both formats)
+    -- Check if EP tag was modified (support both {EP} and legacy {EP:GP} formats)
     local oldTag = oldepgp or oldep
     local newTag = epgp or ep
     if oldTag ~= nil then
@@ -1589,7 +1564,7 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
           for j = 1, GetNumGuildMembers(1) do
             local gname, _, _, _, gclass, _, gnote, gofficernote, _, _ = GetGuildRosterInfo(j)
             if gname == actualName then
-              self:update_epgp_v3(newep, nil, j, gname, gofficernote, "RAID")
+              self:update_epgp_v3(newep, j, gname, gofficernote, "RAID")
               break
             end
           end
@@ -1905,7 +1880,7 @@ function GuildRoll:decay_ep_v3()
     local ep = self:get_ep_v3(name,officernote)
     if (ep~=nil) then
       ep = self:num_round(ep*GuildRoll_decay)
-      self:update_epgp_v3(ep,nil,i,name,officernote,"DECAY")
+      self:update_epgp_v3(ep,i,name,officernote,"DECAY")
       memberCount = memberCount + 1
     end
   end
@@ -1942,7 +1917,7 @@ function GuildRoll:reset_ep_v3()
       local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
       local ep = self:get_ep_v3(name,officernote)
       if ep then
-        self:update_epgp_v3(0,nil,i,name,officernote)
+        self:update_epgp_v3(0,i,name,officernote)
       end
     end
     local msg = "All EP has been reset to 0."
@@ -2416,7 +2391,7 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
         -- Check if public note contains a main tag pattern {name} (min 2 chars)
         local mainTag = string.match(publicNote, "({%a%a%a*})")
         if mainTag and type(mainTag) == "string" and string.len(mainTag) > 2 then
-          -- Insert main tag before {EP:GP} in officer note first (to avoid data loss)
+          -- Insert main tag before {EP} in officer note first (to avoid data loss)
           local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
           
           -- Validate newOfficer is a string before writing
@@ -3056,7 +3031,7 @@ function GuildRoll:EasyMenu(menuList, menuFrame, anchor, x, y, displayMode, leve
   ToggleDropDownMenu(1, nil, menuFrame, anchor, x, y)
 end
 -- Returns the base roll value for the player.
--- Now returns only EP (MainStanding). GP (AuxStanding) is no longer used.
+-- Now returns only EP (MainStanding).
 function GuildRoll:GetBaseRollValue(ep)
     return ep
 end
