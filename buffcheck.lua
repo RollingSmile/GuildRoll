@@ -69,6 +69,33 @@ local BUFF_REQUIREMENTS = {
   },
 }
 
+-- Mapping of buff names to short display names
+local BUFF_SHORT_NAMES = {
+  -- Mage buffs
+  ["Arcane Intellect"] = "Int",
+  ["Arcane Brilliance"] = "Int",
+  
+  -- Priest buffs
+  ["Power Word: Fortitude"] = "Stam",
+  ["Prayer of Fortitude"] = "Stam",
+  ["Divine Spirit"] = "Spirit",
+  ["Prayer of Spirit"] = "Spirit",
+  ["Shadow Protection"] = "ShadowProt",
+  ["Prayer of Shadow Protection"] = "ShadowProt",
+  
+  -- Druid buffs
+  ["Mark of the Wild"] = "MotW",
+  ["Gift of the Wild"] = "MotW",
+  
+  -- Paladin buffs
+  ["Blessing of Might"] = "Might",
+  ["Blessing of Wisdom"] = "Wisdom",
+  ["Blessing of Kings"] = "Kings",
+  ["Blessing of Light"] = "Lights",
+  ["Blessing of Salvation"] = "Salv",
+  ["Blessing of Sanctuary"] = "Sanc",
+}
+
 -- Role-based consumable requirements (name-based matching)
 -- Consumables are organized by role rather than class to reduce duplication
 local ROLE_CONSUMABLES = {
@@ -463,6 +490,22 @@ local function HasAnyBuffByClass(unit, className)
   return false
 end
 
+-- Helper: Get short name for a missing buff from a provider class
+-- Returns the short name of the first buff in that class's buff list
+local function GetShortNameForClass(className)
+  if not className or not BUFF_REQUIREMENTS[className] then
+    return className
+  end
+  
+  local buffList = BUFF_REQUIREMENTS[className]
+  if buffList and buffList[1] then
+    local firstBuffName = buffList[1]
+    return BUFF_SHORT_NAMES[firstBuffName] or firstBuffName
+  end
+  
+  return className
+end
+
 -- Helper: Count distinct paladin blessings on a unit
 local function CountPaladinBlessings(unit)
   local blessings = {}
@@ -509,6 +552,68 @@ local function CountPaladinBlessings(unit)
   return count
 end
 
+-- Helper: Get list of missing paladin blessings for a unit
+-- Returns the short names of missing blessings based on required count
+local function GetMissingPaladinBlessings(unit, requiredBlessings)
+  local blessings = {}
+  local blessingTypes = {
+    ["Might"] = "Might",
+    ["Wisdom"] = "Wisdom",
+    ["Kings"] = "Kings",
+    ["Light"] = "Lights",
+    ["Salvation"] = "Salv",
+    ["Sanctuary"] = "Sanc",
+  }
+  
+  for i = 1, 32 do
+    local buffTexture = UnitBuff(unit, i)
+    if not buffTexture then break end
+    
+    local buffName = GetBuffName(unit, i)
+    if buffName then
+      -- Check if this is a paladin blessing using cached patterns
+      local isBlessing = false
+      for _, pattern in ipairs(PALADIN_BLESSING_PATTERNS) do
+        if MatchBuff(buffName, pattern) then
+          isBlessing = true
+          break
+        end
+      end
+      
+      if isBlessing then
+        -- Extract blessing type (Might, Wisdom, etc.)
+        for bType, _ in pairs(blessingTypes) do
+          if string.find(string.lower(buffName), string.lower(bType), 1, true) then
+            blessings[bType] = true
+            break
+          end
+        end
+      end
+    end
+  end
+  
+  -- Count how many blessings the player has
+  local hasCount = 0
+  for _, _ in pairs(blessings) do
+    hasCount = hasCount + 1
+  end
+  
+  -- If player has enough blessings, return empty list
+  if hasCount >= requiredBlessings then
+    return {}
+  end
+  
+  -- Otherwise, return list of missing blessing types (up to the required amount)
+  local missing = {}
+  for bType, shortName in pairs(blessingTypes) do
+    if not blessings[bType] then
+      table.insert(missing, shortName)
+    end
+  end
+  
+  return missing
+end
+
 -- Helper: Count distinct priest buff types on a unit
 -- Priest has 3 buff types: Fortitude, Spirit, Shadow Protection (each in short/long version)
 local function CountPriestBuffTypes(unit)
@@ -553,6 +658,54 @@ local function CountPriestBuffTypes(unit)
     count = count + 1
   end
   return count
+end
+
+-- Helper: Get list of missing priest buff types for a unit
+local function GetMissingPriestBuffs(unit)
+  local buffTypes = {}
+  local priestBuffCategories = {
+    ["Fortitude"] = "Stam",
+    ["Spirit"] = "Spirit",
+    ["Shadow Protection"] = "ShadowProt",
+  }
+  
+  for i = 1, 32 do
+    local buffTexture = UnitBuff(unit, i)
+    if not buffTexture then break end
+    
+    local buffName = GetBuffName(unit, i)
+    if buffName then
+      -- Check if this is a priest buff using BUFF_REQUIREMENTS patterns
+      local isPriestBuff = false
+      if BUFF_REQUIREMENTS["PRIEST"] then
+        for _, pattern in ipairs(BUFF_REQUIREMENTS["PRIEST"]) do
+          if MatchBuff(buffName, pattern) then
+            isPriestBuff = true
+            break
+          end
+        end
+      end
+      
+      if isPriestBuff then
+        -- Extract buff type (Fortitude, Spirit, Shadow Protection)
+        for buffType, _ in pairs(priestBuffCategories) do
+          if string.find(string.lower(buffName), string.lower(buffType), 1, true) then
+            buffTypes[buffType] = true
+            break
+          end
+        end
+      end
+    end
+  end
+  
+  -- Return list of missing buff types
+  local missing = {}
+  for buffType, shortName in pairs(priestBuffCategories) do
+    if not buffTypes[buffType] then
+      table.insert(missing, shortName)
+    end
+  end
+  return missing
 end
 
 -- Helper: Check if class is present in raid
@@ -646,11 +799,10 @@ function GuildRoll_BuffCheck:CheckBuffs()
     
     -- Check priest buffs (requires all 3 buff types)
     if providers["PRIEST"] then
-      local priestBuffCount = CountPriestBuffTypes(unit)
-      if priestBuffCount < PRIEST_BUFF_TYPES_REQUIRED then
-        local missingPriestBuffs = PRIEST_BUFF_TYPES_REQUIRED - priestBuffCount
-        table.insert(missingBuffs, string.format("Priest(%d)", missingPriestBuffs))
-        missingCount = missingCount + missingPriestBuffs
+      local missingPriestBuffs = GetMissingPriestBuffs(unit)
+      for _, shortName in ipairs(missingPriestBuffs) do
+        table.insert(missingBuffs, shortName)
+        missingCount = missingCount + 1
       end
     end
     
@@ -659,7 +811,8 @@ function GuildRoll_BuffCheck:CheckBuffs()
       if providerClass ~= "PALADIN" and providerClass ~= "PRIEST" then
         local hasBuff, matchedBuff = HasAnyBuffByClass(unit, providerClass)
         if not hasBuff then
-          table.insert(missingBuffs, providerClass)
+          local shortName = GetShortNameForClass(providerClass)
+          table.insert(missingBuffs, shortName)
           missingCount = missingCount + 1
         end
       end
@@ -667,11 +820,10 @@ function GuildRoll_BuffCheck:CheckBuffs()
     
     -- Check paladin blessings using improved CountPaladinBlessings
     if providers["PALADIN"] and requiredBlessings > 0 then
-      local blessingCount = CountPaladinBlessings(unit)
-      if blessingCount < requiredBlessings then
-        local missingBlessings = requiredBlessings - blessingCount
-        table.insert(missingBuffs, string.format("Paladin(%d)", missingBlessings))
-        missingCount = missingCount + missingBlessings
+      local missingBlessings = GetMissingPaladinBlessings(unit, requiredBlessings)
+      for _, shortName in ipairs(missingBlessings) do
+        table.insert(missingBuffs, shortName)
+        missingCount = missingCount + 1
       end
     end
     
