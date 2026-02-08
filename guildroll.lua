@@ -709,21 +709,33 @@ function GuildRoll:buildMenu()
         return IsGuildLeader() or admin()
       end
 
-      -- Helper: Apply threshold change and notify
-      local function applyThresholdChange(newThreshold)
-        -- Convert to number to ensure numeric storage
-        local numericThreshold = tonumber(newThreshold)
-        -- Ensure threshold is never negative (GM must always have access)
-        if numericThreshold ~= nil and numericThreshold < 0 then
-          numericThreshold = 0
-        end
-        GuildRoll_CSRThreshold = numericThreshold
-        if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
-        -- Share settings to guild if admin (guild leader or officer with edit permissions)
-        if hasCSREditPermission() then
-          GuildRoll:shareSettings(true)
-        end
-      end
+	local function applyThresholdChange(newThreshold)
+    	local numericThreshold = tonumber(newThreshold)
+    	if numericThreshold ~= nil and numericThreshold < 0 then
+        	numericThreshold = 0
+    	end
+    	GuildRoll_CSRThreshold = numericThreshold
+    	if GuildRoll and GuildRoll.shareSettings then 
+        GuildRoll:shareSettings(true)
+    	end
+    	if GuildRoll and GuildRoll.RebuildRollOptions then 
+        GuildRoll:RebuildRollOptions() 
+    	end
+	end
+    
+    GuildRoll_CSRThreshold = GuildRoll_CSRThreshold or 3
+	GuildRoll_EnableRollButtons = GuildRoll_EnableRollButtons or false
+    
+    
+    if GuildRoll and GuildRoll.shareSettings then 
+        GuildRoll:shareSettings(true)
+    end
+    
+    
+    if GuildRoll and GuildRoll.RebuildRollOptions then 
+        GuildRoll:RebuildRollOptions() 
+    end
+	end
 
       -- Collect rank names from guild roster if available
       local ranks = {}
@@ -787,52 +799,39 @@ function GuildRoll:buildMenu()
       end
     end
 
-    -- Add the group to options (replaces the old csr_threshold in options.args)
-    options.args["options_group"].args["csr_rank_selector"] = {
-      type = "group",
-      name = L["CSR Threshold"],
-      desc = "Select the minimum rank to can use CSR:",
-      args = {},
-      hidden = function() return not admin() end,
-      order = 65,
-    }
-    BuildCSRRankRadioGroup(options.args["options_group"].args["csr_rank_selector"])
-
-    -- Dynamically update rank names when roster changes (create frame only once)
-    if not self._csr_update_frame then
-      self._csr_update_frame = CreateFrame("Frame")
-      self._csr_update_frame:RegisterEvent("GUILD_ROSTER_UPDATE")
-      self._csr_update_frame:SetScript("OnEvent", function()
-        -- Rebuild toggles with updated names
-        if options and options.args and options.args["options_group"] and options.args["options_group"].args["csr_rank_selector"] then
-          BuildCSRRankRadioGroup(options.args["options_group"].args["csr_rank_selector"])
-        end
-        -- Refresh Dewdrop/Tablet menu if necessary
-        if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
-      end)
+-- ============================================================
+-- Enable Roll Buttons Option - COMPLETE BLOCK with all modifications
+-- ============================================================
+options.args["options_group"].args["enable_roll_buttons"] = {
+  type = "toggle",
+  name = L["Enable Roll Buttons"],
+  desc = L["Enable Roll Buttons description"],
+  order = 66,
+  hidden = function() return not (admin()) end,
+  get = function() return GuildRoll_EnableRollButtons == true end,
+  set = function(v)
+    GuildRoll_EnableRollButtons = v
+    
+    -- Log feedback to user
+    if GuildRoll and GuildRoll.defaultPrint then
+      if v then
+        GuildRoll:defaultPrint("Enable Roll Buttons: ON - All buttons visible and enabled for everyone")
+      else
+        GuildRoll:defaultPrint("Enable Roll Buttons: OFF - Normal visibility rules apply")
+      end
     end
     
-    options.args["options_group"].args["enable_roll_buttons"] = {
-      type = "toggle",
-      name = L["Enable Roll Buttons"],
-      desc = L["Enable Roll Buttons description"],
-      order = 66,
-      hidden = function() return not (admin()) end,
-      get = function() return GuildRoll_EnableRollButtons == true end,
-      set = function(v)
-        GuildRoll_EnableRollButtons = v
-        -- Log feedback to user
-        if GuildRoll and GuildRoll.defaultPrint then
-          if v then
-            GuildRoll:defaultPrint("Enable Roll Buttons: ON - All buttons visible to everyone")
-          else
-            GuildRoll:defaultPrint("Enable Roll Buttons: OFF - Normal visibility rules apply")
-          end
-        end
-        if GuildRoll and GuildRoll.RebuildRollOptions then GuildRoll:RebuildRollOptions() end
-        if GuildRoll and GuildRoll.shareSettings then GuildRoll:shareSettings(true) end
-      end,
-    }
+    -- ✅ AGGIORNA LOCALMENTE
+    if GuildRoll and GuildRoll.RebuildRollOptions then 
+      GuildRoll:RebuildRollOptions() 
+    end
+    
+    -- ✅ SINCRONIZZA A TUTTI I PLAYER
+    if GuildRoll and GuildRoll.shareSettings then 
+      GuildRoll:shareSettings(true) 
+    end
+  end,
+}
 
   end
   if (needInit) or (needRefresh) then
@@ -1360,19 +1359,8 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
   end
 end
 
--- Handler for SHARE: messages containing admin settings
--- Parses and applies received settings locally, triggers UI updates
--- message: payload like "SHARE:CSR=3;RO=1;DC=0.5;MIN=100;ALT=1.0;SC=GUILD"
--- sender: player name who sent the message
--- Handles SHARE messages from admins to synchronize settings across clients.
--- Uses defensive programming to handle environments where the global string table
--- may be partially overwritten or missing functions (e.g., due to addon conflicts).
--- This prevents crashes when parsing SHARE:CSR=...;RO=...;DC=...;MIN=...;ALT=...;SC=... payloads.
---
--- Testing: To verify this fix, apply it and /reload in a client that previously crashed.
--- Have an admin change CSR threshold and verify no errors occur and UI updates correctly.
--- Handler for SHARE: messages containing admin settings
 -- Robust, defensive implementation compatible with Lua 5.0/5.1 environments
+-- UPDATED VERSION with ERB (EnableRollButtons) support
 handleSharedSettings = function(message, sender)
   local gstring = (_G and _G.string) or string
   if not gstring then return end
@@ -1433,34 +1421,44 @@ handleSharedSettings = function(message, sender)
   end
 
   local changed = false
+  
+  -- CSR Threshold handling
   if settings.CSR then
     local csr
-    if settings.CSR == "NONE" then csr = nil else csr = tonumber(settings.CSR) end
-    if csr ~= GuildRoll_CSRThreshold then GuildRoll_CSRThreshold = csr; changed = true end
+    if settings.CSR == "NONE" then 
+      csr = nil 
+    else 
+      csr = tonumber(settings.CSR) 
+    end
+    if csr ~= GuildRoll_CSRThreshold then 
+      GuildRoll_CSRThreshold = csr
+      changed = true 
+    end
   end
+  
+  if settings.ERB then 
+    local erb = (settings.ERB == "1") and true or false
+    if erb ~= GuildRoll_EnableRollButtons then 
+      GuildRoll_EnableRollButtons = erb
+      changed = true
+    end
+  end
+  
   -- RO removed: raid-only toggles are now local runtime-only flags, not shared
-  if settings.DC then local dc = tonumber(settings.DC) if dc and dc ~= GuildRoll_decay then GuildRoll_decay = dc; changed = true end end
+  if settings.DC then 
+    local dc = tonumber(settings.DC) 
+    if dc and dc ~= GuildRoll_decay then 
+      GuildRoll_decay = dc
+      changed = true 
+    end 
+  end
+  
   -- MIN removed: Minimum EP is now local to each admin and not updated from incoming messages
   --if settings.MIN then local minep = tonumber(settings.MIN) if minep and minep ~= GuildRoll_minPE then GuildRoll_minPE = minep; changed = true end end
-  if settings.ALT then local alt = tonumber(settings.ALT) if alt and alt ~= GuildRoll_altpercent then GuildRoll_altpercent = alt; changed = true end end
-  if settings.SC then if settings.SC ~= GuildRoll_saychannel then GuildRoll_saychannel = settings.SC; changed = true end end
-  if settings.SBR then
-    local sbr = settings.SBR == "1"
-    if sbr ~= GuildRoll_showAllRollButtons then GuildRoll_showAllRollButtons = sbr; changed = true end
-  end
-
+  
   if changed then
-    pcall(function() GuildRoster() end)
-    if GuildRoll.RebuildRollOptions then pcall(GuildRoll.RebuildRollOptions, GuildRoll) end
-    if GuildRoll_standings and GuildRoll_standings.Refresh then pcall(GuildRoll_standings.Refresh, GuildRoll_standings) end
-    if GuildRoll_logs and GuildRoll_logs.Refresh then pcall(GuildRoll_logs.Refresh, GuildRoll_logs) end
-    if GuildRoll.SetRefresh then pcall(GuildRoll.SetRefresh, GuildRoll, true) end
-    if GuildRoll.defaultPrint then 
-      -- Defensive: safely format sender name, handle nil sender
-      local senderName = sender or "Unknown"
-      pcall(function() 
-        GuildRoll:defaultPrint(("Admin settings updated from %s"):format(senderName)) 
-      end)
+    if GuildRoll and GuildRoll.RebuildRollOptions then
+      GuildRoll:RebuildRollOptions()
     end
   end
 end
@@ -1487,17 +1485,19 @@ function GuildRoll:shareSettings(force)
     -- RO removed: raid-only toggles are now local runtime-only flags, not shared
     local csr = GuildRoll_CSRThreshold
     local csrStr = csr and tostring(csr) or "NONE"
-    local dc = GuildRoll_decay or self.VARS.decay
-    local alt = GuildRoll_altpercent or 1.0
+    local dc = GuildRoll_decay or 0
+    local alt = GuildRollAltspool and "ON" or "OFF"
     local sc = GuildRoll_saychannel or "GUILD"
-    local sbr = GuildRoll_showAllRollButtons and 1 or 0
+    local sbr = GuildRoll_standings_raidonly and 1 or 0
     
     -- Escape special chars (= and ;) in string values if needed
     sc = string.gsub(sc, "=", "%%3D")
     sc = string.gsub(sc, ";", "%%3B")
     
-    local payload = string.format("SHARE:CSR=%s;DC=%s;ALT=%s;SC=%s;SBR=%d",
-      csrStr, tostring(dc), tostring(alt), sc, sbr)
+    local erbStr = (GuildRoll_EnableRollButtons == true) and "1" or "0"
+    
+    local payload = string.format("SHARE:CSR=%s;DC=%s;ALT=%s;SC=%s;SBR=%d;ERB=%s",
+      csrStr, tostring(dc), tostring(alt), sc, sbr, erbStr)
     
     -- Send via existing addonMessage method for consistency
     self:addonMessage(payload, "GUILD")
