@@ -1226,9 +1226,11 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
         local suffix = ""
         if raidFlag and raidFlag == "RAID" then
           suffix = " (Raid)"
+        elseif raidFlag and raidFlag == "DECAY" then
+          suffix = " (Decay)"
         end
         
-        -- Compact format: EP: Prev -> New (±N) by AdminName[ (Raid)]
+        -- Compact format: EP: Prev -> New (±N) by AdminName[ (Raid)|(Decay)]
         local logMsg = string.format("EP: %d -> %d (%s) by %s%s", prevEP, newEP, deltaStr, sender, suffix)
         self:personalLogAdd(who, logMsg)
         
@@ -1877,10 +1879,16 @@ function GuildRoll:decay_ep_v3()
   local memberCount = 0
   for i = 1, GetNumGuildMembers(1) do
     local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
-    local ep = self:get_ep_v3(name,officernote)
-    if (ep~=nil) then
-      ep = self:num_round(ep*GuildRoll_decay)
-      self:update_epgp_v3(ep,i,name,officernote,"DECAY")
+    local prevEP = self:get_ep_v3(name,officernote)
+    if (prevEP~=nil) then
+      local newEP = self:num_round(prevEP*GuildRoll_decay)
+      local changeEP = newEP - prevEP
+      self:update_epgp_v3(newEP,i,name,officernote,"DECAY")
+      
+      -- Send addon message to notify the player of decay
+      local addonMsg = string.format("%s;%s;%s;%s",name,"MainStanding",changeEP,"DECAY")
+      self:addonMessage(addonMsg,"GUILD")
+      
       memberCount = memberCount + 1
     end
   end
