@@ -709,33 +709,19 @@ function GuildRoll:buildMenu()
         return IsGuildLeader() or admin()
       end
 
-	local function applyThresholdChange(newThreshold)
-    	local numericThreshold = tonumber(newThreshold)
-    	if numericThreshold ~= nil and numericThreshold < 0 then
-        	numericThreshold = 0
-    	end
-    	GuildRoll_CSRThreshold = numericThreshold
-    	if GuildRoll and GuildRoll.shareSettings then 
-        GuildRoll:shareSettings(true)
-    	end
-    	if GuildRoll and GuildRoll.RebuildRollOptions then 
-        GuildRoll:RebuildRollOptions() 
-    	end
-	end
-    
-    GuildRoll_CSRThreshold = GuildRoll_CSRThreshold or 3
-	GuildRoll_EnableRollButtons = GuildRoll_EnableRollButtons or false
-    
-    
-    if GuildRoll and GuildRoll.shareSettings then 
-        GuildRoll:shareSettings(true)
-    end
-    
-    
-    if GuildRoll and GuildRoll.RebuildRollOptions then 
-        GuildRoll:RebuildRollOptions() 
-    end
-	end
+      local function applyThresholdChange(newThreshold)
+        local numericThreshold = tonumber(newThreshold)
+        if numericThreshold ~= nil and numericThreshold < 0 then
+          numericThreshold = 0
+        end
+        GuildRoll_CSRThreshold = numericThreshold
+        if GuildRoll and GuildRoll.shareSettings then 
+          GuildRoll:shareSettings(true)
+        end
+        if GuildRoll and GuildRoll.RebuildRollOptions then 
+          GuildRoll:RebuildRollOptions() 
+        end
+      end
 
       -- Collect rank names from guild roster if available
       local ranks = {}
@@ -798,41 +784,52 @@ function GuildRoll:buildMenu()
         }
       end
     end
-
--- ============================================================
--- Enable Roll Buttons Option - COMPLETE BLOCK with all modifications
--- ============================================================
-options.args["options_group"].args["enable_roll_buttons"] = {
-  type = "toggle",
-  name = L["Enable Roll Buttons"],
-  desc = L["Enable Roll Buttons description"],
-  order = 66,
-  hidden = function() return not (admin()) end,
-  get = function() return GuildRoll_EnableRollButtons == true end,
-  set = function(v)
-    GuildRoll_EnableRollButtons = v
     
-    -- Log feedback to user
-    if GuildRoll and GuildRoll.defaultPrint then
-      if v then
-        GuildRoll:defaultPrint("Enable Roll Buttons: ON - All buttons visible and enabled for everyone")
-      else
-        GuildRoll:defaultPrint("Enable Roll Buttons: OFF - Normal visibility rules apply")
-      end
-    end
+    -- Add CSR Threshold submenu under Admin Settings
+    options.args["options_group"].args["csr_threshold"] = {
+      type = "group",
+      name = "CSR Threshold",
+      desc = "Configure which ranks can see the CSR roll button",
+      order = 65,
+      hidden = function() return not admin() end,
+      args = {}
+    }
     
-    -- ✅ AGGIORNA LOCALMENTE
-    if GuildRoll and GuildRoll.RebuildRollOptions then 
-      GuildRoll:RebuildRollOptions() 
-    end
+    -- Build the CSR threshold menu
+    BuildCSRRankRadioGroup(options.args["options_group"].args["csr_threshold"])
     
-    -- ✅ SINCRONIZZA A TUTTI I PLAYER
-    if GuildRoll and GuildRoll.shareSettings then 
-      GuildRoll:shareSettings(true) 
-    end
-  end,
-}
-
+    -- Enable Roll Buttons Option
+    options.args["options_group"].args["enable_roll_buttons"] = {
+      type = "toggle",
+      name = L["Enable Roll Buttons"],
+      desc = L["Enable Roll Buttons description"],
+      order = 66,
+      hidden = function() return not (admin()) end,
+      get = function() return GuildRoll_EnableRollButtons == true end,
+      set = function(v)
+        GuildRoll_EnableRollButtons = v
+        
+        -- Log feedback to user
+        if GuildRoll and GuildRoll.defaultPrint then
+          if v then
+            GuildRoll:defaultPrint("Enable Roll Buttons: ON - All buttons visible and enabled for everyone")
+          else
+            GuildRoll:defaultPrint("Enable Roll Buttons: OFF - Normal visibility rules apply")
+          end
+        end
+        
+        -- Update locally
+        if GuildRoll and GuildRoll.RebuildRollOptions then 
+          GuildRoll:RebuildRollOptions() 
+        end
+        
+        -- Synchronize to all players
+        if GuildRoll and GuildRoll.shareSettings then 
+          GuildRoll:shareSettings(true) 
+        end
+      end,
+    }
+    
   end
   if (needInit) or (needRefresh) then
     local members = GuildRoll:buildRosterTable()
