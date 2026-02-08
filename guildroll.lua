@@ -1230,7 +1230,7 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
           suffix = " (Decay)"
         end
         
-        -- Compact format: EP: Prev -> New (±N) by AdminName[ (Raid)|(Decay)]
+        -- Compact format: EP: Prev -> New (±N) by AdminName[(Raid) or (Decay)]
         local logMsg = string.format("EP: %d -> %d (%s) by %s%s", prevEP, newEP, deltaStr, sender, suffix)
         self:personalLogAdd(who, logMsg)
         
