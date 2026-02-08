@@ -87,35 +87,6 @@ local function IsAlt()
     return false
 end
 
--- Helper: Check if current zone is an EP zone (awards EP)
--- Uses GuildRoll:GetReward() and IsInInstance() to determine EP eligibility
-local function IsEPZone()
-    -- First check if we're in an instance
-    local success, inInstance, instanceType = pcall(IsInInstance)
-    if not success or not inInstance then
-        return false
-    end
-    
-    -- Now check if GuildRoll:GetReward() is available
-    if not GuildRoll or not GuildRoll.GetReward then
-        return false
-    end
-    
-    -- pcall-wrapped call to GetReward
-    -- GetReward returns: isMainStanding, reward
-    local rewardSuccess, isMainStanding, reward = pcall(function()
-        return GuildRoll:GetReward()
-    end)
-    
-    -- If GetReward succeeds and isMainStanding is true, this is an EP zone
-    -- (isMainStanding = true means the zone awards EP based on standing)
-    if rewardSuccess and isMainStanding == true then
-        return true
-    end
-    
-    return false
-end
-
 -- Helper: try to find the EditBox for a StaticPopup dialog robustly
 local function GetVisibleStaticPopupEditBox(dialog)
     -- Try using the dialog passed in (if any)
