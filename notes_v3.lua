@@ -106,7 +106,7 @@ end
 function GuildRoll:init_notes_v3(guild_index,name,officernote)
   local ep = self:get_ep_v3(name,officernote)
   if ep == nil then
-    -- Initialize with new {EP} format (EP-only, no GP)
+    -- Initialize with {EP} format
     local initstring = string.format("{%d}",0)
     local newnote = string.format("%s%s",officernote,initstring)
     -- Remove any legacy {EP:GP} patterns
@@ -126,11 +126,11 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
     -- If it has legacy {EP:GP}, convert to {EP}
     local hasLegacy = string.find(officernote,"{%d+:%-?%d+}")
     if hasLegacy then
-      -- Convert {EP:GP} to {EP}
+      -- Convert legacy {EP:GP} to {EP}
       -- Pattern captures: prefix, fullTag, epVal, gpVal, postfix (5 total)
       local _, _, prefix, fullTag, epVal, gpVal, postfix = string.find(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
       if epVal then
-        -- NO backup of GP value - just convert to new format
+        -- Convert to new format
         local newTag = string.format("{%d}", tonumber(epVal))
         local newNote = (prefix or "") .. newTag .. (postfix or "")
         if string.len(newNote) <= MAX_NOTE_LEN then
@@ -143,10 +143,9 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
   return officernote
 end
 
--- Update EP/GP values in officer note (v3 - EP-only implementation)
-function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_action)
+-- Update EP value in officer note (v3 - EP-only implementation)
+function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action)
   -- EP-only implementation: initialize notes to {EP} format, update EP value
-  -- gp parameter is kept for compatibility but ignored
   
   -- Initialize notes if needed (ensures {EP} format)
   officernote = self:init_notes_v3(guild_index,name,officernote)
@@ -159,21 +158,16 @@ function GuildRoll:update_epgp_v3(ep,gp,guild_index,name,officernote,special_act
     -- Try to match legacy {EP:GP} format first
     local _, _, prefix, fullTag, oldEP, oldGP, postfix = string.find(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
     if oldEP then
-      -- Has legacy format - NO backup, just convert to new {EP} format
+      -- Has legacy format - convert to new {EP} format
       newnote = string.gsub(officernote,"(.-)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
         return string.format("%s{%d}%s",prefix,ep,postfix)
       end)
     else
-      -- Update new {EP} format
+      -- Update {EP} format
       newnote = string.gsub(officernote,"(.-)({%d+})(.*)",function(prefix,tag,postfix)
         return string.format("%s{%d}%s",prefix,ep,postfix)
       end)
     end
-  end
-  
-  -- GP parameter is ignored (kept for compatibility only)
-  if gp ~= nil then
-    newnote = newnote or officernote
   end
   
   if newnote then 
@@ -226,7 +220,7 @@ function GuildRoll:update_ep_v3(getname,ep)
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
     if (name==getname) then 
-      self:update_epgp_v3(ep,nil,i,name,officernote)
+      self:update_epgp_v3(ep,i,name,officernote)
     end
   end  
 end
@@ -257,128 +251,6 @@ function GuildRoll:get_ep_v3(getname,officernote)
   return
 end
 
--- migrateToEPOnly: Convert officer notes from {EP:GP} format to {EP} format
--- NO BACKUP of GP values - just converts to new format
--- Admin-only function with throttled updates to avoid server spam
-function GuildRoll:migrateToEPOnly(throttleDelay)
-  -- Admin permission check
-  if not self:IsAdmin() then
-    self:defaultPrint(L["You must be a guild officer or leader to run this migration."] or "You must be a guild officer or leader to run this migration.")
-    return
-  end
-  
-  -- Default throttle delay
-  throttleDelay = tonumber(throttleDelay) or 0.25
-  if throttleDelay < 0.1 then
-    throttleDelay = 0.1  -- Minimum safety threshold
-  end
-  
-  -- Scan roster and collect members needing migration
-  local toMigrate = {}
-  local ok, numMembers = pcall(function()
-    if not IsInGuild() then return 0 end
-    return GetNumGuildMembers(1) or 0
-  end)
-  
-  if not ok or numMembers == 0 then
-    self:defaultPrint("Guild roster not available. Please try again in a moment.")
-    return
-  end
-  
-  for i = 1, numMembers do
-    local success, name, rank, rankIndex, level, class, zone, note, officernote = pcall(GetGuildRosterInfo, i)
-    if success and name and officernote then
-      -- Match {EP:GP} pattern (support optional negative GP)
-      -- Pattern captures: prefix, fullTag, ep, gp, postfix (5 total)
-      local _, _, prefix, fullTag, ep, gp, postfix = string.find(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
-      if ep and gp then
-        table.insert(toMigrate, {
-          name = name,
-          oldNote = officernote,
-          prefix = prefix or "",
-          ep = tonumber(ep),
-          gp = tonumber(gp),
-          postfix = postfix or ""
-        })
-      end
-    end
-  end
-  
-  if table.getn(toMigrate) == 0 then
-    self:defaultPrint("No officer notes found with {EP:GP} format. Migration complete.")
-    return
-  end
-  
-  self:defaultPrint(string.format("Starting migration of %d member(s) from {EP:GP} to {EP} format...", table.getn(toMigrate)))
-  
-  -- Create frame for throttled updates
-  local frame = CreateFrame("Frame")
-  local currentIndex = 1
-  local timeSinceLastUpdate = 0
-  
-  frame:SetScript("OnUpdate", function()
-    local elapsed = arg1  -- Lua 5.0 uses arg1 for elapsed time
-    timeSinceLastUpdate = timeSinceLastUpdate + elapsed
-    
-    if timeSinceLastUpdate >= throttleDelay and currentIndex <= table.getn(toMigrate) then
-      timeSinceLastUpdate = 0
-      
-      local entry = toMigrate[currentIndex]
-      
-      -- Build new note with {EP} format
-      local newTag = string.format("{%d}", entry.ep)
-      local newNote = entry.prefix .. newTag .. entry.postfix
-      
-      -- Ensure note doesn't exceed MAX_NOTE_LEN (31 chars)
-      if string.len(newNote) > MAX_NOTE_LEN then
-        -- Trim prefix and postfix evenly to fit
-        local tagLen = string.len(newTag)
-        local availableLen = MAX_NOTE_LEN - tagLen
-        local prefixLen = string.len(entry.prefix)
-        local postfixLen = string.len(entry.postfix)
-        local totalExtra = prefixLen + postfixLen
-        
-        if totalExtra > availableLen then
-          -- Trim proportionally
-          local prefixAllowed = math.floor((prefixLen / totalExtra) * availableLen)
-          local postfixAllowed = availableLen - prefixAllowed
-          
-          entry.prefix = string.sub(entry.prefix, 1, prefixAllowed)
-          entry.postfix = string.sub(entry.postfix, 1, postfixAllowed)
-          newNote = entry.prefix .. newTag .. entry.postfix
-        end
-      end
-      
-      -- NO BACKUP of GP value - just convert to new format
-      
-      -- Find current roster index for this member (roster may have reordered)
-      local foundIndex = nil
-      for i = 1, GetNumGuildMembers(1) do
-        local success, checkName = pcall(GetGuildRosterInfo, i)
-        if success and checkName == entry.name then
-          foundIndex = i
-          break
-        end
-      end
-      
-      if foundIndex then
-        -- Apply the note change
-        local success, err = pcall(GuildRosterSetOfficerNote, foundIndex, newNote)
-        if not success then
-          GuildRoll:defaultPrint(string.format("Failed to update %s: %s", entry.name, tostring(err)))
-        end
-      end
-      
-      currentIndex = currentIndex + 1
-      
-      -- Cleanup when done
-      if currentIndex > table.getn(toMigrate) then
-        frame:SetScript("OnUpdate", nil)
-        GuildRoll:defaultPrint(string.format("Migration complete! Converted %d member(s) to {EP} format.", table.getn(toMigrate)))
-      end
-    end
-  end)
-end
 
 -- MovePublicMainTagsToOfficerNotes: Admin function to migrate main tags from public to officer notes
 -- Requires admin permission (GuildRoll:IsAdmin)
@@ -414,7 +286,7 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
         -- Check if public note contains a main tag pattern {name} (min 2 chars)
         local _, _, mainTag = string.find(publicNote, "({%a%a%a*})")
         if mainTag and type(mainTag) == "string" and string.len(mainTag) > 2 then
-          -- Insert main tag before {EP:GP} in officer note first (to avoid data loss)
+          -- Insert main tag before {EP} in officer note first (to avoid data loss)
           local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
           
           -- Validate newOfficer is a string before writing
