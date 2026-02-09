@@ -17,20 +17,28 @@ end
 -- ========================================================================
 
 -- Import Ace libraries needed by EP/GP functions
--- Wrap in pcall to handle potential errors gracefully
-local ok, L = pcall(function() return AceLibrary("AceLocale-2.2"):new("guildroll") end)
-if not ok then
-  L = {} -- Fallback to empty table if locale fails
-  setmetatable(L, {__index = function(t, k) return k end}) -- Return key as value if not found
-end
-
-local ok2, C = pcall(function() return AceLibrary("Crayon-2.0") end)
-if not ok2 then
-  C = {} -- Fallback
-  -- Provide stub functions
-  C.Colorize = function(color, text) return text end
-  C.Green = function(text) return text end
-  C.Red = function(text) return text end
+-- Use the same pattern as other modules (standings.lua, adminlog.lua, etc.)
+local L, C
+do
+  -- Get AceLocale library and create/get locale instance
+  local ok, aceLocale = pcall(function() return AceLibrary("AceLocale-2.2") end)
+  if ok and aceLocale and type(aceLocale.new) == "function" then
+    ok, L = pcall(function() return aceLocale:new("guildroll") end)
+  end
+  if not L then
+    L = {} -- Fallback to empty table if locale fails
+    setmetatable(L, {__index = function(t, k) return k end}) -- Return key as value if not found
+  end
+  
+  -- Get Crayon library
+  ok, C = pcall(function() return AceLibrary("Crayon-2.0") end)
+  if not ok or not C then
+    C = {} -- Fallback
+    -- Provide stub functions
+    C.Colorize = function(color, text) return text end
+    C.Green = function(text) return text end
+    C.Red = function(text) return text end
+  end
 end
 
 -- ========================================================================

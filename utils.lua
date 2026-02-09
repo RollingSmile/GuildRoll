@@ -6,30 +6,43 @@
 -- ========================================================================
 
 -- Import Ace libraries needed by utility functions
--- Wrap in pcall to handle potential errors gracefully
-local ok1, C = pcall(function() return AceLibrary("Crayon-2.0") end)
-if not ok1 then
-  C = {}
-  C.Colorize = function(color, text) return text end
-end
+-- Use the same pattern as other modules (standings.lua, adminlog.lua, etc.)
+local L, C, BC, BZ
+do
+  local ok
+  
+  -- Get Crayon library
+  ok, C = pcall(function() return AceLibrary("Crayon-2.0") end)
+  if not ok or not C then
+    C = {}
+    C.Colorize = function(color, text) return text end
+  end
 
-local ok2, BC = pcall(function() return AceLibrary("Babble-Class-2.2") end)
-if not ok2 then
-  BC = {}
-  BC.GetHexColor = function(class) return "FFFFFF" end
-end
+  -- Get Babble-Class library
+  ok, BC = pcall(function() return AceLibrary("Babble-Class-2.2") end)
+  if not ok or not BC then
+    BC = {}
+    BC.GetHexColor = function(class) return "FFFFFF" end
+  end
 
-local ok3, BZ = pcall(function() return AceLibrary("Babble-Zone-2.2") end)
-if not ok3 then
-  BZ = {}
-  BZ.HasReverseTranslation = function() return false end
-  BZ.GetReverseTranslation = function(zone) return zone end
-end
+  -- Get Babble-Zone library
+  ok, BZ = pcall(function() return AceLibrary("Babble-Zone-2.2") end)
+  if not ok or not BZ then
+    BZ = {}
+    BZ.HasReverseTranslation = function() return false end
+    BZ.GetReverseTranslation = function(zone) return zone end
+  end
 
-local ok4, L = pcall(function() return AceLibrary("AceLocale-2.2"):new("guildroll") end)
-if not ok4 then
-  L = {}
-  setmetatable(L, {__index = function(t, k) return k end})
+  -- Get AceLocale library and create/get locale instance
+  local aceLocale
+  ok, aceLocale = pcall(function() return AceLibrary("AceLocale-2.2") end)
+  if ok and aceLocale and type(aceLocale.new) == "function" then
+    ok, L = pcall(function() return aceLocale:new("guildroll") end)
+  end
+  if not L then
+    L = {}
+    setmetatable(L, {__index = function(t, k) return k end})
+  end
 end
 
 -- ========================================================================
