@@ -1393,8 +1393,8 @@ end
 
 
 
-  else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
-end
+  --else UIErrorsFrame:AddMessage(L["You aren't in a raid dummy"],1,0,0)end
+--end
 
 -- Backward-compatible wrapper for award_raid_ep
 function GuildRoll:award_raid_ep(ep)
