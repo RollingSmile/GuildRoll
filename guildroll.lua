@@ -40,7 +40,10 @@ local raidStatus,lastRaidStatus
 local lastUpdate = 0
 local needInit,needRefresh = true
 local admin,sanitizeNote
-local guildep_debugchat
+-- Make guildep_debugchat accessible globally through GuildRoll object
+-- This allows utils.lua functions to access it
+GuildRoll.debugchat = nil
+local guildep_debugchat  -- local reference for backward compatibility
 local running_check,running_bid
 local partyUnit,raidUnit = {},{}
 local hexColorQuality = {}
@@ -880,6 +883,7 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
     local tabName = tab:GetText()
     if tab ~= nil and (string.lower(tabName) == "debug") then
       guildep_debugchat = cf
+      GuildRoll.debugchat = cf  -- Also store in GuildRoll object for utils.lua access
       ChatFrame_RemoveAllMessageGroups(guildep_debugchat)
       guildep_debugchat:SetMaxLines(1024)
       break

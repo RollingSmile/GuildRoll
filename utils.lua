@@ -2,6 +2,23 @@
 -- Contains helper functions for string manipulation, numeric operations, and member verification
 
 -- ========================================================================
+-- LIBRARY IMPORTS
+-- ========================================================================
+
+-- Import Ace libraries needed by utility functions
+local C = AceLibrary("Crayon-2.0")      -- Chat color formatting
+local BC = AceLibrary("Babble-Class-2.2") -- Class name translations
+local BZ = AceLibrary("Babble-Zone-2.2") -- Zone name translations
+local L = AceLibrary("AceLocale-2.2"):new("guildroll") -- Localization
+
+-- ========================================================================
+-- LOCAL VARIABLES
+-- ========================================================================
+
+-- Output format string for chat messages
+local out = "|cff9664c8guildroll:|r %s"
+
+-- ========================================================================
 -- GLOBAL CONSTANTS AND TABLES
 -- ========================================================================
 
@@ -187,9 +204,10 @@ end
 
 -- Debug utility: Print debug messages if debug mode is enabled
 function GuildRoll:debugPrint(msg)
-  if (guildep_debugchat) then
-    guildep_debugchat:AddMessage(string.format(out,msg))
-    self:flashFrame(guildep_debugchat)
+  if (self.debugchat or GuildRoll.debugchat) then
+    local debugchat = self.debugchat or GuildRoll.debugchat
+    debugchat:AddMessage(string.format(out,msg))
+    self:flashFrame(debugchat)
   else
     self:defaultPrint(msg)
   end

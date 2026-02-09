@@ -7,7 +7,17 @@
 -- - Export/Import functions (ExportEPCSV, ImportEPCSV)
 -- - Main character management (set_main, get_main)
 
--- Constants for note length and migration timing
+-- ========================================================================
+-- LIBRARY IMPORTS
+-- ========================================================================
+
+-- Import Ace libraries needed by EP/GP functions
+local L = AceLibrary("AceLocale-2.2"):new("guildroll") -- Localization
+local C = AceLibrary("Crayon-2.0")      -- Chat color formatting (for logging)
+
+-- ========================================================================
+-- CONSTANTS
+-- ========================================================================
 local MAX_NOTE_LEN = 31
 local MIGRATION_THROTTLE_SECONDS = 30
 local MIGRATION_AUTO_DELAY_SECONDS = 5
