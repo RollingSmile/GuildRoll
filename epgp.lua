@@ -7,13 +7,31 @@
 -- - Export/Import functions (ExportEPCSV, ImportEPCSV)
 -- - Main character management (set_main, get_main)
 
+-- Debug: Print when epgp.lua starts loading
+if DEFAULT_CHAT_FRAME then
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00epgp.lua loading...|r")
+end
+
 -- ========================================================================
 -- LIBRARY IMPORTS
 -- ========================================================================
 
 -- Import Ace libraries needed by EP/GP functions
-local L = AceLibrary("AceLocale-2.2"):new("guildroll") -- Localization
-local C = AceLibrary("Crayon-2.0")      -- Chat color formatting (for logging)
+-- Wrap in pcall to handle potential errors gracefully
+local ok, L = pcall(function() return AceLibrary("AceLocale-2.2"):new("guildroll") end)
+if not ok then
+  L = {} -- Fallback to empty table if locale fails
+  setmetatable(L, {__index = function(t, k) return k end}) -- Return key as value if not found
+end
+
+local ok2, C = pcall(function() return AceLibrary("Crayon-2.0") end)
+if not ok2 then
+  C = {} -- Fallback
+  -- Provide stub functions
+  C.Colorize = function(color, text) return text end
+  C.Green = function(text) return text end
+  C.Red = function(text) return text end
+end
 
 -- ========================================================================
 -- CONSTANTS
@@ -265,6 +283,11 @@ function GuildRoll:get_ep_v3(getname,officernote)
     if (name==getname) then return tonumber(ep_legacy) end
   end
   return
+end
+
+-- Debug: Confirm get_ep_v3 was defined
+if DEFAULT_CHAT_FRAME then
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00epgp.lua: get_ep_v3 defined|r")
 end
 
 

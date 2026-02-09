@@ -6,10 +6,31 @@
 -- ========================================================================
 
 -- Import Ace libraries needed by utility functions
-local C = AceLibrary("Crayon-2.0")      -- Chat color formatting
-local BC = AceLibrary("Babble-Class-2.2") -- Class name translations
-local BZ = AceLibrary("Babble-Zone-2.2") -- Zone name translations
-local L = AceLibrary("AceLocale-2.2"):new("guildroll") -- Localization
+-- Wrap in pcall to handle potential errors gracefully
+local ok1, C = pcall(function() return AceLibrary("Crayon-2.0") end)
+if not ok1 then
+  C = {}
+  C.Colorize = function(color, text) return text end
+end
+
+local ok2, BC = pcall(function() return AceLibrary("Babble-Class-2.2") end)
+if not ok2 then
+  BC = {}
+  BC.GetHexColor = function(class) return "FFFFFF" end
+end
+
+local ok3, BZ = pcall(function() return AceLibrary("Babble-Zone-2.2") end)
+if not ok3 then
+  BZ = {}
+  BZ.HasReverseTranslation = function() return false end
+  BZ.GetReverseTranslation = function(zone) return zone end
+end
+
+local ok4, L = pcall(function() return AceLibrary("AceLocale-2.2"):new("guildroll") end)
+if not ok4 then
+  L = {}
+  setmetatable(L, {__index = function(t, k) return k end})
+end
 
 -- ========================================================================
 -- LOCAL VARIABLES
