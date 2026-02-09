@@ -8,8 +8,13 @@
 -- - Main character management (set_main, get_main)
 
 -- Debug: Print when epgp.lua starts loading
-if DEFAULT_CHAT_FRAME then
-  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00epgp.lua loading...|r")
+local loadOk, loadErr = pcall(function()
+  if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPGP] epgp.lua loading...|r")
+  end
+end)
+if not loadOk and DEFAULT_CHAT_FRAME then
+  DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[EPGP] Error in initial debug: " .. tostring(loadErr) .. "|r")
 end
 
 -- ========================================================================
@@ -20,25 +25,50 @@ end
 -- Use the same pattern as other modules (standings.lua, adminlog.lua, etc.)
 local L, C
 do
-  -- Get AceLocale library and create/get locale instance
-  local ok, aceLocale = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if ok and aceLocale and type(aceLocale.new) == "function" then
-    ok, L = pcall(function() return aceLocale:new("guildroll") end)
-  end
-  if not L then
-    L = {} -- Fallback to empty table if locale fails
-    setmetatable(L, {__index = function(t, k) return k end}) -- Return key as value if not found
-  end
+  local libraryLoadOk, libraryLoadErr = pcall(function()
+    -- Get AceLocale library and create/get locale instance
+    local ok, aceLocale = pcall(function() return AceLibrary("AceLocale-2.2") end)
+    if ok and aceLocale and type(aceLocale.new) == "function" then
+      ok, L = pcall(function() return aceLocale:new("guildroll") end)
+      if not ok and DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[EPGP] Error calling aceLocale:new: " .. tostring(L) .. "|r")
+        L = nil
+      end
+    end
+    if not L then
+      L = {} -- Fallback to empty table if locale fails
+      setmetatable(L, {__index = function(t, k) return k end}) -- Return key as value if not found
+    end
+    
+    -- Get Crayon library
+    ok, C = pcall(function() return AceLibrary("Crayon-2.0") end)
+    if not ok or not C then
+      C = {} -- Fallback
+      -- Provide stub functions
+      C.Colorize = function(color, text) return text end
+      C.Green = function(text) return text end
+      C.Red = function(text) return text end
+    end
+  end)
   
-  -- Get Crayon library
-  ok, C = pcall(function() return AceLibrary("Crayon-2.0") end)
-  if not ok or not C then
-    C = {} -- Fallback
-    -- Provide stub functions
-    C.Colorize = function(color, text) return text end
-    C.Green = function(text) return text end
-    C.Red = function(text) return text end
+  if not libraryLoadOk and DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[EPGP] Error loading libraries: " .. tostring(libraryLoadErr) .. "|r")
+    -- Provide fallback values
+    if not L then
+      L = {}
+      setmetatable(L, {__index = function(t, k) return k end})
+    end
+    if not C then
+      C = {}
+      C.Colorize = function(color, text) return text end
+      C.Green = function(text) return text end
+      C.Red = function(text) return text end
+    end
   end
+end
+
+if DEFAULT_CHAT_FRAME then
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPGP] Libraries loaded successfully|r")
 end
 
 -- ========================================================================
@@ -295,7 +325,7 @@ end
 
 -- Debug: Confirm get_ep_v3 was defined
 if DEFAULT_CHAT_FRAME then
-  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00epgp.lua: get_ep_v3 defined|r")
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPGP] get_ep_v3 function defined successfully|r")
 end
 
 
@@ -781,3 +811,8 @@ end
 GuildRoll._attemptThrottledMigration = _attemptThrottledMigration
 GuildRoll._trim_public_with_tag = _trim_public_with_tag
 GuildRoll._insertTagBeforeEP = _insertTagBeforeEP
+
+-- Debug: Confirm epgp.lua loaded completely
+if DEFAULT_CHAT_FRAME then
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPGP] epgp.lua loaded completely!|r")
+end
