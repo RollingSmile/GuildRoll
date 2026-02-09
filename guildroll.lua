@@ -892,6 +892,19 @@ function GuildRoll:AceEvent_FullyInitialized() -- SYNTHETIC EVENT, later than PL
 
   self:testMain()
 
+  -- Auto-enable main UI modules
+  pcall(function()
+    self:ToggleModuleActive("GuildRoll_standings", true)
+  end)
+
+  pcall(function()
+    self:ToggleModuleActive("GuildRollAlts", true)
+  end)
+
+  pcall(function()
+    self:ToggleModuleActive("GuildRoll_logs", true)
+  end)
+
   -- Auto-enable AdminLog module for admins
   if self:IsAdmin() then
     pcall(function()
