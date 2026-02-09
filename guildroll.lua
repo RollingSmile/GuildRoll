@@ -287,6 +287,11 @@ function GuildRoll:buildMenu()
             GuildRoll:ToggleModuleActive("GuildRoll_standings", true)
             GuildRoll_standings:Toggle()
           end)
+        else
+          -- Debug: Show error if standings module is not available
+          if DEFAULT_CHAT_FRAME then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Cannot open standings - module not available|r")
+          end
         end
       end
     }
@@ -1696,6 +1701,16 @@ function GuildRoll:OnClick(button)
   end
   if GuildRoll_standings and GuildRoll_standings.Toggle then
     pcall(function() GuildRoll_standings:Toggle() end)
+  else
+    -- Debug: Show error if standings module is not available
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: GuildRoll_standings module not available|r")
+      if not GuildRoll_standings then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] GuildRoll_standings is nil - module failed to load|r")
+      elseif not GuildRoll_standings.Toggle then
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] GuildRoll_standings.Toggle is nil|r")
+      end
+    end
   end
 end
 

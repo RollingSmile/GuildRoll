@@ -4,9 +4,8 @@ local T, D, C, BC, L
 do
   local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
   if not ok or not result then 
-    guildep_debugchat = guildep_debugchat or {}
-    if guildep_debugchat and guildep_debugchat.AddMessage then
-      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Tablet-2.0 not loaded in standings.lua|r")
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Tablet-2.0 not loaded in standings.lua|r")
     end
     return 
   end
@@ -14,8 +13,8 @@ do
   
   ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
   if not ok or not result then 
-    if guildep_debugchat and guildep_debugchat.AddMessage then
-      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Dewdrop-2.0 not loaded in standings.lua|r")
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Dewdrop-2.0 not loaded in standings.lua|r")
     end
     return 
   end
@@ -23,8 +22,8 @@ do
   
   ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
   if not ok or not result then 
-    if guildep_debugchat and guildep_debugchat.AddMessage then
-      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Crayon-2.0 not loaded in standings.lua|r")
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Crayon-2.0 not loaded in standings.lua|r")
     end
     return 
   end
@@ -32,8 +31,8 @@ do
   
   ok, result = pcall(function() return AceLibrary("Babble-Class-2.2") end)
   if not ok or not result then 
-    if guildep_debugchat and guildep_debugchat.AddMessage then
-      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Babble-Class-2.2 not loaded in standings.lua|r")
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Babble-Class-2.2 not loaded in standings.lua|r")
     end
     return 
   end
@@ -41,22 +40,34 @@ do
   
   ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
   if not ok or not result or type(result.new) ~= "function" then 
-    if guildep_debugchat and guildep_debugchat.AddMessage then
-      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: AceLocale-2.2 not loaded in standings.lua|r")
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: AceLocale-2.2 not loaded in standings.lua|r")
     end
     return 
   end
   ok, L = pcall(function() return result:new("guildroll") end)
   if not ok or not L then 
-    if guildep_debugchat and guildep_debugchat.AddMessage then
-      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Localization not initialized in standings.lua|r")
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Localization not initialized in standings.lua|r")
     end
     return 
   end
 end
+
+-- Debug: Confirm standings.lua libraries loaded successfully
+if DEFAULT_CHAT_FRAME then
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[GuildRoll] standings.lua libraries loaded successfully|r")
+end
+
 local _G = getfenv(0)
 
 GuildRoll_standings = GuildRoll:NewModule("GuildRoll_standings", "AceDB-2.0")
+
+-- Debug: Confirm module was created
+if DEFAULT_CHAT_FRAME and GuildRoll_standings then
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[GuildRoll] GuildRoll_standings module created successfully|r")
+end
+
 local groupings = {
   "GuildRoll_groupbyclass",
   "GuildRoll_groupbyarmor",
