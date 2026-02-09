@@ -347,20 +347,39 @@ function GuildRoll_standings:Top()
 end
 
 function GuildRoll_standings:Toggle(forceShow)
-  self:Top()
-  if T:IsAttached("GuildRoll_standings") then -- hidden
-    pcall(function() T:Detach("GuildRoll_standings") end) -- show
-    if (T.IsLocked and T:IsLocked("GuildRoll_standings")) then
-      pcall(function() T:ToggleLocked("GuildRoll_standings") end)
-    end
-    self:setHideScript()
-  else
-    if (forceShow) then
-      GuildRoll_standings:Refresh()
+  if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Standings] Toggle called, forceShow=" .. tostring(forceShow) .. "|r")
+  end
+  
+  local toggleOk, toggleErr = pcall(function()
+    self:Top()
+    if T:IsAttached("GuildRoll_standings") then -- hidden
+      if DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Standings] Currently attached, detaching (showing)...|r")
+      end
+      pcall(function() T:Detach("GuildRoll_standings") end) -- show
+      if (T.IsLocked and T:IsLocked("GuildRoll_standings")) then
+        pcall(function() T:ToggleLocked("GuildRoll_standings") end)
+      end
+      self:setHideScript()
     else
-      pcall(function() T:Attach("GuildRoll_standings") end) -- hide
+      if (forceShow) then
+        if DEFAULT_CHAT_FRAME then
+          DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Standings] forceShow=true, calling Refresh...|r")
+        end
+        GuildRoll_standings:Refresh()
+      else
+        if DEFAULT_CHAT_FRAME then
+          DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Standings] Not attached, attaching (hiding)...|r")
+        end
+        pcall(function() T:Attach("GuildRoll_standings") end) -- hide
+      end
     end
-  end  
+  end)
+  
+  if not toggleOk and DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[Standings] Error in Toggle: " .. tostring(toggleErr) .. "|r")
+  end
 end
 
 function GuildRoll_standings:ToggleGroupBy(setting)

@@ -1699,7 +1699,16 @@ function GuildRoll:OnClick(button)
     end
     return
   end
+  
+  -- Default click: Toggle standings
+  if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[GuildRoll] OnClick: Attempting to toggle standings...|r")
+  end
+  
   if GuildRoll_standings and GuildRoll_standings.Toggle then
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[GuildRoll] GuildRoll_standings and Toggle exist, calling...|r")
+    end
     pcall(function() GuildRoll_standings:Toggle() end)
   else
     -- Debug: Show error if standings module is not available
