@@ -18,6 +18,10 @@ local L = AceLibrary("AceLocale-2.2"):new("guildroll") -- Localization
 -- Output format string for chat messages
 local out = "|cff9664c8guildroll:|r %s"
 
+function admin()
+  return GuildRoll:IsAdmin()
+end
+
 -- ========================================================================
 -- GLOBAL CONSTANTS AND TABLES
 -- ========================================================================
