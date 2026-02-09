@@ -38,7 +38,7 @@ localization.lua
 guildroll.lua
 utils.lua
 ui_helpers.lua
-notes_v3.lua
+epgp.lua
 roll.lua
 migrations.lua 
 standings.lua 
