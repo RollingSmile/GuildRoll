@@ -3,25 +3,56 @@
 local T, D, C, BC, L
 do
   local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    guildep_debugchat = guildep_debugchat or {}
+    if guildep_debugchat and guildep_debugchat.AddMessage then
+      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Tablet-2.0 not loaded in standings.lua|r")
+    end
+    return 
+  end
   T = result
   
   ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    if guildep_debugchat and guildep_debugchat.AddMessage then
+      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Dewdrop-2.0 not loaded in standings.lua|r")
+    end
+    return 
+  end
   D = result
   
   ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    if guildep_debugchat and guildep_debugchat.AddMessage then
+      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Crayon-2.0 not loaded in standings.lua|r")
+    end
+    return 
+  end
   C = result
   
   ok, result = pcall(function() return AceLibrary("Babble-Class-2.2") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    if guildep_debugchat and guildep_debugchat.AddMessage then
+      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Babble-Class-2.2 not loaded in standings.lua|r")
+    end
+    return 
+  end
   BC = result
   
   ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if not ok or not result or type(result.new) ~= "function" then return end
+  if not ok or not result or type(result.new) ~= "function" then 
+    if guildep_debugchat and guildep_debugchat.AddMessage then
+      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: AceLocale-2.2 not loaded in standings.lua|r")
+    end
+    return 
+  end
   ok, L = pcall(function() return result:new("guildroll") end)
-  if not ok or not L then return end
+  if not ok or not L then 
+    if guildep_debugchat and guildep_debugchat.AddMessage then
+      guildep_debugchat:AddMessage("|cffff0000[GuildRoll] ERROR: Localization not initialized in standings.lua|r")
+    end
+    return 
+  end
 end
 local _G = getfenv(0)
 
