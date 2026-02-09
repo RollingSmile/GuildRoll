@@ -161,8 +161,10 @@ do
     hexColorQuality[ITEM_QUALITY_COLORS[i].hex] = i
   end
 end
-local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
-
+local cmdtable_shared = {
+  type = "group", 
+  handler = GuildRoll, 
+  args = {
     show = {
       type = "execute",
       name = L["Standings"],
@@ -227,79 +229,11 @@ local admincmd, membercmd = {type = "group", handler = GuildRoll, args = {
       end,
       order = 10,
     },
-  }},
-{type = "group", handler = GuildRoll, args = {
-    show = {
-      type = "execute",
-      name = L["Standings"],
-      desc = L["Show Standings Table."],
-      func = function()
-        GuildRoll_standings:Toggle()
-      end,
-      order = 1,
-    },
-    resetButton = {
-      type = "execute",
-      name = "Reset Button",
-      desc = "Reset Button",
-      func = function()
-        GuildRoll:ResetButton()  
-      end,
-      order = 2,
-    }, 
-    restart = {
-      type = "execute",
-      name = L["Restart"],
-      desc = L["Restart guildroll if having startup problems."],
-      func = function() 
-        GuildRoll:OnEnable()
-        GuildRoll:defaultPrint(L["Restarted"])
-      end,
-      order = 4,
-    },
-    ms = {
-      type = "execute",
-      name = "Roll MainSpec",
-      desc = "Roll with your standing",
-      func = function() 
-        GuildRoll:RollCommand(false, 0)
-      end,
-      order = 5,
-    },
-    sr = {
-      type = "execute",
-      name = "Roll SR",
-      desc = "Roll Soft Reserve with your standing",
-      func = function() 
-        GuildRoll:RollCommand(true, 0)
-      end,
-      order = 7,
-    },
-    csr = {
-      type = "range",
-      name = "Roll Cumulative SR",
-      desc = "Roll Cumulative Soft Reserve with your standing",
-      get = "Roll Cumulative Soft Reserve with your standing",
-      min = 1,
-      max = 10,
-      step = 1,
-      isPercent = false,
-      get = function(input)
-      
-      end,
-      set = function(input) 
-      local bonus = GuildRoll:calculateBonus(input)
-      GuildRoll:RollCommand(true, bonus)
-      end,
-      order = 8,
-    },
-  }}
+  }
+}
+
 GuildRoll.cmdtable = function() 
-  if (admin()) then
-    return admincmd
-  else
-    return membercmd
-  end
+  return cmdtable_shared
 end
 GuildRoll.alts = {} 
 function GuildRoll:buildMenu()
@@ -990,27 +924,6 @@ function GuildRoll:delayedInit()
   GuildRoll.VARS.GuildName  =""
   if (IsInGuild()) then
     GuildRoll.VARS.GuildName  = (GetGuildInfo("player"))
-  end
-   
-  -- Migration helper: Copy legacy "shooty" frame names to new "guildep" names
-  -- This ensures users who update without clearing saved variables don't lose functionality
-  if _G["shooty_exportframe"] and not _G["guildep_exportframe"] then
-    _G["guildep_exportframe"] = _G["shooty_exportframe"]
-  end
-  if _G["shooty_exportaction"] and not _G["guildep_exportaction"] then
-    _G["guildep_exportaction"] = _G["shooty_exportaction"]
-  end
-  if _G["shooty_exportedit"] and not _G["guildep_exportedit"] then
-    _G["guildep_exportedit"] = _G["shooty_exportedit"]
-  end
-  if _G["shooty_exportscroll"] and not _G["guildep_exportscroll"] then
-    _G["guildep_exportscroll"] = _G["shooty_exportscroll"]
-  end
-  if _G["ShootyRollFrame"] and not _G["GuildEpRollFrame"] then
-    _G["GuildEpRollFrame"] = _G["ShootyRollFrame"]
-  end
-  if _G["ShootyRollButton"] and not _G["GuildEpRollButton"] then
-    _G["GuildEpRollButton"] = _G["ShootyRollButton"]
   end
    
   -- init options and comms
@@ -1910,13 +1823,6 @@ function GuildRoll:decay_ep_v3()
   -- Immediate UI refresh after decay
   self:refreshAllEPUI()
 end
-
--- Backward-compatible wrapper for decay_epgp_v3
-function GuildRoll:decay_epgp_v3()
-  return self:decay_ep_v3()
-end
-
-
 
 function GuildRoll:reset_ep_v3()
   if (IsGuildLeader()) then
