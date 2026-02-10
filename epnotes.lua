@@ -1,4 +1,4 @@
--- epgp.lua: EP/GP system for GuildRoll
+-- epnotes.lua: EP/GP system for GuildRoll
 -- Contains all EP/GP-related logic including:
 -- - Core EP get/set functions (get_ep_v3, update_epgp_v3)
 -- - Bulk operations (decay_ep_v3, reset_ep_v3, give_ep_to_raid)
@@ -6,15 +6,16 @@
 -- - Announce functions (my_epgp, my_epgp_announce)
 -- - Export/Import functions (ExportEPCSV, ImportEPCSV)
 -- - Main character management (set_main, get_main)
+-- - UI dialogs (ShowGiveEPDialog, UpdateGiveEPDialog, PromptAwardRaidEP)
 
--- Debug: Print when epgp.lua starts loading
+-- Debug: Print when epnotes.lua starts loading
 local loadOk, loadErr = pcall(function()
   if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPGP] epgp.lua loading...|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPNOTES] epnotes.lua loading...|r")
   end
 end)
 if not loadOk and DEFAULT_CHAT_FRAME then
-  DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[EPGP] Error in initial debug: " .. tostring(loadErr) .. "|r")
+  DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[EPNOTES] Error in initial debug: " .. tostring(loadErr) .. "|r")
 end
 
 -- ========================================================================
@@ -31,7 +32,7 @@ do
     if ok and aceLocale and type(aceLocale.new) == "function" then
       ok, L = pcall(function() return aceLocale:new("guildroll") end)
       if not ok and DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[EPGP] Error calling aceLocale:new: " .. tostring(L) .. "|r")
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[EPNOTES] Error calling aceLocale:new: " .. tostring(L) .. "|r")
         L = nil
       end
     end
@@ -52,7 +53,7 @@ do
   end)
   
   if not libraryLoadOk and DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[EPGP] Error loading libraries: " .. tostring(libraryLoadErr) .. "|r")
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[EPNOTES] Error loading libraries: " .. tostring(libraryLoadErr) .. "|r")
     -- Provide fallback values
     if not L then
       L = {}
@@ -68,7 +69,7 @@ do
 end
 
 if DEFAULT_CHAT_FRAME then
-  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPGP] Libraries loaded successfully|r")
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPNOTES] Libraries loaded successfully|r")
 end
 
 -- ========================================================================
@@ -325,7 +326,7 @@ end
 
 -- Debug: Confirm get_ep_v3 was defined
 if DEFAULT_CHAT_FRAME then
-  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPGP] get_ep_v3 function defined successfully|r")
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPNOTES] get_ep_v3 function defined successfully|r")
 end
 
 
@@ -812,7 +813,168 @@ GuildRoll._attemptThrottledMigration = _attemptThrottledMigration
 GuildRoll._trim_public_with_tag = _trim_public_with_tag
 GuildRoll._insertTagBeforeEP = _insertTagBeforeEP
 
--- Debug: Confirm epgp.lua loaded completely
+-- ========================================================================
+-- UI DIALOG FUNCTIONS
+-- ========================================================================
+
+-- Prompt user to award EP to entire raid
+function GuildRoll:PromptAwardRaidEP()
+  if not GuildRoll:IsAdmin() then
+    self:defaultPrint(L["You don't have permission to award EP."])
+    return
+  end
+  
+  -- Check if player is in a raid
+  local numRaid = GetNumRaidMembers()
+  if numRaid == 0 then
+    self:defaultPrint(L["BuffCheck_NotInRaid"] or "You are not in a raid.")
+    return
+  end
+  
+  StaticPopup_Show("GUILDROLL_AWARD_EP_RAID_HELP")
+end
+
+-- Helper function to update the GiveEP dialog content when target changes
+-- Can be called on a visible dialog to refresh its content
+function GuildRoll:UpdateGiveEPDialog(frame)
+  if not frame then
+    return
+  end
+  
+  -- Read from frame.data with fallback to legacy field and pending variable
+  local targetName = frame.data or frame.guildroll_target or GuildRoll._pendingGiveEPTarget
+  
+  -- Clear pending variable when consumed
+  if targetName and targetName == GuildRoll._pendingGiveEPTarget then
+    GuildRoll._pendingGiveEPTarget = nil
+  end
+  
+  -- Get the text element for the dialog
+  local textElement = getglobal(frame:GetName().."Text")
+  local editBox = getglobal(frame:GetName().."EditBox")
+  
+  if not targetName then
+    if textElement then
+      textElement:SetText("Error: No target specified")
+    end
+    if editBox then
+      editBox:SetText("")
+    end
+    return
+  end
+  
+  -- Determine the effective recipient (main if alt, otherwise selected)
+  local currentEP = 0
+  local headerString = ""
+  
+  -- Try to parse alt -> main
+  local mainName
+  local parseSuccess, parseMain = pcall(function() return GuildRoll:parseAlt(targetName) end)
+  if parseSuccess and parseMain then
+    mainName = parseMain
+  end
+  
+  if mainName then
+    -- This is an alt with a main - show "Giving EP to MainName (main of AltName); current EP: X"
+    local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(mainName) end)
+    if epSuccess and ep then
+      currentEP = ep
+    end
+    headerString = string.format(L["GIVING_EP_MAIN_OF_ALT"], mainName, targetName, currentEP)
+  else
+    -- This is a main or alt without main found - show "Giving EP to CharName; current EP: X"
+    local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(targetName) end)
+    if epSuccess and ep then
+      currentEP = ep
+    end
+    headerString = string.format(L["GIVING_EP_TO_CHAR"], targetName, currentEP)
+  end
+  
+  if textElement then
+    textElement:SetText(headerString)
+  end
+  if editBox then
+    editBox:SetText("")
+    editBox:SetFocus()
+  end
+end
+
+-- Show dialog to give EP to a specific player
+function GuildRoll:ShowGiveEPDialog(targetName)
+  if not GuildRoll:IsAdmin() then
+    return
+  end
+  if not targetName then
+    return
+  end
+
+  -- Store target in pending variable before calling StaticPopup_Show to handle race conditions
+  GuildRoll._pendingGiveEPTarget = targetName
+
+  -- Pass targetName as the data parameter to avoid the OnShow race condition
+  local ok, dialog = pcall(function()
+    return StaticPopup_Show("GUILDROLL_GIVE_EP", nil, nil, targetName)
+  end)
+
+  if not ok then
+    -- StaticPopup_Show failed for some reason; fail silently to avoid hard errors
+    -- Schedule delayed clear of pending variable
+    pcall(function()
+      GuildRoll:ScheduleEvent("GuildRoll_ClearPendingGiveEP", function()
+        GuildRoll._pendingGiveEPTarget = nil
+      end, 1)
+    end)
+    return
+  end
+
+  if dialog then
+    -- Defensive: ensure .data is set (older or modified clients may not set it)
+    pcall(function()
+      if not dialog.data then dialog.data = targetName end
+      -- preserve legacy field for backward compatibility
+      dialog.guildroll_target = targetName
+    end)
+    -- Clear pending variable (will be cleared again in UpdateGiveEPDialog, but do it early for safety)
+    GuildRoll._pendingGiveEPTarget = nil
+    -- Refresh dialog content immediately (handles case where dialog was already visible)
+    pcall(function()
+      GuildRoll:UpdateGiveEPDialog(dialog)
+    end)
+  else
+    -- StaticPopup_Show returned nil (queued); attempt to locate existing frame
+    local foundFrame = nil
+    pcall(function()
+      local maxDialogs = STATICPOPUP_NUMDIALOGS or 4
+      for i = 1, maxDialogs do
+        local frameName = "StaticPopup" .. i
+        local frame = getglobal(frameName)
+        if frame and frame.which == "GUILDROLL_GIVE_EP" then
+          frame.data = targetName
+          frame.guildroll_target = targetName
+          foundFrame = frame
+          break
+        end
+      end
+    end)
+    
+    if foundFrame then
+      -- Successfully set dialog fields on existing frame, clear pending and refresh content
+      GuildRoll._pendingGiveEPTarget = nil
+      pcall(function()
+        GuildRoll:UpdateGiveEPDialog(foundFrame)
+      end)
+    else
+      -- Unable to set dialog immediately; schedule delayed clear of pending variable
+      pcall(function()
+        GuildRoll:ScheduleEvent("GuildRoll_ClearPendingGiveEP", function()
+          GuildRoll._pendingGiveEPTarget = nil
+        end, 1)
+      end)
+    end
+  end
+end
+
+-- Debug: Confirm epnotes.lua loaded completely
 if DEFAULT_CHAT_FRAME then
-  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPGP] epgp.lua loaded completely!|r")
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[EPNOTES] epnotes.lua loaded completely!|r")
 end
