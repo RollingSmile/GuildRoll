@@ -6,6 +6,7 @@ EP rolls - Basic Effort Points manager for TurtleWoW
 
 GuildRoll is a World of Warcraft addon for managing Effort Points (EP) in guilds. It provides:
 - EP tracking and management
+- Buff/Consumables check
 - Guild member/Raid EP awards
 - Buff/Consumables check
 - Guild standings, personal Log and AdminsLog

@@ -3,29 +3,71 @@
 local T, D, C, BC, L
 do
   local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Tablet-2.0 not loaded in standings.lua|r")
+    end
+    return 
+  end
   T = result
   
   ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Dewdrop-2.0 not loaded in standings.lua|r")
+    end
+    return 
+  end
   D = result
   
   ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Crayon-2.0 not loaded in standings.lua|r")
+    end
+    return 
+  end
   C = result
   
   ok, result = pcall(function() return AceLibrary("Babble-Class-2.2") end)
-  if not ok or not result then return end
+  if not ok or not result then 
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Babble-Class-2.2 not loaded in standings.lua|r")
+    end
+    return 
+  end
   BC = result
   
   ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if not ok or not result or type(result.new) ~= "function" then return end
+  if not ok or not result or type(result.new) ~= "function" then 
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: AceLocale-2.2 not loaded in standings.lua|r")
+    end
+    return 
+  end
   ok, L = pcall(function() return result:new("guildroll") end)
-  if not ok or not L then return end
+  if not ok or not L then 
+    if DEFAULT_CHAT_FRAME then
+      DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[GuildRoll] ERROR: Localization not initialized in standings.lua|r")
+    end
+    return 
+  end
 end
+
+-- Debug: Confirm standings.lua libraries loaded successfully
+if DEFAULT_CHAT_FRAME then
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[GuildRoll] standings.lua libraries loaded successfully|r")
+end
+
 local _G = getfenv(0)
 
 GuildRoll_standings = GuildRoll:NewModule("GuildRoll_standings", "AceDB-2.0")
+
+-- Debug: Confirm module was created
+if DEFAULT_CHAT_FRAME and GuildRoll_standings then
+  DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[GuildRoll] GuildRoll_standings module created successfully|r")
+end
+
 local groupings = {
   "GuildRoll_groupbyclass",
   "GuildRoll_groupbyarmor",
@@ -305,20 +347,39 @@ function GuildRoll_standings:Top()
 end
 
 function GuildRoll_standings:Toggle(forceShow)
-  self:Top()
-  if T:IsAttached("GuildRoll_standings") then -- hidden
-    pcall(function() T:Detach("GuildRoll_standings") end) -- show
-    if (T.IsLocked and T:IsLocked("GuildRoll_standings")) then
-      pcall(function() T:ToggleLocked("GuildRoll_standings") end)
-    end
-    self:setHideScript()
-  else
-    if (forceShow) then
-      GuildRoll_standings:Refresh()
+  if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Standings] Toggle called, forceShow=" .. tostring(forceShow) .. "|r")
+  end
+  
+  local toggleOk, toggleErr = pcall(function()
+    self:Top()
+    if T:IsAttached("GuildRoll_standings") then -- hidden
+      if DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Standings] Currently attached, detaching (showing)...|r")
+      end
+      pcall(function() T:Detach("GuildRoll_standings") end) -- show
+      if (T.IsLocked and T:IsLocked("GuildRoll_standings")) then
+        pcall(function() T:ToggleLocked("GuildRoll_standings") end)
+      end
+      self:setHideScript()
     else
-      pcall(function() T:Attach("GuildRoll_standings") end) -- hide
+      if (forceShow) then
+        if DEFAULT_CHAT_FRAME then
+          DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Standings] forceShow=true, calling Refresh...|r")
+        end
+        GuildRoll_standings:Refresh()
+      else
+        if DEFAULT_CHAT_FRAME then
+          DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Standings] Not attached, attaching (hiding)...|r")
+        end
+        pcall(function() T:Attach("GuildRoll_standings") end) -- hide
+      end
     end
-  end  
+  end)
+  
+  if not toggleOk and DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[Standings] Error in Toggle: " .. tostring(toggleErr) .. "|r")
+  end
 end
 
 function GuildRoll_standings:ToggleGroupBy(setting)
