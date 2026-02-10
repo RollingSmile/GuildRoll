@@ -1409,40 +1409,13 @@ end
 -- Standing Operations
 ---------------------
 
--- Backward-compatible wrapper for award_raid_ep
-function GuildRoll:award_raid_ep(ep)
-  return self:give_ep_to_raid(ep)
-end
-
 
 -- ========================================================================
 -- EP/GP FUNCTION WRAPPERS
 -- These functions are implemented in epnotes.lua 
--- No wrappers needed here since epnotes.lua is loaded before guildroll.lua
+-- No wrappers needed here since epnotes.lua is loaded after guildroll.lua
+-- and defines all the required functions and wrappers
 -- ========================================================================
-
-
-
--- Backward-compatible wrappers for givename_ep
-function GuildRoll:givename_ep(getname,ep,block)
-  return self:give_ep_to_member(getname,ep,block)
-end
-
-
-
-
-
-
-
-
--- Backward-compatible wrapper for ep_reset_v3
-function GuildRoll:ep_reset_v3()
-  return self:reset_ep_v3()
-end
-
-
-
-
 
 ---------
 -- Menu
