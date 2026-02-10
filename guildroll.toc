@@ -35,8 +35,8 @@ Libs\FuBarPlugin-2.0\FuBarPlugin-2.0.lua
 Libs\ChatThrottleLib.lua
 
 localization.lua
-epgp.lua
 guildroll.lua
+epgp.lua
 utils.lua
 ui_helpers.lua
 roll.lua
