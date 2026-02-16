@@ -52,7 +52,7 @@ Provides persistent, guild-wide synchronized admin log with delta broadcast and 
 --]]
 
 -- Guard: Check if required libraries are available
-local T, D, C, BC, L, CP = GuildRoll:InitLibraries()
+local T, D, C, _, L, CP = GuildRoll:InitLibraries()
 if not (T and D and C and L and CP) then return end
 
 -- Initialize saved variables
