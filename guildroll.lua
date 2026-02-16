@@ -932,7 +932,7 @@ function GuildRoll:delayedInit()
   
   function GuildRoll:calculateBonus(input)
     local number = tonumber(input)
-    if not number or number < 0 or number > 15 then
+    if not number or number < 0 or number > 25 then
       return nil  -- Invalid input
     end
     if number == 0 or number == 1 then
