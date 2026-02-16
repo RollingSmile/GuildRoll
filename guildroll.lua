@@ -4,6 +4,49 @@ GuildRoll:SetModuleMixins("AceDebug-2.0")
 -- Global debug flag: set to true to enable debug output
 GuildRoll.DEBUG = false
 
+--- Helper: Initialize and load required libraries with pcall protection
+--- This centralizes library initialization to reduce duplication across module files
+--- @param libraryNames table Array of library names to load (e.g., {"Tablet-2.0", "Dewdrop-2.0"})
+--- @param optionalLibraries table Optional: Table of library names that are not required
+--- @return table|nil Table of loaded libraries keyed by name, or nil if required libraries missing
+function GuildRoll:InitLibraries(libraryNames, optionalLibraries)
+  local libs = {}
+  optionalLibraries = optionalLibraries or {}
+  
+  for _, libName in ipairs(libraryNames) do
+    local ok, result = pcall(function() return AceLibrary(libName) end)
+    
+    -- Check if this is the AceLocale library which needs special handling
+    if libName == "AceLocale-2.2" then
+      if not ok or not result or type(result.new) ~= "function" then 
+        return nil 
+      end
+      -- Create the localization instance
+      ok, result = pcall(function() return result:new("guildroll") end)
+      if not ok or not result then 
+        return nil 
+      end
+    elseif not ok or not result then
+      -- Check if this is an optional library
+      local isOptional = false
+      for _, optName in ipairs(optionalLibraries) do
+        if optName == libName then
+          isOptional = true
+          break
+        end
+      end
+      if not isOptional then
+        return nil
+      end
+      result = nil
+    end
+    
+    libs[libName] = result
+  end
+  
+  return libs
+end
+
 -- Library imports
 local D = AceLibrary("Dewdrop-2.0")     -- Dropdown menus
 local BZ = AceLibrary("Babble-Zone-2.2") -- Zone name translations
