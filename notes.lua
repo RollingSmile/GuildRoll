@@ -286,7 +286,9 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
   return movedCount
 end
 
--- Export helper functions for use by other modules
+-- Export helper functions and constants for use by other modules
 GuildRoll._attemptThrottledMigration = _attemptThrottledMigration
 GuildRoll._trim_public_with_tag = _trim_public_with_tag
 GuildRoll._insertTagBeforeEP = _insertTagBeforeEP
+GuildRoll.MAX_NOTE_LEN = MAX_NOTE_LEN
+GuildRoll.MIGRATION_AUTO_DELAY_SECONDS = MIGRATION_AUTO_DELAY_SECONDS

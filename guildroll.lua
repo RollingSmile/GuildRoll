@@ -48,107 +48,6 @@ local RaidKey = {}
 -- Forward-declare handler for SHARE: admin settings so addonComms can call it early
 local handleSharedSettings
 
--- Constants for note length and migration timing
-local MAX_NOTE_LEN = 31
-local MIGRATION_THROTTLE_SECONDS = 30
-local MIGRATION_AUTO_DELAY_SECONDS = 5
-
--- Helper: trim public note with tag to ensure it fits within max length
--- existing: current public note
--- tag: tag to append
--- maxlen: maximum allowed length (default MAX_NOTE_LEN)
--- Returns: trimmed note with tag appended
-local function _trim_public_with_tag(existing, tag, maxlen)
-  maxlen = maxlen or MAX_NOTE_LEN
-  existing = existing or ""
-  tag = tag or ""
-  
-  local tagLen = string.len(tag)
-  local availableLen = maxlen - tagLen
-  
-  if availableLen < 0 then
-    -- Tag itself is too long; return just the tag truncated
-    return string.sub(tag, 1, maxlen)
-  end
-  
-  if string.len(existing) <= availableLen then
-    -- Existing note fits; append tag
-    return existing .. tag
-  else
-    -- Trim existing to fit
-    return string.sub(existing, 1, availableLen) .. tag
-  end
-end
-
--- Helper: insert tag before {EP} pattern in officer note
--- officernote: current officer note
--- tag: tag to insert
--- Returns: new officer note with tag inserted before {EP} pattern
-local function _insertTagBeforeEP(officernote, tag)
-  -- Ensure inputs are strings
-  if type(officernote) ~= "string" then officernote = "" end
-  if type(tag) ~= "string" then tag = "" end
-  
-  -- Return early if tag is empty
-  if tag == "" then
-    return officernote
-  end
-  
-  -- Remove any existing occurrences of this tag from the officer note
-  -- Escape pattern characters in the tag for safe pattern matching
-  local escapedTag = string.gsub(tag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-  officernote = string.gsub(officernote, escapedTag, "")
-  
-  -- Try to find new {EP} pattern first (e.g., {123})
-  local prefix, ep, postfix = string.match(officernote, "^(.-)({%d+})(.*)$")
-  
-  if ep then
-    -- Found new {EP} pattern; insert tag before it
-    return prefix .. tag .. ep .. postfix
-  end
-  
-  -- Try to find legacy {EP:GP} pattern (e.g., {123:456})
-  prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
-  
-  if epgp then
-    -- Found legacy pattern; insert tag before it
-    return prefix .. tag .. epgp .. postfix
-  else
-    -- No pattern found; append tag to end
-    return officernote .. tag
-  end
-end
-
--- Helper: attempt to run main tag migration with throttle check
--- Returns true if migration was attempted, false if throttled
-local function _attemptThrottledMigration(self)
-  -- Check throttle: don't run more often than once every 30 seconds
-  local now = GetTime()
-  if self._lastMigrateRun and (now - self._lastMigrateRun) < MIGRATION_THROTTLE_SECONDS then
-    return false
-  end
-  
-  -- Set timestamp before attempting to prevent rapid retries on failure
-  -- This ensures we don't spam attempts when guild roster isn't available yet
-  self._lastMigrateRun = now
-  
-  -- Verify guild roster is available
-  local ok, numMembers = pcall(function()
-    if not IsInGuild() then return 0 end
-    return GetNumGuildMembers(1) or 0
-  end)
-  
-  if ok and numMembers > 0 then
-    -- Run migration
-    pcall(function()
-      GuildRoll:MovePublicMainTagsToOfficerNotes()
-    end)
-    return true
-  end
-  
-  return false
-end
-
 local options
 do
   for i=1,40 do
@@ -956,8 +855,8 @@ function GuildRoll:delayedInit()
     
     -- Auto-run migration 5 seconds after init for admins
     self:ScheduleEvent("guildroll_auto_migrate", function()
-      _attemptThrottledMigration(self)
-    end, MIGRATION_AUTO_DELAY_SECONDS)
+      self._attemptThrottledMigration(self)
+    end, self.MIGRATION_AUTO_DELAY_SECONDS)
   end
   
   -- Schedule alt main prompt check after a short delay to allow roster to populate
@@ -1097,7 +996,7 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     end
     
     -- Attempt throttled migration
-    _attemptThrottledMigration(self)
+    self._attemptThrottledMigration(self)
     return
   end
   
@@ -2174,7 +2073,7 @@ function GuildRoll:ProcessSetMainInput(inputMain)
   end
   
   -- Append main tag to public note
-  local newPublic = _trim_public_with_tag(playerPublicNote, mainTag, MAX_NOTE_LEN)
+  local newPublic = self._trim_public_with_tag(playerPublicNote, mainTag, self.MAX_NOTE_LEN)
   
   -- Write the new public note (wrapped in pcall for safety)
   local success, err = pcall(function()
@@ -2305,7 +2204,7 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
         local mainTag = string.match(publicNote, "({%a%a%a*})")
         if mainTag and type(mainTag) == "string" and string.len(mainTag) > 2 then
           -- Insert main tag before {EP} in officer note first (to avoid data loss)
-          local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
+          local newOfficer = self._insertTagBeforeEP(officerNote, mainTag)
           
           -- Validate newOfficer is a string before writing
           if type(newOfficer) == "string" then
