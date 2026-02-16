@@ -48,6 +48,107 @@ local RaidKey = {}
 -- Forward-declare handler for SHARE: admin settings so addonComms can call it early
 local handleSharedSettings
 
+-- Constants for note length and migration timing
+local MAX_NOTE_LEN = 31
+local MIGRATION_THROTTLE_SECONDS = 30
+local MIGRATION_AUTO_DELAY_SECONDS = 5
+
+-- Helper: trim public note with tag to ensure it fits within max length
+-- existing: current public note
+-- tag: tag to append
+-- maxlen: maximum allowed length (default MAX_NOTE_LEN)
+-- Returns: trimmed note with tag appended
+local function _trim_public_with_tag(existing, tag, maxlen)
+  maxlen = maxlen or MAX_NOTE_LEN
+  existing = existing or ""
+  tag = tag or ""
+  
+  local tagLen = string.len(tag)
+  local availableLen = maxlen - tagLen
+  
+  if availableLen < 0 then
+    -- Tag itself is too long; return just the tag truncated
+    return string.sub(tag, 1, maxlen)
+  end
+  
+  if string.len(existing) <= availableLen then
+    -- Existing note fits; append tag
+    return existing .. tag
+  else
+    -- Trim existing to fit
+    return string.sub(existing, 1, availableLen) .. tag
+  end
+end
+
+-- Helper: insert tag before {EP} pattern in officer note
+-- officernote: current officer note
+-- tag: tag to insert
+-- Returns: new officer note with tag inserted before {EP} pattern
+local function _insertTagBeforeEP(officernote, tag)
+  -- Ensure inputs are strings
+  if type(officernote) ~= "string" then officernote = "" end
+  if type(tag) ~= "string" then tag = "" end
+  
+  -- Return early if tag is empty
+  if tag == "" then
+    return officernote
+  end
+  
+  -- Remove any existing occurrences of this tag from the officer note
+  -- Escape pattern characters in the tag for safe pattern matching
+  local escapedTag = string.gsub(tag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+  officernote = string.gsub(officernote, escapedTag, "")
+  
+  -- Try to find new {EP} pattern first (e.g., {123})
+  local prefix, ep, postfix = string.match(officernote, "^(.-)({%d+})(.*)$")
+  
+  if ep then
+    -- Found new {EP} pattern; insert tag before it
+    return prefix .. tag .. ep .. postfix
+  end
+  
+  -- Try to find legacy {EP:GP} pattern (e.g., {123:456})
+  prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
+  
+  if epgp then
+    -- Found legacy pattern; insert tag before it
+    return prefix .. tag .. epgp .. postfix
+  else
+    -- No pattern found; append tag to end
+    return officernote .. tag
+  end
+end
+
+-- Helper: attempt to run main tag migration with throttle check
+-- Returns true if migration was attempted, false if throttled
+local function _attemptThrottledMigration(self)
+  -- Check throttle: don't run more often than once every 30 seconds
+  local now = GetTime()
+  if self._lastMigrateRun and (now - self._lastMigrateRun) < MIGRATION_THROTTLE_SECONDS then
+    return false
+  end
+  
+  -- Set timestamp before attempting to prevent rapid retries on failure
+  -- This ensures we don't spam attempts when guild roster isn't available yet
+  self._lastMigrateRun = now
+  
+  -- Verify guild roster is available
+  local ok, numMembers = pcall(function()
+    if not IsInGuild() then return 0 end
+    return GetNumGuildMembers(1) or 0
+  end)
+  
+  if ok and numMembers > 0 then
+    -- Run migration
+    pcall(function()
+      GuildRoll:MovePublicMainTagsToOfficerNotes()
+    end)
+    return true
+  end
+  
+  return false
+end
+
 local options
 do
   for i=1,40 do
@@ -855,8 +956,8 @@ function GuildRoll:delayedInit()
     
     -- Auto-run migration 5 seconds after init for admins
     self:ScheduleEvent("guildroll_auto_migrate", function()
-      GuildRoll._attemptThrottledMigration(self)
-    end, GuildRoll.MIGRATION_AUTO_DELAY_SECONDS)
+      _attemptThrottledMigration(self)
+    end, MIGRATION_AUTO_DELAY_SECONDS)
   end
   
   -- Schedule alt main prompt check after a short delay to allow roster to populate
@@ -996,7 +1097,7 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     end
     
     -- Attempt throttled migration
-    GuildRoll._attemptThrottledMigration(self)
+    _attemptThrottledMigration(self)
     return
   end
   
@@ -1019,10 +1120,10 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     if (who == self._playerName) or (for_main) then
       if what == "MainStanding" then
         -- Add personal log entry for EP changes with compact colorized format
-        -- Note: Due to WoW's guild roster sync timing, get_ep usually returns the pre-change
+        -- Note: Due to WoW's guild roster sync timing, get_ep_v3 usually returns the pre-change
         -- value, making prevEP accurate. In rare cases where roster has already synced, prevEP
         -- may reflect the post-change value, but this is unavoidable with the current API.
-        local prevEP = self:get_ep(who) or 0
+        local prevEP = self:get_ep_v3(who) or 0
         local newEP = prevEP + amount
         
         -- Colorize delta: green for positive, red for negative
@@ -1370,14 +1471,14 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
         -- Skip if already awarded in this call (check the actual target name)
         if not GuildRoll:TFind(award, actualName) then
           -- Get old EP and calculate new EP
-          local old = (self:get_ep(actualName) or 0)
+          local old = (self:get_ep_v3(actualName) or 0)
           local newep = actualEP + old
           
           -- Update EP with special_action="RAID" for local personal log
           for j = 1, GetNumGuildMembers(1) do
             local gname, _, _, _, gclass, _, gnote, gofficernote, _, _ = GetGuildRosterInfo(j)
             if gname == actualName then
-              self:update_epgp(newep, j, gname, gofficernote, "RAID")
+              self:update_epgp_v3(newep, j, gname, gofficernote, "RAID")
               break
             end
           end
@@ -1479,14 +1580,14 @@ function GuildRoll:UpdateGiveEPDialog(frame)
   
   if mainName then
     -- This is an alt with a main - show "Giving EP to MainName (main of AltName); current EP: X"
-    local epSuccess, ep = pcall(function() return GuildRoll:get_ep(mainName) end)
+    local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(mainName) end)
     if epSuccess and ep then
       currentEP = ep
     end
     headerString = string.format(L["GIVING_EP_MAIN_OF_ALT"], mainName, targetName, currentEP)
   else
     -- This is a main or alt without main found - show "Giving EP to CharName; current EP: X"
-    local epSuccess, ep = pcall(function() return GuildRoll:get_ep(targetName) end)
+    local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(targetName) end)
     if epSuccess and ep then
       currentEP = ep
     end
@@ -1607,9 +1708,9 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
     self:debugPrint(string.format("Skipping %s, already awarded.",getname))
     return false, getname
   end
-  local old =  (self:get_ep(getname) or 0)
+  local old =  (self:get_ep_v3(getname) or 0)
   local newep = ep + old
-  self:update_ep(getname,newep)
+  self:update_ep_v3(getname,newep)
   self:debugPrint(string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep))
   
   -- Always announce, log, and send addon message for both positive and negative EP
@@ -1690,11 +1791,11 @@ function GuildRoll:decay_ep_v3()
   local memberCount = 0
   for i = 1, GetNumGuildMembers(1) do
     local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
-    local prevEP = self:get_ep(name,officernote)
+    local prevEP = self:get_ep_v3(name,officernote)
     if (prevEP~=nil) then
       local newEP = self:num_round(prevEP*GuildRoll_decay)
       local changeEP = newEP - prevEP
-      self:update_epgp(newEP,i,name,officernote,"DECAY")
+      self:update_epgp_v3(newEP,i,name,officernote,"DECAY")
       
       -- Send addon message to notify the player of decay
       local addonMsg = string.format("%s;%s;%s;%s",name,"MainStanding",changeEP,"DECAY")
@@ -1727,9 +1828,9 @@ function GuildRoll:reset_ep_v3()
   if (IsGuildLeader()) then
     for i = 1, GetNumGuildMembers(1) do
       local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
-      local ep = self:get_ep(name,officernote)
+      local ep = self:get_ep_v3(name,officernote)
       if ep then
-        self:update_epgp(0,i,name,officernote)
+        self:update_epgp_v3(0,i,name,officernote)
       end
     end
     local msg = "All EP has been reset to 0."
@@ -1760,9 +1861,9 @@ end
 function GuildRoll:my_epgp_announce(use_main)
   local ep
   if (use_main) then
-    ep = self:get_ep(GuildRoll_main) or 0
+    ep = self:get_ep_v3(GuildRoll_main) or 0
   else
-    ep = self:get_ep(self._playerName) or 0
+    ep = self:get_ep_v3(self._playerName) or 0
   end
   local msg = string.format(L["You now have: %d MainStanding"], ep)
   self:defaultPrint(msg)
@@ -2073,7 +2174,7 @@ function GuildRoll:ProcessSetMainInput(inputMain)
   end
   
   -- Append main tag to public note
-  local newPublic = GuildRoll._trim_public_with_tag(playerPublicNote, mainTag, GuildRoll.MAX_NOTE_LEN)
+  local newPublic = _trim_public_with_tag(playerPublicNote, mainTag, MAX_NOTE_LEN)
   
   -- Write the new public note (wrapped in pcall for safety)
   local success, err = pcall(function()
@@ -2204,7 +2305,7 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
         local mainTag = string.match(publicNote, "({%a%a%a*})")
         if mainTag and type(mainTag) == "string" and string.len(mainTag) > 2 then
           -- Insert main tag before {EP} in officer note first (to avoid data loss)
-          local newOfficer = GuildRoll._insertTagBeforeEP(officerNote, mainTag)
+          local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
           
           -- Validate newOfficer is a string before writing
           if type(newOfficer) == "string" then
@@ -2718,14 +2819,14 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
     
     if mainName then
       -- This is an alt with a main - show "Giving EP to MainName (main of AltName); current EP: X"
-      local epSuccess, ep = pcall(function() return GuildRoll:get_ep(mainName) end)
+      local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(mainName) end)
       if epSuccess and ep then
         currentEP = ep
       end
       headerString = string.format(L["GIVING_EP_MAIN_OF_ALT"], mainName, targetName, currentEP)
     else
       -- This is a main or alt without main found - show "Giving EP to CharName; current EP: X"
-      local epSuccess, ep = pcall(function() return GuildRoll:get_ep(targetName) end)
+      local epSuccess, ep = pcall(function() return GuildRoll:get_ep_v3(targetName) end)
       if epSuccess and ep then
         currentEP = ep
       end
@@ -2857,16 +2958,16 @@ function GuildRoll:RollCommand(isSRRoll, bonus)
     local main = self:parseAlt(playerName)
     if main then
       -- If the player is an alt, use the main's EP
-      ep = self:get_ep(main) or 0
+      ep = self:get_ep_v3(main) or 0
       desc = "Alt of "..main
     else
       -- If not an alt, use the player's own EP
-      ep = self:get_ep(playerName) or 0
+      ep = self:get_ep_v3(playerName) or 0
       desc = "Main"
     end
   else
     -- If alt pooling is not enabled, just use the player's EP
-    ep = self:get_ep(playerName) or 0
+    ep = self:get_ep_v3(playerName) or 0
     desc = "Main"
   end
   
