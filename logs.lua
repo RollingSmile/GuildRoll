@@ -1,7 +1,18 @@
---- logs.lua: Guild activity logs display and management
--- Guard: Check if required libraries are available
-local T, D, C, _, L, CP = GuildRoll:InitLibraries()
-if not (T and D and C and L and CP) then return end
+-- Guard: Check if required libraries are available before proceeding
+-- This prevents runtime errors if Ace/Tablet/Dewdrop/Crayon/Compost are not loaded
+local libs = GuildRoll:InitLibraries({
+  "Tablet-2.0", 
+  "Dewdrop-2.0", 
+  "Crayon-2.0", 
+  "Compost-2.0", 
+  "AceLocale-2.2"
+})
+if not libs then return end
+local T = libs["Tablet-2.0"]
+local D = libs["Dewdrop-2.0"]
+local C = libs["Crayon-2.0"]
+local CP = libs["Compost-2.0"]
+local L = libs["AceLocale-2.2"]
 
 GuildRoll_logs = GuildRoll:NewModule("GuildRoll_logs", "AceDB-2.0")
 GuildRoll_logs.tmp = CP:Acquire()

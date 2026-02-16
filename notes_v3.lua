@@ -102,7 +102,12 @@ local function _attemptThrottledMigration(self)
   return false
 end
 
--- Initialize officer notes to {EP} format
+--- Initialize officer notes to {EP} format
+--- Ensures officer note contains {EP} pattern, converting from legacy {EP:GP} if needed
+--- @param guild_index number The guild roster index for the player
+--- @param name string The player name
+--- @param officernote string The current officer note
+--- @return string The updated officer note with {EP} format
 function GuildRoll:init_notes_v3(guild_index,name,officernote)
   local ep = self:get_ep_v3(name,officernote)
   if ep == nil then
@@ -143,7 +148,14 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
   return officernote
 end
 
--- Update EP value in officer note (v3 - EP-only implementation)
+--- Update EP value in officer note (v3 - EP-only implementation)
+--- Initializes notes to {EP} format if needed, then updates EP value
+--- @param ep number The new EP value to set
+--- @param guild_index number The guild roster index for the player
+--- @param name string The player name
+--- @param officernote string The current officer note
+--- @param special_action string|nil Optional special action for logging
+--- @return string|nil The updated officer note, or nil on error
 function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action)
   -- EP-only implementation: initialize notes to {EP} format, update EP value
   
@@ -215,17 +227,23 @@ function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action
   end
 end
 
--- Update EP value by player name
+--- Update EP value by player name
+--- Finds the player in guild roster and updates their EP value
+--- @param getname string The player name to update
+--- @param ep number The new EP value to set
 function GuildRoll:update_ep_v3(getname,ep)
-  for i = 1, GetNumGuildMembers(1) do
-    local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
+  GuildRoll:ForEachGuildMember(function(i, name, class, officernote)
     if (name==getname) then 
       self:update_epgp_v3(ep,i,name,officernote)
     end
-  end  
+  end)
 end
 
--- Get EP value from officer note or by player name
+--- Get EP value from officer note or by player name
+--- Supports both new {EP} format and legacy {EP:GP} format
+--- @param getname string The player name to lookup (optional if officernote provided)
+--- @param officernote string|nil Optional officer note to parse directly
+--- @return number|nil The EP value if found, nil otherwise
 function GuildRoll:get_ep_v3(getname,officernote)
   if (officernote) then
     -- Try new {EP} format first

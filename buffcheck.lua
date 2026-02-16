@@ -1,7 +1,14 @@
---- buffcheck.lua: Raid buff and consumable checking
--- Guard: Check if required libraries are available
-local T, D, C, BC, L = GuildRoll:InitLibraries()
-if not (T and D and C and L) then return end
+-- Guard: Check if required libraries are available before proceeding
+local libs = GuildRoll:InitLibraries(
+  {"Tablet-2.0", "Dewdrop-2.0", "Crayon-2.0", "AceLocale-2.2"},
+  {"Babble-Class-2.2"}  -- Babble-Class-2.2 is optional
+)
+if not libs then return end
+local T = libs["Tablet-2.0"]
+local D = libs["Dewdrop-2.0"]
+local C = libs["Crayon-2.0"]
+local L = libs["AceLocale-2.2"]
+local BC = libs["Babble-Class-2.2"]  -- May be nil if not loaded
 
 GuildRoll_BuffCheck = GuildRoll:NewModule("GuildRoll_BuffCheck", "AceDB-2.0")
 

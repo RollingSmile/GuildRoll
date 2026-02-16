@@ -1,7 +1,18 @@
---- alts.lua: Guild alternate characters tracking and management
--- Guard: Check if required libraries are available
-local T, D, C, BC, L = GuildRoll:InitLibraries()
-if not (T and D and C and BC and L) then return end
+-- Guard: Check if required libraries are available before proceeding
+-- This prevents runtime errors if Ace/Tablet/Dewdrop/Crayon are not loaded
+local libs = GuildRoll:InitLibraries({
+  "Tablet-2.0", 
+  "Dewdrop-2.0", 
+  "Crayon-2.0", 
+  "Babble-Class-2.2", 
+  "AceLocale-2.2"
+})
+if not libs then return end
+local T = libs["Tablet-2.0"]
+local D = libs["Dewdrop-2.0"]
+local C = libs["Crayon-2.0"]
+local BC = libs["Babble-Class-2.2"]
+local L = libs["AceLocale-2.2"]
 
 GuildRollAlts = GuildRoll:NewModule("GuildRollAlts", "AceDB-2.0")
 

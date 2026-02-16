@@ -1,12 +1,17 @@
 -- utils.lua: Utility functions for GuildRoll
 -- Contains helper functions for string manipulation, numeric operations, and member verification
 
--- Math utility: Round number to nearest integer
+--- Math utility: Round number to nearest integer
+--- @param i number The number to round
+--- @return number The rounded integer value
 function GuildRoll:num_round(i)
   return math.floor(i+0.5)
 end
 
--- String utility: Split string by delimiter, returns multiple values
+--- String utility: Split string by delimiter, returns multiple values
+--- @param delimiter string The delimiter character(s) to split on (default ":")
+--- @param subject string The string to split
+--- @return ... Multiple return values, one for each split segment
 function GuildRoll:strsplit(delimiter, subject)
   local delimiter, fields = delimiter or ":", {}
   local pattern = string.format("([^%s]+)", delimiter)
@@ -14,20 +19,29 @@ function GuildRoll:strsplit(delimiter, subject)
   return unpack(fields)
 end
 
--- String utility: Split string by delimiter, returns table
+--- String utility: Split string by delimiter, returns table
+--- @param delimiter string The delimiter character(s) to split on
+--- @param subject string The string to split
+--- @return table Table containing split segments
 function GuildRoll:strsplitT(delimiter, subject)
   local tbl = {GuildRoll:strsplit(delimiter, subject)}
   return tbl
 end
 
--- String utility: Convert word to CamelCase
+--- String utility: Convert word to CamelCase
+--- @param word string The word to convert
+--- @return string The word in CamelCase format
 function GuildRoll:camelCase(word)
   return string.gsub(word,"(%a)([%w_']*)",function(head,tail) 
     return string.format("%s%s",string.upper(head),string.lower(tail)) 
   end)
 end
 
--- Version parsing utility: Compare addon versions
+--- Version parsing utility: Compare addon versions
+--- @param version string The current version string (e.g., "1.2.3")
+--- @param otherVersion string|nil Optional version string to compare against
+--- @return boolean|nil true if otherVersion is newer, nil if same or current is newer
+--- @return string|nil Version component that differs ("major", "minor", or "patch")
 function GuildRoll:parseVersion(version,otherVersion)
   if version then  
     if not GuildRoll._version then
@@ -80,12 +94,25 @@ function GuildRoll:parseVersion(version,otherVersion)
   end
 end
 
--- Guild member verification wrapper (with silent flag)
+--- Guild member verification wrapper (with silent flag)
+--- @param name string Player name to verify
+--- @param silent boolean If true, suppresses error messages
+--- @return string|nil Guild member name if found
+--- @return string|nil Guild member class if found
+--- @return string|nil Guild member rank if found
+--- @return string|nil Guild member officer note if found
 function GuildRoll:verifyGuildMember(name,silent)
   return GuildRoll:verifyGuildMember(name,silent,false)
 end
 
--- Guild member verification: Check if player is in guild and meets requirements
+--- Guild member verification: Check if player is in guild and meets requirements
+--- @param name string Player name to verify
+--- @param silent boolean If true, suppresses error messages
+--- @param ignorelevel boolean If true, ignores minimum level requirement
+--- @return string|nil Guild member name if found
+--- @return string|nil Guild member class if found
+--- @return string|nil Guild member rank if found
+--- @return string|nil Guild member officer note if found
 function GuildRoll:verifyGuildMember(name,silent,ignorelevel)
   for i=1,GetNumGuildMembers(1) do
     local g_name, g_rank, g_rankIndex, g_level, g_class, g_zone, g_note, g_officernote, g_online = GetGuildRosterInfo(i)
@@ -99,7 +126,9 @@ function GuildRoll:verifyGuildMember(name,silent,ignorelevel)
   return
 end
 
--- Raid utility: Check if player is in raid
+--- Raid utility: Check if player is in raid
+--- @param name string Player name to check
+--- @return boolean true if player is in raid, false otherwise
 function GuildRoll:inRaid(name)
   for i=1,GetNumRaidMembers() do
     if name == (UnitName(raidUnit[i])) then
@@ -109,7 +138,8 @@ function GuildRoll:inRaid(name)
   return false
 end
 
--- Loot utility: Check if player is loot master
+--- Loot utility: Check if player is loot master
+--- @return boolean true if current player is loot master, false otherwise
 function GuildRoll:lootMaster()
   local method, lootmasterID = GetLootMethod()
   if method == "master" and lootmasterID == 0 then
@@ -119,7 +149,10 @@ function GuildRoll:lootMaster()
   end
 end
 
--- Table utility: Find element in table
+--- Table utility: Find element in table
+--- @param tbl table The table to search
+--- @param item any The item to find
+--- @return number|nil Index of item if found, nil otherwise
 function GuildRoll:TFind(tbl, item)
   if not tbl then return nil end
   for i, v in ipairs(tbl) do
@@ -140,7 +173,8 @@ function GuildRoll:StripRealm(name)
   return string.gsub(name, "%-[^%-]+$", "")
 end
 
--- Player utility: Get current player's name with fallback
+--- Player utility: Get current player's name with fallback
+--- @return string The current player's name, or "Unknown" if not available
 function GuildRoll:GetAdminName()
   return UnitName("player") or "Unknown"
 end
