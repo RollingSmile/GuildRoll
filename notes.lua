@@ -1,4 +1,4 @@
--- notes_v3.lua: Note management and EP system for GuildRoll
+-- notes.lua: Note management and EP system for GuildRoll
 -- Contains functions for managing officer notes in {EP} format and migration utilities
 
 -- Constants for note length and migration timing
