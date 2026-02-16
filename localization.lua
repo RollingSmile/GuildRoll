@@ -26,6 +26,7 @@ L:RegisterTranslations("enUS", function() return {
   ["Binds"] = true,
   ["Looter"] = true,
   ["AuxStanding Action"] = "EP Action",
+  -- standings
   ["Ctrl-C to copy. Esc to close."] = true,
   ["Ctrl-V to paste data. Esc to close."] = true,
   ["Imported %d members."] = true,
