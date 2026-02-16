@@ -37,7 +37,7 @@ Libs\ChatThrottleLib.lua
 localization.lua
 guildroll.lua
 utils.lua
-ui_helpers.lua
+
 notes_v3.lua
 roll.lua
 standings.lua 
