@@ -7,6 +7,7 @@ L:RegisterTranslations("enUS", function() return {
   ["Refresh window"] = true,
   ["Clear"] = true,
   ["Name"] = true,
+  ["Rank"] = true,
   ["Raid Only"] = true,
   ["Only show members in raid."] = true,
   ["Restarted"] = true,
