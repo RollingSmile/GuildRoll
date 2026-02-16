@@ -124,14 +124,14 @@ Results will print here when done.]],
   ["Account MainStanding to %s."] = "Account EP to %s.",
   ["Account AuxStanding to %s."] = "Account EP to %s.", -- Internal use only (not GUI)
   -- Error messages and validation
-  ["Invalid CSR input. Please enter a number between 0 and 15."] = true,
+  ["Invalid CSR input. Please enter a number between 0 and 25."] = true,
   ["Invalid EP value entered."] = true,
   ["EP value out of range (%s to %s)"] = true,
   -- StaticPopup prompts
   ["Enter EP to award to raid members:"] = true,
   ["GIVING_EP_MAIN_OF_ALT"] = "Giving EP to %s (main of %s); current EP: %d",
   ["GIVING_EP_TO_CHAR"] = "Giving EP to %s; current EP: %d",
-  ["Enter number of weeks you SR this item (0..15):"] = true,
+  ["Enter number of weeks you SR this item (0..25):"] = true,
   ["guildroll options"] = true,
   ["+MainStanding to Member"] = "+EP to Member",
   ["Account MainStanding for member."] = "Account EP for member.",
