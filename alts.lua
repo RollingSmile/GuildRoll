@@ -1,7 +1,7 @@
 --- alts.lua: Guild alternate characters tracking and management
 -- Guard: Check if required libraries are available
 local T, D, C, BC, L = GuildRoll:InitLibraries()
-if not (T and D and C and L) then return end
+if not (T and D and C and BC and L) then return end
 
 GuildRollAlts = GuildRoll:NewModule("GuildRollAlts", "AceDB-2.0")
 

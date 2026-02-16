@@ -1,7 +1,7 @@
 --- standings.lua: Guild member standings display and management
 -- Guard: Check if required libraries are available
 local T, D, C, BC, L = GuildRoll:InitLibraries()
-if not (T and D and C and L) then return end
+if not (T and D and C and BC and L) then return end
 local _G = getfenv(0)
 
 GuildRoll_standings = GuildRoll:NewModule("GuildRoll_standings", "AceDB-2.0")
