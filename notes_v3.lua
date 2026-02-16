@@ -232,12 +232,11 @@ end
 --- @param getname string The player name to update
 --- @param ep number The new EP value to set
 function GuildRoll:update_ep_v3(getname,ep)
-  for i = 1, GetNumGuildMembers(1) do
-    local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
+  GuildRoll:ForEachGuildMember(function(i, name, class, officernote)
     if (name==getname) then 
       self:update_epgp_v3(ep,i,name,officernote)
     end
-  end  
+  end)
 end
 
 --- Get EP value from officer note or by player name

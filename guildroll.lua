@@ -47,6 +47,31 @@ function GuildRoll:InitLibraries(libraryNames, optionalLibraries)
   return libs
 end
 
+--- Helper: Iterate through all guild members with a callback
+--- Encapsulates the common pattern of looping through guild roster
+--- @param callback function Callback function(index, name, class, officernote) called for each member
+--- @return number|nil Number of members processed, or nil if roster not available
+function GuildRoll:ForEachGuildMember(callback)
+  if type(callback) ~= "function" then
+    self:debugPrint("ForEachGuildMember: callback must be a function")
+    return nil
+  end
+  
+  local numMembers = GetNumGuildMembers(1)
+  if not numMembers or numMembers == 0 then
+    return 0
+  end
+  
+  for i = 1, numMembers do
+    local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
+    if name then
+      callback(i, name, class, officernote)
+    end
+  end
+  
+  return numMembers
+end
+
 -- Library imports
 local D = AceLibrary("Dewdrop-2.0")     -- Dropdown menus
 local BZ = AceLibrary("Babble-Zone-2.2") -- Zone name translations
