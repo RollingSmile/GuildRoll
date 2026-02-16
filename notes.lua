@@ -52,20 +52,12 @@ local function _insertTagBeforeEP(officernote, tag)
   local escapedTag = string.gsub(tag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
   officernote = string.gsub(officernote, escapedTag, "")
   
-  -- Try to find new {EP} pattern first (e.g., {123})
+  -- Try to find {EP} pattern (e.g., {123})
   local _, _, prefix, ep, postfix = string.find(officernote, "^(.-)({%d+})(.*)$")
   
   if ep then
-    -- Found new {EP} pattern; insert tag before it
+    -- Found {EP} pattern; insert tag before it
     return prefix .. tag .. ep .. postfix
-  end
-  
-  -- Try to find legacy {EP:GP} pattern (e.g., {123:456})
-  _, _, prefix, epgp, postfix = string.find(officernote, "^(.-)({%d+:%d+})(.*)$")
-  
-  if epgp then
-    -- Found legacy pattern; insert tag before it
-    return prefix .. tag .. epgp .. postfix
   else
     -- No pattern found; append tag to end
     return officernote .. tag
@@ -109,10 +101,6 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
     -- Initialize with {EP} format
     local initstring = string.format("{%d}",0)
     local newnote = string.format("%s%s",officernote,initstring)
-    -- Remove any legacy {EP:GP} patterns
-    newnote = string.gsub(newnote,"(.*)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
-      return string.format("%s%s",prefix,postfix)
-    end)
     -- Ensure new tag fits within note length
     if string.len(newnote) > MAX_NOTE_LEN then
       local tagLen = string.len(initstring)
@@ -121,23 +109,6 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
       newnote = trimmed .. initstring
     end
     officernote = newnote
-  else
-    -- Note already has EP value, ensure proper format
-    -- If it has legacy {EP:GP}, convert to {EP}
-    local hasLegacy = string.find(officernote,"{%d+:%-?%d+}")
-    if hasLegacy then
-      -- Convert legacy {EP:GP} to {EP}
-      -- Pattern captures: prefix, fullTag, epVal, gpVal, postfix (5 total)
-      local _, _, prefix, fullTag, epVal, gpVal, postfix = string.find(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
-      if epVal then
-        -- Convert to new format
-        local newTag = string.format("{%d}", tonumber(epVal))
-        local newNote = (prefix or "") .. newTag .. (postfix or "")
-        if string.len(newNote) <= MAX_NOTE_LEN then
-          officernote = newNote
-        end
-      end
-    end
   end
   GuildRosterSetOfficerNote(guild_index,officernote,true)
   return officernote
@@ -155,19 +126,10 @@ function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action
   
   local newnote
   if ep ~= nil then 
-    -- Try to match legacy {EP:GP} format first
-    local _, _, prefix, fullTag, oldEP, oldGP, postfix = string.find(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
-    if oldEP then
-      -- Has legacy format - convert to new {EP} format
-      newnote = string.gsub(officernote,"(.-)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
-        return string.format("%s{%d}%s",prefix,ep,postfix)
-      end)
-    else
-      -- Update {EP} format
-      newnote = string.gsub(officernote,"(.-)({%d+})(.*)",function(prefix,tag,postfix)
-        return string.format("%s{%d}%s",prefix,ep,postfix)
-      end)
-    end
+    -- Update {EP} format
+    newnote = string.gsub(officernote,"(.-)({%d+})(.*)",function(prefix,tag,postfix)
+      return string.format("%s{%d}%s",prefix,ep,postfix)
+    end)
   end
   
   if newnote then 
@@ -228,25 +190,17 @@ end
 -- Get EP value from officer note or by player name
 function GuildRoll:get_ep_v3(getname,officernote)
   if (officernote) then
-    -- Try new {EP} format first
+    -- Extract from {EP} format
     local _,_,ep = string.find(officernote,".*{(%d+)}.*")
-    if ep then
-      return tonumber(ep)
-    end
-    -- Fall back to legacy {EP:GP} format
-    local _,_,ep_legacy = string.find(officernote,".*{(%d+):%-?%d+}.*")
-    return tonumber(ep_legacy)
+    return tonumber(ep)
   end
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
-    -- Try new {EP} format first
-    local _,_,ep = string.find(officernote,".*{(%d+)}.*")
-    if ep and (name==getname) then
+    if (name==getname) then
+      -- Extract from {EP} format
+      local _,_,ep = string.find(officernote,".*{(%d+)}.*")
       return tonumber(ep)
     end
-    -- Fall back to legacy {EP:GP} format
-    local _,_,ep_legacy = string.find(officernote,".*{(%d+):%-?%d+}.*")
-    if (name==getname) then return tonumber(ep_legacy) end
   end
   return
 end
