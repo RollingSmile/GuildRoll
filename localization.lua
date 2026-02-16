@@ -27,10 +27,10 @@ L:RegisterTranslations("enUS", function() return {
   ["Looter"] = true,
   ["AuxStanding Action"] = "EP Action",
   -- migrations
-  ["Updated %d members to v3 storage."] = true,
-  ["Countdown"] = true,
-  ["Rank"] = true,
-  ["OnAlt"] = true,
+  --["Updated %d members to v3 storage."] = true,
+  --["Countdown"] = true,
+  --["Rank"] = true,
+  --["OnAlt"] = true,
   -- standings
   ["Ctrl-C to copy. Esc to close."] = true,
   ["Ctrl-V to paste data. Esc to close."] = true,
