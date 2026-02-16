@@ -855,8 +855,8 @@ function GuildRoll:delayedInit()
     
     -- Auto-run migration 5 seconds after init for admins
     self:ScheduleEvent("guildroll_auto_migrate", function()
-      self._attemptThrottledMigration(self)
-    end, self.MIGRATION_AUTO_DELAY_SECONDS)
+      GuildRoll._attemptThrottledMigration(self)
+    end, GuildRoll.MIGRATION_AUTO_DELAY_SECONDS)
   end
   
   -- Schedule alt main prompt check after a short delay to allow roster to populate
@@ -996,7 +996,7 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     end
     
     -- Attempt throttled migration
-    self._attemptThrottledMigration(self)
+    GuildRoll._attemptThrottledMigration(self)
     return
   end
   
@@ -2073,7 +2073,7 @@ function GuildRoll:ProcessSetMainInput(inputMain)
   end
   
   -- Append main tag to public note
-  local newPublic = self._trim_public_with_tag(playerPublicNote, mainTag, self.MAX_NOTE_LEN)
+  local newPublic = GuildRoll._trim_public_with_tag(playerPublicNote, mainTag, GuildRoll.MAX_NOTE_LEN)
   
   -- Write the new public note (wrapped in pcall for safety)
   local success, err = pcall(function()
@@ -2204,7 +2204,7 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
         local mainTag = string.match(publicNote, "({%a%a%a*})")
         if mainTag and type(mainTag) == "string" and string.len(mainTag) > 2 then
           -- Insert main tag before {EP} in officer note first (to avoid data loss)
-          local newOfficer = self._insertTagBeforeEP(officerNote, mainTag)
+          local newOfficer = GuildRoll._insertTagBeforeEP(officerNote, mainTag)
           
           -- Validate newOfficer is a string before writing
           if type(newOfficer) == "string" then
