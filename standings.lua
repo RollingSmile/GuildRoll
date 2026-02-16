@@ -1,28 +1,7 @@
--- Guard: Check if required libraries are available before proceeding
--- This prevents runtime errors if Ace/Tablet/Dewdrop/Crayon are not loaded
-local T, D, C, BC, L
-do
-  local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
-  if not ok or not result then return end
-  T = result
-  
-  ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
-  if not ok or not result then return end
-  D = result
-  
-  ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
-  if not ok or not result then return end
-  C = result
-  
-  ok, result = pcall(function() return AceLibrary("Babble-Class-2.2") end)
-  if not ok or not result then return end
-  BC = result
-  
-  ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if not ok or not result or type(result.new) ~= "function" then return end
-  ok, L = pcall(function() return result:new("guildroll") end)
-  if not ok or not L then return end
-end
+--- standings.lua: Guild member standings display and management
+-- Guard: Check if required libraries are available
+local T, D, C, BC, L = GuildRoll:InitLibraries()
+if not (T and D and C and L) then return end
 local _G = getfenv(0)
 
 GuildRoll_standings = GuildRoll:NewModule("GuildRoll_standings", "AceDB-2.0")

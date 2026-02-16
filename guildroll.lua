@@ -11,6 +11,49 @@ local C = AceLibrary("Crayon-2.0")      -- Chat color formatting
 local BC = AceLibrary("Babble-Class-2.2") -- Class name translations
 local T = AceLibrary("Tablet-2.0")      -- Tooltip display
 local L = AceLibrary("AceLocale-2.2"):new("guildroll") -- Localization
+
+-- Centralized library initialization for modules
+-- Returns: T, D, C, BC, L, CP (Tablet, Dewdrop, Crayon, Babble-Class, Locale, Compost)
+-- BC (Babble-Class) and CP (Compost) are optional and may be nil
+function GuildRoll:InitLibraries()
+  local T, D, C, BC, L, CP
+  
+  -- Load Tablet-2.0 (required)
+  local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
+  if not ok or not result then return nil, nil, nil, nil, nil, nil end
+  T = result
+  
+  -- Load Dewdrop-2.0 (required)
+  ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
+  if not ok or not result then return nil, nil, nil, nil, nil, nil end
+  D = result
+  
+  -- Load Crayon-2.0 (required)
+  ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
+  if not ok or not result then return nil, nil, nil, nil, nil, nil end
+  C = result
+  
+  -- Load Babble-Class-2.2 (optional)
+  ok, result = pcall(function() return AceLibrary("Babble-Class-2.2") end)
+  if ok and result then
+    BC = result
+  end
+  
+  -- Load AceLocale-2.2 (required)
+  ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
+  if not ok or not result or type(result.new) ~= "function" then return nil, nil, nil, nil, nil, nil end
+  ok, L = pcall(function() return result:new("guildroll") end)
+  if not ok or not L then return nil, nil, nil, nil, nil, nil end
+  
+  -- Load Compost-2.0 (optional)
+  ok, result = pcall(function() return AceLibrary("Compost-2.0") end)
+  if ok and result then
+    CP = result
+  end
+  
+  return T, D, C, BC, L, CP
+end
+
 GuildRoll.VARS = {
   CSRWeekBonus = 10,  -- Bonus per week for CSR (weeks 2-15: (weeks-1)*10)
   minPE = 0,

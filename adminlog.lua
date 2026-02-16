@@ -52,29 +52,8 @@ Provides persistent, guild-wide synchronized admin log with delta broadcast and 
 --]]
 
 -- Guard: Check if required libraries are available
-local T, D, C, CP, L
-do
-  local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
-  if not ok or not result then return end
-  T = result
-  
-  ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
-  if not ok or not result then return end
-  D = result
-  
-  ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
-  if not ok or not result then return end
-  C = result
-  
-  ok, result = pcall(function() return AceLibrary("Compost-2.0") end)
-  if not ok or not result then return end
-  CP = result
-  
-  ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if not ok or not result or type(result.new) ~= "function" then return end
-  ok, L = pcall(function() return result:new("guildroll") end)
-  if not ok or not L then return end
-end
+local T, D, C, BC, L, CP = GuildRoll:InitLibraries()
+if not (T and D and C and L and CP) then return end
 
 -- Initialize saved variables
 GuildRoll_adminLogSaved = GuildRoll_adminLogSaved or {}
