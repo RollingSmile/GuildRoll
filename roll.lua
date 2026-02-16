@@ -133,9 +133,9 @@ local function ExecuteCommand(command)
             GuildRoll:RollCommand(true, 0)
         end
     elseif command == "roll csr" then
-        -- Use static popup dialog to input CSR weeks (0..15) and validate
+        -- Use static popup dialog to input CSR weeks (0..25) and validate
         StaticPopupDialogs["CSR_INPUT"] = {
-            text = L["Enter number of weeks you SR this item (0..15):"],
+            text = L["Enter number of weeks you SR this item (0..25):"],
             button1 = TEXT(ACCEPT),
             button2 = TEXT(CANCEL),
             hasEditBox = 1,
@@ -148,7 +148,7 @@ local function ExecuteCommand(command)
                     if GuildRoll and GuildRoll.calculateBonus then
                         local bonus = GuildRoll:calculateBonus(number)
                         if bonus == nil then
-                            print("Invalid number entered. Valid values: 0,1 or 2..15")
+                            print("Invalid number entered. Valid values: 0,1 or 2..25")
                         else
                             if GuildRoll.RollCommand then
                                 GuildRoll:RollCommand(true, bonus)
@@ -181,7 +181,7 @@ local function ExecuteCommand(command)
                     if GuildRoll and GuildRoll.calculateBonus then
                         local bonus = GuildRoll:calculateBonus(number)
                         if bonus == nil then
-                            print("Invalid number entered. Valid values: 0,1 or 2..15")
+                            print("Invalid number entered. Valid values: 0,1 or 2..25")
                         else
                             if GuildRoll.RollCommand then
                                 GuildRoll:RollCommand(true, bonus)
