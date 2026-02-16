@@ -116,7 +116,7 @@ function GuildRoll_standings:Export()
   local t = {}
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
-    local ep = (GuildRoll:get_ep_v3(name,officernote) or 0) 
+    local ep = (GuildRoll:get_ep(name,officernote) or 0) 
     if ep > 0 then
       table.insert(t,{name,ep})
     end
@@ -168,7 +168,7 @@ function GuildRoll_standings.import()
       if (ep_value) then
         count = count + 1
         -- Update EP value
-        GuildRoll:update_epgp_v3(ep_value,i,name,officernote)
+        GuildRoll:update_epgp(ep_value,i,name,officernote)
         t[name]=nil
       end
     end
@@ -393,7 +393,7 @@ function GuildRoll_standings:BuildStandingsTable()
   GuildRoll.alts = {}
   for i = 1, GetNumGuildMembers(1) do
     local name, g_rank, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
-    local ep = (GuildRoll:get_ep_v3(name,officernote) or 0) 
+    local ep = (GuildRoll:get_ep(name,officernote) or 0) 
     local main_name, main_class, main_rank = GuildRoll:parseAlt(name,officernote)
     
     -- displayName starts as the character name

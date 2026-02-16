@@ -95,8 +95,8 @@ local function _attemptThrottledMigration(self)
 end
 
 -- Initialize officer notes to {EP} format
-function GuildRoll:init_notes_v3(guild_index,name,officernote)
-  local ep = self:get_ep_v3(name,officernote)
+function GuildRoll:init_notes(guild_index,name,officernote)
+  local ep = self:get_ep(name,officernote)
   if ep == nil then
     -- Initialize with {EP} format
     local initstring = string.format("{%d}",0)
@@ -114,15 +114,15 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
   return officernote
 end
 
--- Update EP value in officer note (v3 - EP-only implementation)
-function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action)
+-- Update EP value in officer note
+function GuildRoll:update_epgp(ep,guild_index,name,officernote,special_action)
   -- EP-only implementation: initialize notes to {EP} format, update EP value
   
   -- Initialize notes if needed (ensures {EP} format)
-  officernote = self:init_notes_v3(guild_index,name,officernote)
+  officernote = self:init_notes(guild_index,name,officernote)
   
   -- Get previous EP value for logging (after note initialization)
-  local prevEP = self:get_ep_v3(name,officernote) or 0
+  local prevEP = self:get_ep(name,officernote) or 0
   
   local newnote
   if ep ~= nil then 
@@ -178,17 +178,17 @@ function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action
 end
 
 -- Update EP value by player name
-function GuildRoll:update_ep_v3(getname,ep)
+function GuildRoll:update_ep(getname,ep)
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
     if (name==getname) then 
-      self:update_epgp_v3(ep,i,name,officernote)
+      self:update_epgp(ep,i,name,officernote)
     end
   end  
 end
 
 -- Get EP value from officer note or by player name
-function GuildRoll:get_ep_v3(getname,officernote)
+function GuildRoll:get_ep(getname,officernote)
   if (officernote) then
     -- Extract from {EP} format
     local _,_,ep = string.find(officernote,".*{(%d+)}.*")
