@@ -1,29 +1,14 @@
 -- Guard: Check if required libraries are available before proceeding
-local T, D, C, L, BC
-do
-  local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
-  if not ok or not result then return end
-  T = result
-  
-  ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
-  if not ok or not result then return end
-  D = result
-  
-  ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
-  if not ok or not result then return end
-  C = result
-  
-  ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if not ok or not result or type(result.new) ~= "function" then return end
-  ok, L = pcall(function() return result:new("guildroll") end)
-  if not ok or not L then return end
-  
-  -- Optional: Babble-Class-2.2 for class name normalization
-  ok, result = pcall(function() return AceLibrary("Babble-Class-2.2") end)
-  if ok and result then
-    BC = result
-  end
-end
+local libs = GuildRoll:InitLibraries(
+  {"Tablet-2.0", "Dewdrop-2.0", "Crayon-2.0", "AceLocale-2.2"},
+  {"Babble-Class-2.2"}  -- Babble-Class-2.2 is optional
+)
+if not libs then return end
+local T = libs["Tablet-2.0"]
+local D = libs["Dewdrop-2.0"]
+local C = libs["Crayon-2.0"]
+local L = libs["AceLocale-2.2"]
+local BC = libs["Babble-Class-2.2"]  -- May be nil if not loaded
 
 GuildRoll_BuffCheck = GuildRoll:NewModule("GuildRoll_BuffCheck", "AceDB-2.0")
 

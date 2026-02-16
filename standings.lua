@@ -1,28 +1,18 @@
 -- Guard: Check if required libraries are available before proceeding
 -- This prevents runtime errors if Ace/Tablet/Dewdrop/Crayon are not loaded
-local T, D, C, BC, L
-do
-  local ok, result = pcall(function() return AceLibrary("Tablet-2.0") end)
-  if not ok or not result then return end
-  T = result
-  
-  ok, result = pcall(function() return AceLibrary("Dewdrop-2.0") end)
-  if not ok or not result then return end
-  D = result
-  
-  ok, result = pcall(function() return AceLibrary("Crayon-2.0") end)
-  if not ok or not result then return end
-  C = result
-  
-  ok, result = pcall(function() return AceLibrary("Babble-Class-2.2") end)
-  if not ok or not result then return end
-  BC = result
-  
-  ok, result = pcall(function() return AceLibrary("AceLocale-2.2") end)
-  if not ok or not result or type(result.new) ~= "function" then return end
-  ok, L = pcall(function() return result:new("guildroll") end)
-  if not ok or not L then return end
-end
+local libs = GuildRoll:InitLibraries({
+  "Tablet-2.0", 
+  "Dewdrop-2.0", 
+  "Crayon-2.0", 
+  "Babble-Class-2.2", 
+  "AceLocale-2.2"
+})
+if not libs then return end
+local T = libs["Tablet-2.0"]
+local D = libs["Dewdrop-2.0"]
+local C = libs["Crayon-2.0"]
+local BC = libs["Babble-Class-2.2"]
+local L = libs["AceLocale-2.2"]
 local _G = getfenv(0)
 
 GuildRoll_standings = GuildRoll:NewModule("GuildRoll_standings", "AceDB-2.0")
@@ -114,13 +104,12 @@ function GuildRoll_standings:Export()
   guildep_export.action:Hide()
   guildep_export.title:SetText(C:Gold(L["Ctrl-C to copy. Esc to close."]))
   local t = {}
-  for i = 1, GetNumGuildMembers(1) do
-    local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
+  GuildRoll:ForEachGuildMember(function(i, name, class, officernote)
     local ep = (GuildRoll:get_ep_v3(name,officernote) or 0) 
     if ep > 0 then
       table.insert(t,{name,ep})
     end
-  end 
+  end)
   table.sort(t, function(a,b)
       return tonumber(a[2]) > tonumber(b[2])
     end)
@@ -162,8 +151,7 @@ function GuildRoll_standings.import()
   if (found) then
     local count = 0
     guildep_export.edit:SetText("")
-    for i=1,GetNumGuildMembers(1) do
-      local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
+    GuildRoll:ForEachGuildMember(function(i, name, class, officernote)
       local ep_value = t[name]
       if (ep_value) then
         count = count + 1
@@ -171,7 +159,7 @@ function GuildRoll_standings.import()
         GuildRoll:update_epgp_v3(ep_value,i,name,officernote)
         t[name]=nil
       end
-    end
+    end)
     GuildRoll:defaultPrint(string.format(L["Imported %d members."],count))
     local report = string.format(L["Imported %d members.\n"],count)
     report = string.format(L["%s\nFailed to import:"],report)
@@ -355,8 +343,7 @@ function GuildRoll_standings:BuildStandingsTable()
   local main_to_alts = {}  -- Maps main name to list of online alts in raid
   
   -- First pass: Build alt-to-main mapping and main-to-alts mapping
-  for i = 1, GetNumGuildMembers(1) do
-    local name, g_rank, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
+  GuildRoll:ForEachGuildMember(function(i, name, class, officernote)
     local main_name, main_class, main_rank = GuildRoll:parseAlt(name, officernote)
     
     if main_name then
@@ -369,7 +356,7 @@ function GuildRoll_standings:BuildStandingsTable()
       end
       table.insert(main_to_alts[main_name], name)
     end
-  end
+  end)
   
   -- Build raid presence set and track which mains to show via alts
   local main_via_alt = {}  -- Mains to show because their alt is in raid
@@ -391,8 +378,8 @@ function GuildRoll_standings:BuildStandingsTable()
   
   -- Second pass: Build standings table
   GuildRoll.alts = {}
-  for i = 1, GetNumGuildMembers(1) do
-    local name, g_rank, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
+  GuildRoll:ForEachGuildMember(function(i, name, class, officernote)
+    local g_rank = select(2, GetGuildRosterInfo(i))
     local ep = (GuildRoll:get_ep_v3(name,officernote) or 0) 
     local main_name, main_class, main_rank = GuildRoll:parseAlt(name,officernote)
     
@@ -446,7 +433,7 @@ function GuildRoll_standings:BuildStandingsTable()
         table.insert(t,{displayName,class,armor_class,ep,ep,name,g_rank})
       end
     end
-  end
+  end)
   
   if (GuildRoll_groupbyclass) then
     table.sort(t, function(a,b)
