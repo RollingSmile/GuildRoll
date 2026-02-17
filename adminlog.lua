@@ -821,6 +821,11 @@ function GuildRoll:RequestAdminLogSnapshot(since_ts)
   requestAdminLogSnapshot(since_ts)
 end
 
+-- Public API: Handle incoming admin log messages from addon comms
+function GuildRoll:HandleAdminLogMessage(prefix, message, channel, sender)
+  handleAdminLogMessage(prefix, message, channel, sender)
+end
+
 -- Module initialization
 function GuildRoll_AdminLog:OnEnable()
   -- Load saved entries

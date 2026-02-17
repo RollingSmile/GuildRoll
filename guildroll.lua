@@ -1101,6 +1101,14 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     return
   end
   
+  -- Handle ADMINLOG messages (admin log synchronization)
+  if message and string.find(message, "^ADMINLOG;") then
+    if self.HandleAdminLogMessage then
+      self:HandleAdminLogMessage(prefix, message, channel, sender)
+    end
+    return
+  end
+  
   local who,what,amount,raidFlag
   -- Parse 3-field or 4-field message format for backward compatibility
   for name,epgp,change,flag in string.gfind(message,"([^;]+);([^;]+);([^;]+);?([^;]*)") do
