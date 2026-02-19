@@ -1080,6 +1080,16 @@ end
 function GuildRoll:addonComms(prefix,message,channel,sender)
   if prefix ~= self.VARS.prefix then return end -- we don't care for messages from other addons
   if sender == self._playerName then return end -- we don't care for messages from ourselves
+  
+  -- Handle ADMINLOG messages FIRST (before guild member verification)
+  -- ADMINLOG handler has its own verification and retry logic
+  if message and string.find(message, "^ADMINLOG;") then
+    if self.HandleAdminLogMessage then
+      self:HandleAdminLogMessage(prefix, message, channel, sender)
+    end
+    return
+  end
+  
   local name_g,class,rank = self:verifyGuildMember(sender,true)
   if not (name_g) then return end -- only accept messages from guild members
   
@@ -1098,14 +1108,6 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     
     -- Attempt throttled migration
     _attemptThrottledMigration(self)
-    return
-  end
-  
-  -- Handle ADMINLOG messages (admin log synchronization)
-  if message and string.find(message, "^ADMINLOG;") then
-    if self.HandleAdminLogMessage then
-      self:HandleAdminLogMessage(prefix, message, channel, sender)
-    end
     return
   end
   
