@@ -25,6 +25,11 @@ GuildRoll.VARS = {
   prefix = "RRG_"
 }
 
+-- Stable constant prefix for invisible addon-message sync (AdminLog, etc.).
+-- Never driven by user settings.  Old clients using VARS.prefix ("RRG_") are
+-- accepted on receive for backward compatibility.
+GuildRoll.ADDON_SYNC_PREFIX = "GR_SYNC"
+
 GuildRollMSG = {
   delayedinit = false,
   dbg = false,
@@ -1078,7 +1083,8 @@ function GuildRoll:addonMessage(message,channel,sender)
 end
 
 function GuildRoll:addonComms(prefix,message,channel,sender)
-  if prefix ~= self.VARS.prefix then return end -- we don't care for messages from other addons
+  -- Accept both the legacy prefix (VARS.prefix) and the new stable sync prefix
+  if prefix ~= self.VARS.prefix and prefix ~= self.ADDON_SYNC_PREFIX then return end -- we don't care for messages from other addons
   if sender == self._playerName then return end -- we don't care for messages from ourselves
   local name_g,class,rank = self:verifyGuildMember(sender,true)
   if not (name_g) then return end -- only accept messages from guild members
