@@ -1271,7 +1271,7 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
       end
     end
     if table.getn(parts) == 0 then return missingList end
-    return table.concat(parts, "; ")
+    return table.concat(parts, ";")
   end
 
   if isBuffFormat then
