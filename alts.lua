@@ -122,8 +122,8 @@ end
 function GuildRollAlts:OnTooltipUpdate()
   local cat = T:AddCategory(
       "columns", 2,
-      "text",  C:Orange(L["Main"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify",  "LEFT",
-      "text2", C:Orange(L["Alts"]),  "child_text2R",   0, "child_text2G",   1, "child_text2B",   0, "child_justify2", "RIGHT"
+      "text",  C:Yellow(L["Main"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify",  "LEFT",
+      "text2", C:Yellow(L["Alts"]),  "child_text2R",   0, "child_text2G",   1, "child_text2B",   0, "child_justify2", "RIGHT"
     )
   local t = self:BuildAltsTable()
   for main, alts in pairs(t) do
