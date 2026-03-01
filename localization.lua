@@ -13,6 +13,8 @@ L:RegisterTranslations("enUS", function() return {
   ["Minimum MainStanding: %s"] = "Minimum EP: %s",
   ["Minimum MainStanding"] = "Minimum EP",
   ["Set Minimum MainStanding"] = "Set Minimum EP",
+  ["Missing"] = true
+  ["Details"] = true
   -- logs
   ["guildroll logs"] = true,
   ["Clear Logs."] = true,
