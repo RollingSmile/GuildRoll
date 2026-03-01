@@ -950,7 +950,7 @@ function GuildRoll_BuffCheck:CheckFlasks()
       table.insert(report, {
         player = name,
         class = class,
-        missing = "Flask",
+        missing = "No Flask",
         type = "flask"
       })
     end
