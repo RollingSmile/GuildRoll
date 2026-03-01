@@ -13,6 +13,6 @@ GuildRoll is a World of Warcraft addon for managing Effort Points (EP) in guilds
 
 ## Recent Changes
 
-- Minor changes is Buff check result table
+- Added colors in Buffs check result tables
   
 
