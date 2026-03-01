@@ -475,16 +475,16 @@ function GuildRoll_standings:OnTooltipUpdate()
     -- Admin: Show Name | EP | Rank (3 columns)
     cat = T:AddCategory(
       "columns", 3,
-      "text",  C:Orange(L["Name"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify", "LEFT",
-      "text2", C:Orange(L["Main Standing"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT",
-      "text3", C:Orange(L["Rank"]),   "child_text3R",   1, "child_text3G",   1, "child_text3B",   1, "child_justify3", "RIGHT"
+      "text",  C:Yellow(L["Name"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify", "LEFT",
+      "text2", C:Yellow(L["Main Standing"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT",
+      "text3", C:Yellow(L["Rank"]),   "child_text3R",   1, "child_text3G",   1, "child_text3B",   1, "child_justify3", "RIGHT"
     )
   else
     -- Non-admin: Show Name | EP (2 columns)
     cat = T:AddCategory(
       "columns", 2,
-      "text",  C:Orange(L["Name"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify", "LEFT",
-      "text2", C:Orange(L["Main Standing"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT"
+      "text",  C:Yellow(L["Name"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify", "LEFT",
+      "text2", C:Yellow(L["Main Standing"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT"
     )
   end
   

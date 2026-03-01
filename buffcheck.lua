@@ -1216,12 +1216,36 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   local isConsumeFormat = sample and (sample.type == "consume")
   local isFlaskFormat = sample and (sample.type == "flask")
   
+  -- Helper: return class-colored player name using Babble-Class (BC) for color lookup.
+  -- BC is optional; if unavailable, player names are returned uncolored.
+  -- Build a name->class lookup from raid roster once (fallback when entry.class is nil).
+  local raidClassByName
+  local function coloredPlayer(entry)
+    local playerName = tostring(entry.player or "<unknown>")
+    if not BC then return playerName end
+    local class = entry.class
+    if not class then
+      if not raidClassByName then
+        raidClassByName = {}
+        for i = 1, GetNumRaidMembers() do
+          local rname, _, _, _, rclass = GetRaidRosterInfo(i)
+          if rname then raidClassByName[rname] = rclass end
+        end
+      end
+      class = raidClassByName[entry.player]
+    end
+    if class then
+      return C:Colorize(BC:GetHexColor(class), playerName)
+    end
+    return playerName
+  end
+
   if isBuffFormat then
     local cat = T:AddCategory(
       "columns", 3,
-      "text", L["Name"] or "Name",
-      "text2", "Missing",
-      "text3", "Details"
+      "text", C:Yellow(L["Name"] or "Name"),
+      "text2", C:Yellow(L["Missing"] or "Missing"),
+      "text3", C:Yellow(L["Details"] or "Details")
     )
     
     for _, entry in ipairs(report) do
@@ -1239,7 +1263,7 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
       local detailsColor = C:Red(missingList)
       
       cat:AddLine(
-        "text", tostring(entry.player or "<unknown>"),
+        "text", coloredPlayer(entry),
         "text2", countColor,
         "text3", detailsColor
       )
@@ -1251,8 +1275,8 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   if isConsumeFormat then
     local cat = T:AddCategory(
       "columns", 2,
-      "text", L["Name"] or "Name",
-      "text2", "Details"
+      "text", C:Yellow(L["Name"] or "Name"),
+      "text2", C:Yellow(L["Details"] or "Details")
     )
     for _, entry in ipairs(report) do
       local status = tostring(entry.missing or "")
@@ -1262,7 +1286,7 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
         statusColor = C:Orange(status)
       end
       cat:AddLine(
-        "text", tostring(entry.player or "<unknown>"),
+        "text", coloredPlayer(entry),
         "text2", statusColor
       )
     end
@@ -1273,14 +1297,14 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   if isFlaskFormat then
     local cat = T:AddCategory(
       "columns", 2,
-      "text", L["Name"] or "Name",
-      "text2", "Details"
+      "text", C:Yellow(L["Name"] or "Name"),
+      "text2", C:Yellow(L["Details"] or "Details")
     )
     for _, entry in ipairs(report) do
       local status = tostring(entry.missing or "Flask")
       local statusColor = C:Red(status)
       cat:AddLine(
-        "text", tostring(entry.player or "<unknown>"),
+        "text", coloredPlayer(entry),
         "text2", statusColor
       )
     end
@@ -1288,9 +1312,9 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   end
   
   -- Generic fallback: show whatever fields exist
-  local cat = T:AddCategory("columns", 2, "text", L["Name"] or "Name", "text2", "Info")
+  local cat = T:AddCategory("columns", 2, "text", C:Yellow(L["Name"] or "Name"), "text2", C:Yellow(L["Info"] or "Info"))
   for _, entry in ipairs(report) do
     local info = entry.missingList or entry.missing or tostring(entry.missingCount or "")
-    cat:AddLine("text", tostring(entry.player or "<unknown>"), "text2", tostring(info))
+    cat:AddLine("text", coloredPlayer(entry), "text2", tostring(info))
   end
 end
