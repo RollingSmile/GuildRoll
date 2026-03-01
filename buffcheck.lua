@@ -1240,6 +1240,40 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
     return playerName
   end
 
+  -- Helper: build a map from short tag -> providerClass, derived from BUFF_REQUIREMENTS and BUFF_SHORT_NAMES
+  local buffTagProvider
+  local function BuildBuffTagProviderClass()
+    if buffTagProvider then return buffTagProvider end
+    buffTagProvider = {}
+    for providerClass, buffList in pairs(BUFF_REQUIREMENTS) do
+      for _, buffName in ipairs(buffList) do
+        local shortTag = BUFF_SHORT_NAMES[buffName]
+        if shortTag and not buffTagProvider[shortTag] then
+          buffTagProvider[shortTag] = providerClass
+        end
+      end
+    end
+    return buffTagProvider
+  end
+
+  -- Helper: colorize each semicolon-separated tag in missingList by its provider class color
+  local function ColorizeMissingTags(missingList)
+    if not BC then return missingList end
+    local tagMap = BuildBuffTagProviderClass()
+    local parts = {}
+    for tag in string.gmatch(missingList, "([^;]+)") do
+      tag = string.gsub(tag, "^%s*(.-)%s*$", "%1")
+      local providerClass = tagMap[tag]
+      if providerClass then
+        table.insert(parts, C:Colorize(BC:GetHexColor(providerClass), tag))
+      else
+        table.insert(parts, tag)
+      end
+    end
+    if table.getn(parts) == 0 then return missingList end
+    return table.concat(parts, "; ")
+  end
+
   if isBuffFormat then
     local cat = T:AddCategory(
       "columns", 3,
@@ -1260,7 +1294,7 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
         countColor = C:Orange(countText)
       end
       
-      local detailsColor = C:Red(missingList)
+      local detailsColor = ColorizeMissingTags(missingList)
       
       cat:AddLine(
         "text", coloredPlayer(entry),
