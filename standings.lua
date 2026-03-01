@@ -408,9 +408,19 @@ function GuildRoll_standings:BuildStandingsTable()
         end
       end
       -- Store colorized main in GuildRoll.alts for display purposes
-      local colorized_main = C:Colorize(BC:GetHexColor(main_class), main_name)
-      GuildRoll.alts[colorized_main] = GuildRoll.alts[colorized_main] or {}
-      GuildRoll.alts[colorized_main][name] = class
+      local main_key
+      if main_class and main_class ~= "" then
+        main_key = C:Colorize(BC:GetHexColor(main_class), main_name)
+      else
+        main_key = tostring(main_name).."(Missing)"
+        GuildRoll._missingMainWarned = GuildRoll._missingMainWarned or {}
+        if not GuildRoll._missingMainWarned[main_name] then
+          GuildRoll._missingMainWarned[main_name] = true
+          GuildRoll:defaultPrint(string.format(L["Alt %s references missing main: %s"], name, main_name))
+        end
+      end
+      GuildRoll.alts[main_key] = GuildRoll.alts[main_key] or {}
+      GuildRoll.alts[main_key][name] = class
     end
     
     local armor_class = self:getArmorClass(class)

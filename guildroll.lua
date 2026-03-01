@@ -1458,8 +1458,8 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
         
         -- Handle alt -> main mapping if Altspool enabled
         if (GuildRollAltspool) then
-          local main = self:parseAlt(name)
-          if (main) then
+          local main, main_class = self:parseAlt(name)
+          if (main) and (main_class) then
             local alt = name
             actualName = main
             actualEP = self:num_round(GuildRoll_altpercent*ep)
@@ -2017,9 +2017,19 @@ function GuildRoll:buildRosterTable()
             self:defaultPrint(string.format(L["Your main has been set to %s"],GuildRoll_main))
           end
         end
-        main = C:Colorize(BC:GetHexColor(main_class), main)
-        GuildRoll.alts[main] = GuildRoll.alts[main] or {}
-        GuildRoll.alts[main][member_name] = class
+        local main_key
+        if main_class and main_class ~= "" then
+          main_key = C:Colorize(BC:GetHexColor(main_class), main)
+        else
+          main_key = tostring(main).."(Missing)"
+          self._missingMainWarned = self._missingMainWarned or {}
+          if not self._missingMainWarned[main] then
+            self._missingMainWarned[main] = true
+            self:defaultPrint(string.format(L["Alt %s references missing main: %s"], member_name, main))
+          end
+        end
+        GuildRoll.alts[main_key] = GuildRoll.alts[main_key] or {}
+        GuildRoll.alts[main_key][member_name] = class
       end
       if (GuildRoll_memberlist_raidonly) and next(r) then
         if r[member_name] and is_raid_level then
@@ -2089,11 +2099,11 @@ function GuildRoll:parseAlt(name,officernote)
     local _,_,_,main,_ = string.find(officernote or "","(.*){([%a][%a]%a*)}(.*)")
     if type(main)=="string" and (string.len(main) < 13) then
       main = self:camelCase(main)
-      local g_name, g_class, g_rank, g_officernote = self:verifyGuildMember(main)
+      local g_name, g_class, g_rank, g_officernote = self:verifyGuildMember(main, true)
       if (g_name) then
         return g_name, g_class, g_rank, g_officernote
       else
-        return nil
+        return main, nil, nil, nil
       end
     else
       return nil
