@@ -13,8 +13,6 @@ L:RegisterTranslations("enUS", function() return {
   ["Minimum MainStanding: %s"] = "Minimum EP: %s",
   ["Minimum MainStanding"] = "Minimum EP",
   ["Set Minimum MainStanding"] = "Set Minimum EP",
-  --["Missing"] = true
-  --["Details"] = true
   -- logs
   ["guildroll logs"] = true,
   ["Clear Logs."] = true,
@@ -203,6 +201,8 @@ Results will print here when done.]],
   ["Enable Roll Buttons description"] = "When enabled, all roll buttons are visible and enabled for everyone (override normal restrictions)",
   -- Buff Checks
   ["Buff Checks"] = true,
+  ["Missing"] = true,
+  ["Details"] = true,
   ["Admin buff verification tools"] = true,
   ["Check Buffs"] = true,
   ["Check raid-level buffs required (special paladin rule)."] = true,
