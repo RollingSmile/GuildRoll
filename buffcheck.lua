@@ -974,14 +974,20 @@ function GuildRoll_BuffCheck:CheckFlasks()
 end
 
 -- Show report in Tablet
+-- Always attach and refresh so the frame reliably appears on every check,
+-- regardless of prior detach state or UI scale differences between users.
 function GuildRoll_BuffCheck:ShowReport(report, title, allOk)
   -- Store report for display
   self._currentReport = report
   self._reportTitle = title
   self._reportAllOk = allOk
-  
-  -- Toggle Tablet display
-  self:Toggle(true)
+
+  -- Unconditionally attach and refresh the Tablet frame instead of toggling.
+  -- This fixes inconsistent frame visibility when Tablet loses frame ownership.
+  pcall(function()
+    T:Attach("GuildRoll_BuffCheck")
+    T:Refresh("GuildRoll_BuffCheck")
+  end)
 end
 
 -- Diagnostic helper: Dump buffs on a unit
@@ -1153,45 +1159,6 @@ end
 
 function GuildRoll_BuffCheck:Refresh()
   pcall(function() T:Refresh("GuildRoll_BuffCheck") end)
-end
-
-function GuildRoll_BuffCheck:Toggle(forceShow)
-  if T:IsAttached("GuildRoll_BuffCheck") then
-    pcall(function() T:Detach("GuildRoll_BuffCheck") end)
-    if (T.IsLocked and T:IsLocked("GuildRoll_BuffCheck")) then
-      pcall(function() T:ToggleLocked("GuildRoll_BuffCheck") end)
-    end
-    self:setHideScript()
-  else
-    if (forceShow) then
-      self:Refresh()
-    else
-      pcall(function() T:Attach("GuildRoll_BuffCheck") end)
-    end
-  end
-end
-
-function GuildRoll_BuffCheck:setHideScript()
-  local frame = GuildRoll:FindDetachedFrame("GuildRoll_BuffCheck")
-  if frame then
-    if not frame.owner then
-      frame.owner = "GuildRoll_BuffCheck"
-    end
-    GuildRoll:make_escable(frame:GetName(), "add")
-    if frame.SetScript then
-      frame:SetScript("OnHide", nil)
-      frame:SetScript("OnHide", function(f)
-          pcall(function()
-            if T and T.IsAttached and not T:IsAttached("GuildRoll_BuffCheck") then
-              T:Attach("GuildRoll_BuffCheck")
-            end
-            if f and f.SetScript then
-              f:SetScript("OnHide", nil)
-            end
-          end)
-        end)
-    end
-  end
 end
 
 -- UPDATED OnTooltipUpdate: robust handling for buff/consumes/flasks report formats
