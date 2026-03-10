@@ -100,6 +100,8 @@ local SYNC_THROTTLE_SEC = 5 -- minimum seconds between sync requests
 local SNAPSHOT_TIMEOUT_SEC = 10 -- seconds before clearing snapshot in progress flag
 local RETRY_INTERVAL_SEC = 2 -- retry interval for queued messages
 local MAX_RETRIES = 5 -- maximum retry attempts for queued messages
+-- Delay (seconds) before requesting auto-sync on enable, to allow guild roster readiness
+local AUTO_SYNC_DELAY_SEC = 5
 
 local lastSyncRequest = 0
 
@@ -120,7 +122,7 @@ local function getLocalLatestTS()
   return maxTS
 end
 
--- Helper: Debug print (protected by GuildRoll_debugAdminLog)
+-- Helper: Debug print (protected by GuildRoll.DEBUG)
 local function debugPrint(msg)
   if GuildRoll and GuildRoll.DEBUG and msg then
     pcall(function()
@@ -131,6 +133,18 @@ local function debugPrint(msg)
       end
     end)
   end
+end
+
+-- Helper: Send an invisible sync message using the stable ADDON_SYNC_PREFIX.
+-- channel defaults to "GUILD"; pass channel="WHISPER" + target for snapshot responses.
+-- User-configurable say-channel (GuildRoll_saychannel) does NOT affect this path.
+local function sendAdminSyncMessage(message, channel, target)
+  channel = channel or "GUILD"
+  local prefix = (GuildRoll and GuildRoll.ADDON_SYNC_PREFIX) or "GR_SYNC"
+  debugPrint(string.format("sendAdminSyncMessage: prefix=%s channel=%s msg=%s", prefix, channel, string.sub(message, 1, 80)))
+  pcall(function()
+    SendAddonMessage(prefix, message, channel, target)
+  end)
 end
 
 -- Process pending messages queue
@@ -421,9 +435,7 @@ local function broadcastAdminLogEntry(entry)
   local serialized = serializeEntry(entry)
   local message = string.format("ADMINLOG;ADD;%d;%s", PROTOCOL_VERSION, serialized)
   
-  pcall(function()
-    GuildRoll:addonMessage(message, "GUILD")
-  end)
+  sendAdminSyncMessage(message)
 end
 
 -- Request admin log snapshot from other admins
@@ -445,9 +457,7 @@ local function requestAdminLogSnapshot(since_ts)
   since_ts = since_ts or 0
   local message = string.format("ADMINLOG;REQ;%d;%d", PROTOCOL_VERSION, since_ts)
   
-  pcall(function()
-    GuildRoll:addonMessage(message, "GUILD")
-  end)
+  sendAdminSyncMessage(message)
   
   GuildRoll:defaultPrint("Admin log sync requested...")
   
@@ -478,9 +488,7 @@ local function sendSnapshot(target, since_ts)
   if table.getn(entries) == 0 then
     -- Send empty snapshot end
     local message = string.format("ADMINLOG;SNAP_END;%d;0", PROTOCOL_VERSION)
-    pcall(function()
-      GuildRoll:addonMessage(message, "WHISPER", target)
-    end)
+    sendAdminSyncMessage(message, "WHISPER", target)
     return
   end
   
@@ -500,28 +508,28 @@ local function sendSnapshot(target, since_ts)
     local chunkStr = table.concat(chunkData, ";;")
     
     local message = string.format("ADMINLOG;SNAP;%d;%s", PROTOCOL_VERSION, chunkStr)
-    pcall(function()
-      GuildRoll:addonMessage(message, "WHISPER", target)
-    end)
+    sendAdminSyncMessage(message, "WHISPER", target)
     
     chunkCount = chunkCount + 1
   end
   
   -- Send snapshot end
   local message = string.format("ADMINLOG;SNAP_END;%d;%d", PROTOCOL_VERSION, table.getn(entries))
-  pcall(function()
-    GuildRoll:addonMessage(message, "WHISPER", target)
-  end)
+  sendAdminSyncMessage(message, "WHISPER", target)
 end
 
 -- Handle incoming admin log messages
 local function handleAdminLogMessage(prefix, message, channel, sender)
   -- Debug: Log raw incoming message
-  debugPrint(string.format("Received CHAT_MSG_ADDON: prefix=%s, channel=%s, sender=%s", tostring(prefix), tostring(channel), tostring(sender)))
+  local syncPrefix = (GuildRoll and GuildRoll.ADDON_SYNC_PREFIX) or "GR_SYNC"
+  local legacyPrefix = (GuildRoll and GuildRoll.VARS and GuildRoll.VARS.prefix) or "RRG_"
+  debugPrint(string.format("Received CHAT_MSG_ADDON: prefix=%s, channel=%s, sender=%s (expected: %s or %s)",
+    tostring(prefix), tostring(channel), tostring(sender), syncPrefix, legacyPrefix))
   
-  -- Check prefix
-  if not prefix or prefix ~= GuildRoll.VARS.prefix then
-    debugPrint("Dropped: prefix mismatch")
+  -- Accept both the new stable sync prefix and the legacy prefix (backward compat)
+  if not prefix or (prefix ~= syncPrefix and prefix ~= legacyPrefix) then
+    debugPrint(string.format("Dropped: prefix mismatch (got=%s, expected=%s or %s)",
+      tostring(prefix), syncPrefix, legacyPrefix))
     return
   end
   
@@ -826,12 +834,31 @@ function GuildRoll_AdminLog:OnEnable()
   -- Load saved entries
   loadSavedEntries()
   
-  -- Register CHAT_MSG_ADDON handler
+  -- Register CHAT_MSG_ADDON handler.
+  -- AceEvent calls function handlers as method(a1, a2, ...) where a1..aN are the
+  -- WoW event arguments (arg1..argN).  For CHAT_MSG_ADDON: a1=prefix, a2=message,
+  -- a3=channel, a4=sender.  There is NO implicit self parameter for closures.
   if not self.addonHandlerRegistered then
-    self:RegisterEvent("CHAT_MSG_ADDON", function(self, prefix, message, channel, sender)
+    self:RegisterEvent("CHAT_MSG_ADDON", function(prefix, message, channel, sender)
       handleAdminLogMessage(prefix, message, channel, sender)
     end)
     self.addonHandlerRegistered = true
+  end
+  
+  -- Auto-sync: request snapshot from other admins after a short delay to allow
+  -- the guild roster to become available.  Throttling inside requestAdminLogSnapshot
+  -- prevents spam if the module is re-enabled frequently.
+  if GuildRoll and GuildRoll.IsAdmin and GuildRoll:IsAdmin() then
+    local ok, err = pcall(function()
+      GuildRoll:ScheduleEvent("GuildRoll_AdminLog_AutoSync", function()
+        local since_ts = getLocalLatestTS()
+        debugPrint(string.format("Auto-sync on enable: requesting snapshot since_ts=%d", since_ts))
+        requestAdminLogSnapshot(since_ts)
+      end, AUTO_SYNC_DELAY_SEC)
+    end)
+    if not ok then
+      debugPrint(string.format("Auto-sync scheduling failed: %s", tostring(err)))
+    end
   end
   
   -- Register Tablet UI
@@ -1397,22 +1424,20 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_CLEAR_CONFIRM"] = {
     end
     
     if isGuildMaster then
-      -- Broadcast ADMINLOG;CLEAR message to GUILD
+      -- Broadcast ADMINLOG;CLEAR message to GUILD via stable sync prefix
       local clearMsg = string.format("ADMINLOG;CLEAR;%d", PROTOCOL_VERSION)
       local broadcastSuccess = false
-      if GuildRoll and GuildRoll.addonMessage then
-        local ok, err = pcall(function()
-          GuildRoll:addonMessage(clearMsg, "GUILD")
-        end)
-        if ok then
-          broadcastSuccess = true
-        else
-          -- Log error for debugging
-          if GuildRoll and GuildRoll.Debug then
-            pcall(function() GuildRoll:Debug("AdminLog clear broadcast failed: " .. tostring(err)) end)
-          end
-          GuildRoll:defaultPrint("Warning: Failed to broadcast clear message to guild. Other admins will not be notified.")
+      local ok, err = pcall(function()
+        sendAdminSyncMessage(clearMsg)
+      end)
+      if ok then
+        broadcastSuccess = true
+      else
+        -- Log error for debugging
+        if GuildRoll and GuildRoll.Debug then
+          pcall(function() GuildRoll:Debug("AdminLog clear broadcast failed: " .. tostring(err)) end)
         end
+        GuildRoll:defaultPrint("Warning: Failed to broadcast clear message to guild. Other admins will not be notified.")
       end
       
       -- Clear local entries
