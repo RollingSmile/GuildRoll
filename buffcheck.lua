@@ -791,7 +791,7 @@ function GuildRoll_BuffCheck:CheckBuffs()
   
   -- Scan each raid member
   for i = 1, numRaid do
-    local name, _, _, _, class = GetRaidRosterInfo(i)
+    local name, _, subgroup, _, class = GetRaidRosterInfo(i)
     local unit = "raid" .. i
     
     local missingBuffs = {}
@@ -833,6 +833,7 @@ function GuildRoll_BuffCheck:CheckBuffs()
       table.insert(report, {
         player = name,
         class = class,
+        group = subgroup or 0,
         missingCount = missingCount,
         totalRequired = totalRequired,
         missingList = table.concat(missingBuffs, ";")
@@ -840,9 +841,12 @@ function GuildRoll_BuffCheck:CheckBuffs()
     end
   end
   
-  -- Sort report by number of missing buffs (descending)
+  -- Sort report by subgroup ascending, then by player name ascending
   table.sort(report, function(a, b)
-    return a.missingCount > b.missingCount
+    if a.group ~= b.group then
+      return a.group < b.group
+    end
+    return (a.player or "") < (b.player or "")
   end)
   
   -- Show results in Tablet
@@ -1276,10 +1280,11 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
 
   if isBuffFormat then
     local cat = T:AddCategory(
-      "columns", 3,
-      "text", C:Yellow(L["Name"] or "Name"),
-      "text2", C:Yellow(L["Missing"] or "Missing"),
-      "text3", C:Yellow(L["Details"] or "Details")
+      "columns", 4,
+      "text", C:Yellow("Grp"),
+      "text2", C:Yellow(L["Name"] or "Name"),
+      "text3", C:Yellow(L["Missing"] or "Missing"),
+      "text4", C:Yellow(L["Details"] or "Details")
     )
     
     for _, entry in ipairs(report) do
@@ -1296,10 +1301,21 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
       
       local detailsColor = ColorizeMissingTags(missingList)
       
+      local groupNum = tostring(entry.group or 0)
+      local groupText
+      if C.White then
+        groupText = C:White(groupNum)
+      elseif C.Colorize then
+        groupText = C:Colorize("ffffff", groupNum)
+      else
+        groupText = groupNum
+      end
+      
       cat:AddLine(
-        "text", coloredPlayer(entry),
-        "text2", countColor,
-        "text3", detailsColor
+        "text", groupText,
+        "text2", coloredPlayer(entry),
+        "text3", countColor,
+        "text4", detailsColor
       )
     end
     return
