@@ -280,8 +280,8 @@ local function serializeEntry(entry)
     if at == "AWARD" or at == "PENALTY" then
       return base
         .. "|" .. (entry.ep or 0)
-        .. "|" .. escPipe(entry.player or "")
-        .. "|" .. escPipe(entry.main   or "")
+        .. "|" .. escPipe(entry.player   or "")
+        .. "|" .. escPipe(entry.alt_name or "")
 
     elseif at == "AWARD_RAID" or at == "PENALTY_RAID" then
       local rd   = entry.raid_details or {players = {}, counts = {}, alt_sources = {}}
@@ -343,9 +343,9 @@ local function deserializeEntry(data)
     entry.action_type = at
 
     if at == "AWARD" or at == "PENALTY" then
-      entry.ep     = tonumber(parts[6]) or 0
-      entry.player = parts[7] or ""
-      entry.main   = (parts[8] and parts[8] ~= "") and parts[8] or nil
+      entry.ep       = tonumber(parts[6]) or 0
+      entry.player   = parts[7] or ""
+      entry.alt_name = (parts[8] and parts[8] ~= "") and parts[8] or nil
 
     elseif at == "AWARD_RAID" or at == "PENALTY_RAID" then
       entry.ep = tonumber(parts[6]) or 0
@@ -649,9 +649,9 @@ end
 
 -- Award EP to a single player.
 -- ep:         positive integer
--- playerName: character who receives EP (main when alt-pooling applies)
--- mainName:   alt character whose main received the award (nil if not applicable)
-function GuildRoll:AdminLogAddAward(ep, playerName, mainName)
+-- playerName: main character who receives EP (when alt-pooling: the main, not the alt)
+-- altName:    alt character whose award was redirected to the main (nil if no alt-pooling)
+function GuildRoll:AdminLogAddAward(ep, playerName, altName)
   if not self:IsAdmin() then return end
   _addEntry({
     id          = generateEntryId(),
@@ -660,15 +660,15 @@ function GuildRoll:AdminLogAddAward(ep, playerName, mainName)
     action_type = "AWARD",
     ep          = math.abs(ep or 0),
     player      = playerName or "",
-    main        = (mainName and mainName ~= "") and mainName or nil,
+    alt_name    = (altName and altName ~= "") and altName or nil,
   })
 end
 
 -- Penalty EP to a single player.
--- ep:         integer (absolute value is used; stored negative)
--- playerName: character penalized (main when alt-pooling applies)
--- mainName:   alt character name (nil if not applicable)
-function GuildRoll:AdminLogAddPenalty(ep, playerName, mainName)
+-- ep:         integer (stored as negative; absolute value used internally)
+-- playerName: main character penalized (when alt-pooling: the main, not the alt)
+-- altName:    alt character whose penalty was redirected to the main (nil if no alt-pooling)
+function GuildRoll:AdminLogAddPenalty(ep, playerName, altName)
   if not self:IsAdmin() then return end
   _addEntry({
     id          = generateEntryId(),
@@ -677,7 +677,7 @@ function GuildRoll:AdminLogAddPenalty(ep, playerName, mainName)
     action_type = "PENALTY",
     ep          = -math.abs(ep or 0),
     player      = playerName or "",
-    main        = (mainName and mainName ~= "") and mainName or nil,
+    alt_name    = (altName and altName ~= "") and altName or nil,
   })
 end
 
@@ -1022,17 +1022,19 @@ local function buildActionLine(entry)
   end
 
   if at == "AWARD" then
-    local player = entry.player or ""
-    local main   = entry.main
-    local target = main and (player .. " (main: " .. main .. ")") or player
+    local player  = entry.player   or ""
+    local altChar = entry.alt_name
+    -- When alt-pooling: show "40 EP to AltChar (main: MainChar)"
+    -- Direct award:     show "50 EP to MainChar"
+    local target = altChar and (altChar .. " (main: " .. player .. ")") or player
     local msg    = string.format("%s: %d EP to %s", author, entry.ep or 0, target)
     return CLR_GREEN .. "+" .. CLR_END .. " " .. w(msg), false
 
   elseif at == "PENALTY" then
-    local player = entry.player or ""
-    local main   = entry.main
-    local target = main and (player .. " (main: " .. main .. ")") or player
-    local msg    = string.format("%s: %d EP to %s", author, math.abs(entry.ep or 0), target)
+    local player  = entry.player   or ""
+    local altChar = entry.alt_name
+    local target  = altChar and (altChar .. " (main: " .. player .. ")") or player
+    local msg     = string.format("%s: %d EP to %s", author, math.abs(entry.ep or 0), target)
     return CLR_RED .. "-" .. CLR_END .. " " .. w(msg), false
 
   elseif at == "AWARD_RAID" then
