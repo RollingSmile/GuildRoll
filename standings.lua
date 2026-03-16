@@ -173,6 +173,10 @@ function GuildRoll_standings.import()
       end
     end
     GuildRoll:defaultPrint(string.format(L["Imported %d members."],count))
+    -- Log import to AdminLog
+    if GuildRoll.AdminLogAddImport then
+      pcall(function() GuildRoll:AdminLogAddImport(count) end)
+    end
     local report = string.format(L["Imported %d members.\n"],count)
     report = string.format(L["%s\nFailed to import:"],report)
     for name,ep in pairs(t) do

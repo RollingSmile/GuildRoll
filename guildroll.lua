@@ -1018,6 +1018,12 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
     end
     -- No need to sanitize with new {EP} format - it's already clean
     -- Just pass through the note as-is
+    -- Log manual modification to AdminLog
+    if self:IsAdmin() and self.AdminLogAddManualModify then
+      pcall(function()
+        self:AdminLogAddManualModify(name or "", prevnote or "", note or "")
+      end)
+    end
     return self.hooks["GuildRosterSetOfficerNote"](index,note)    
   end
 end
@@ -1740,25 +1746,27 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
   end
   
   self:adminSay(msg)
-  self:addToLog(logMsg)
   local addonMsg = string.format("%s;%s;%s",getname,"MainStanding",ep)
   self:addonMessage(addonMsg,"GUILD")
   
-  -- Add AdminLog and personal log entries with alt tag if alt-pooling was applied
+  -- Structured AdminLog entry (single entry, no duplicates)
+  if self:IsAdmin() then
+    pcall(function()
+      local mainN = self:StripRealm(getname)
+      local altN  = alt and self:StripRealm(alt) or nil
+      if ep < 0 then
+        self:AdminLogAddPenalty(ep, mainN, altN)
+      else
+        self:AdminLogAddAward(ep, mainN, altN)
+      end
+    end)
+  end
+  
+  -- Personal log entries for alt-pooling case
   if alt then
-    -- Alt-pooling was applied: add tagged AdminLog and personal logs
-    local altNameClean = self:StripRealm(alt)
+    local altNameClean  = self:StripRealm(alt)
     local mainNameClean = self:StripRealm(getname)
     
-    -- AdminLog entry: "[GIVE] %d EP given to %s (%s) by %s"
-    if self.AdminLogAdd then
-      pcall(function()
-        local adminLogText = string.format("[GIVE] %d EP given to %s (%s) by %s", ep, mainNameClean, altNameClean, self:GetAdminName())
-        self:AdminLogAdd(adminLogText)
-      end)
-    end
-    
-    -- Personal log for main: "EP received via alt AltName: +%d EP (Prev: %d, New: %d)"
     if self.personalLogAdd then
       pcall(function()
         local mainLogText = string.format("EP received via alt %s: %s EP (Prev: %d, New: %d)", altNameClean, deltaStr, old, newep)
@@ -1766,7 +1774,6 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
       end)
     end
     
-    -- Personal log for alt: "EP awarded to main MainName (redirect): +%d EP (Prev: %d, New: %d)"
     if self.personalLogAdd then
       pcall(function()
         local altLogText = string.format("EP awarded to main %s (redirect): %s EP (Prev: %d, New: %d)", mainNameClean, deltaStr, old, newep)
@@ -1818,11 +1825,10 @@ function GuildRoll:decay_ep_v3()
   self:addonMessage(addonMsg,"GUILD")
   self:addToLog(msg)
   
-  -- Add single AdminLog summary entry for decay
-  if self.AdminLogAdd then
+  -- Structured AdminLog entry for decay
+  if self.AdminLogAddDecay then
     pcall(function()
-      local adminLogText = string.format("[DECAY] Applied %.0f%% decay to %d members by %s", decayPercent, memberCount, self:GetAdminName())
-      self:AdminLogAdd(adminLogText)
+      self:AdminLogAddDecay(decayPercent, memberCount)
     end)
   end
   
@@ -1844,11 +1850,10 @@ function GuildRoll:reset_ep_v3()
     self:adminSay(msg)
     self:addToLog(msg)
     
-    -- Add single AdminLog summary entry for reset
-    if self.AdminLogAdd then
+    -- Structured AdminLog entry for reset
+    if self.AdminLogAddReset then
       pcall(function()
-        local adminLogText = string.format("[RESET] Standing reset by %s", self:GetAdminName())
-        self:AdminLogAdd(adminLogText)
+        self:AdminLogAddReset()
       end)
     end
     
@@ -2371,17 +2376,8 @@ end
 -- Logging
 ------------
 function GuildRoll:addToLog(line,skipTime)
-  -- For admins: use the new synchronized AdminLog system only
-  if self:IsAdmin() then
-    -- Add to synchronized AdminLog (broadcasts to all admins)
-    if GuildRoll.AdminLogAdd then
-      pcall(function()
-        GuildRoll:AdminLogAdd(line)
-      end)
-    end
-  end
-  -- For non-admins: do nothing (admin actions only recorded in AdminLog)
-  -- Personal logs are maintained separately via personalLogAdd
+  -- Admin actions are now logged via AdminLogAdd* structured methods directly.
+  -- Non-admin players have no personal log for admin actions.
 end
 
 ------------
