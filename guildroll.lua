@@ -1507,9 +1507,31 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
     
     -- Create a single consolidated raid entry in AdminLog
     if self:IsAdmin() and table.getn(raid_data.players) > 0 then
-      if GuildRoll.AdminLogAddRaid then
+      if GuildRoll.AdminLogAdd then
         pcall(function()
-          GuildRoll:AdminLogAddRaid(ep, raid_data)
+          local playerCount = table.getn(raid_data.players)
+          local deltaStr = (ep >= 0) and string.format("+%d", ep) or string.format("%d", ep)
+          local details = string.format("%s EP to %d RAID members [expand]", deltaStr, playerCount)
+          -- Build details_expanded: one line per player
+          local expanded = {}
+          for pi = 1, playerCount do
+            local pname = raid_data.players[pi]
+            local counts = raid_data.counts[pname] or {old=0, new=0}
+            local delta = counts.new - counts.old
+            local altSrc = raid_data.alt_sources and raid_data.alt_sources[pname]
+            local line
+            if altSrc and altSrc ~= "" then
+              line = string.format("%s (%s's main): %d -> %d (%+d)", pname, altSrc, counts.old, counts.new, delta)
+            else
+              line = string.format("%s: %d -> %d (%+d)", pname, counts.old, counts.new, delta)
+            end
+            table.insert(expanded, line)
+          end
+          GuildRoll:AdminLogAdd({
+            type             = "AWARD",
+            details          = details,
+            details_expanded = expanded,
+          })
         end)
       end
     end
@@ -1718,61 +1740,51 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
   local newep = ep + old
   self:update_ep_v3(getname,newep)
   self:debugPrint(string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep))
-  
+
   -- Always announce, log, and send addon message for both positive and negative EP
   local msg
-  local logMsg
-  
-  -- Build compact AdminLog format: PlayerName - EP: Prev -> New (±N)
   local deltaStr
   if ep >= 0 then
     deltaStr = string.format("+%d", ep)
   else
     deltaStr = string.format("%d", ep)
   end
-  logMsg = string.format("%s - EP: %d -> %d (%s)", getname, old, newep, deltaStr)
-  
+
   -- Build announcement message
   if ep < 0 then
     msg = string.format(L["%s MainStanding Penalty to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
   else
     msg = string.format(L["Giving %d MainStanding to %s%s. (Previous: %d, New: %d)"],ep,getname,postfix,old, newep)
   end
-  
+
   self:adminSay(msg)
-  self:addToLog(logMsg)
   local addonMsg = string.format("%s;%s;%s",getname,"MainStanding",ep)
   self:addonMessage(addonMsg,"GUILD")
-  
-  -- Add AdminLog and personal log entries with alt tag if alt-pooling was applied
-  if alt then
-    -- Alt-pooling was applied: add tagged AdminLog and personal logs
-    local altNameClean = self:StripRealm(alt)
-    local mainNameClean = self:StripRealm(getname)
-    
-    -- AdminLog entry: "[GIVE] %d EP given to %s (%s) by %s"
-    if self.AdminLogAdd then
-      pcall(function()
-        local adminLogText = string.format("[GIVE] %d EP given to %s (%s) by %s", ep, mainNameClean, altNameClean, self:GetAdminName())
-        self:AdminLogAdd(adminLogText)
-      end)
-    end
-    
-    -- Personal log for main: "EP received via alt AltName: +%d EP (Prev: %d, New: %d)"
-    if self.personalLogAdd then
-      pcall(function()
-        local mainLogText = string.format("EP received via alt %s: %s EP (Prev: %d, New: %d)", altNameClean, deltaStr, old, newep)
-        self:personalLogAdd(getname, mainLogText)
-      end)
-    end
-    
-    -- Personal log for alt: "EP awarded to main MainName (redirect): +%d EP (Prev: %d, New: %d)"
-    if self.personalLogAdd then
-      pcall(function()
-        local altLogText = string.format("EP awarded to main %s (redirect): %s EP (Prev: %d, New: %d)", mainNameClean, deltaStr, old, newep)
-        self:personalLogAdd(alt, altLogText)
-      end)
-    end
+
+  -- Build and emit a single AdminLog entry
+  if self.AdminLogAdd then
+    pcall(function()
+      local mainNameClean = self:StripRealm(getname)
+      local entryType = (ep < 0) and "PENALTY" or "AWARD"
+      local details
+      if alt then
+        local altNameClean = self:StripRealm(alt)
+        details = string.format("%s EP to %s (via %s)", deltaStr, mainNameClean, altNameClean)
+      else
+        details = string.format("%s EP to %s", deltaStr, mainNameClean)
+      end
+      self:AdminLogAdd({type = entryType, details = details})
+    end)
+  end
+
+  -- Personal log for alt: notify the alt that their EP was redirected to their main
+  if alt and self.personalLogAdd then
+    pcall(function()
+      local altNameClean = self:StripRealm(alt)
+      local mainNameClean = self:StripRealm(getname)
+      local altPersonalLogText = string.format("EP redirected to main %s: %s EP (Prev: %d, New: %d)", mainNameClean, deltaStr, old, newep)
+      self:personalLogAdd(altNameClean, altPersonalLogText)
+    end)
   end
   
   -- Immediate UI refresh
@@ -1816,13 +1828,14 @@ function GuildRoll:decay_ep_v3()
   if not (GuildRoll_saychannel=="OFFICER") then self:adminSay(msg) end
   local addonMsg = string.format("ALL;DECAY;%s",decayPercent)
   self:addonMessage(addonMsg,"GUILD")
-  self:addToLog(msg)
-  
+
   -- Add single AdminLog summary entry for decay
   if self.AdminLogAdd then
     pcall(function()
-      local adminLogText = string.format("[DECAY] Applied %.0f%% decay to %d members by %s", decayPercent, memberCount, self:GetAdminName())
-      self:AdminLogAdd(adminLogText)
+      self:AdminLogAdd({
+        type    = "DECAY",
+        details = string.format("All EP decayed by %.0f%% (%d members)", decayPercent, memberCount),
+      })
     end)
   end
   
@@ -1842,13 +1855,14 @@ function GuildRoll:reset_ep_v3()
     local msg = "All EP has been reset to 0."
     self:debugPrint(msg)
     self:adminSay(msg)
-    self:addToLog(msg)
-    
+
     -- Add single AdminLog summary entry for reset
     if self.AdminLogAdd then
       pcall(function()
-        local adminLogText = string.format("[RESET] Standing reset by %s", self:GetAdminName())
-        self:AdminLogAdd(adminLogText)
+        self:AdminLogAdd({
+          type    = "RESET",
+          details = "All EP reset to 0",
+        })
       end)
     end
     
@@ -2371,17 +2385,9 @@ end
 -- Logging
 ------------
 function GuildRoll:addToLog(line,skipTime)
-  -- For admins: use the new synchronized AdminLog system only
-  if self:IsAdmin() then
-    -- Add to synchronized AdminLog (broadcasts to all admins)
-    if GuildRoll.AdminLogAdd then
-      pcall(function()
-        GuildRoll:AdminLogAdd(line)
-      end)
-    end
-  end
-  -- For non-admins: do nothing (admin actions only recorded in AdminLog)
-  -- Personal logs are maintained separately via personalLogAdd
+  -- Legacy stub: all logging now goes through AdminLogAdd (admin log) or
+  -- personalLogAdd (personal log).  This function is kept only for backward
+  -- compatibility with any third-party or legacy callers and does nothing.
 end
 
 ------------
