@@ -1014,6 +1014,17 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
         -- legacy PUG/Bank handling removed: just report the modification to admins
         self:adminSay(string.format(L["Manually modified %s\'s note. Standing was %s"],name,oldTag))
         self:defaultPrint(string.format(L["|cffff0000Manually modified %s\'s note. Standing was %s|r"],name,oldTag))
+        -- Log to AdminLog with type MANUAL and full note context
+        if self.AdminLogAdd then
+          pcall(function()
+            local safeOld = string.gsub(prevnote or "", '"', '\\"')
+            local safeNew = string.gsub(note or "", '"', '\\"')
+            self:AdminLogAdd({
+              type    = "MANUAL",
+              details = string.format('%s: OLD:"%s" NEW:"%s"', name, safeOld, safeNew),
+            })
+          end)
+        end
       end
     end
     -- No need to sanitize with new {EP} format - it's already clean
@@ -1528,7 +1539,7 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
             table.insert(expanded, line)
           end
           GuildRoll:AdminLogAdd({
-            type             = "AWARD",
+            type             = (ep < 0) and "PENALTY" or "AWARD",
             details          = details,
             details_expanded = expanded,
           })
