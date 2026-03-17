@@ -91,7 +91,10 @@ local snapshotMaxTS = 0 -- track max timestamp during snapshot reception
 local latestRemoteTS = 0 -- track latest remote timestamp seen
 local filterAuthor = nil -- for UI filtering
 local searchText = nil -- for UI search
-local expandedRaidEntries = {} -- track which raid entries are expanded (key = entry.id)
+local expandedEntries = {} -- track which entries with details_expanded are expanded (key = entry.id)
+
+-- Valid entry types for the new schema
+local VALID_TYPES = {AWARD=true, PENALTY=true, DECAY=true, RESET=true, MANUAL=true}
 
 -- Constants
 local PROTOCOL_VERSION = 1
@@ -221,152 +224,155 @@ local function generateEntryId()
 end
 
 -- Helper: Serialize entry for transmission
+-- New format: id|ts|actor|type|details[|EXP|N|line_1|line_2|...|line_N]
 local function serializeEntry(entry)
-  -- Format: id|ts|author|action[|RAID_DATA if raid entry]
   local id = entry.id or ""
   local ts = entry.ts or 0
-  local author = entry.author or ""
-  local action = entry.action or ""
-  
-  -- Escape pipe characters in action
-  action = string.gsub(action, "|", "||")
-  
-  local baseStr = string.format("%s|%d|%s|%s", id, ts, author, action)
-  
-  -- If this is a raid entry, append raid_details
-  if entry.raid_details then
-    local rd = entry.raid_details
-    -- Format: RAID|ep|player_count|player1:old:new:alt,player2:old:new:alt,...
-    -- alt field contains the alt character name that triggered this main's award (may be empty string for direct awards or legacy entries)
-    local playerList = {}
-    for i = 1, table.getn(rd.players or {}) do
-      local player = rd.players[i]
-      local counts = rd.counts[player] or {old=0, new=0}
-      -- Extract alt source if it exists, otherwise use empty string
-      local alt_source = ""
-      if rd.alt_sources and rd.alt_sources[player] then
-        alt_source = rd.alt_sources[player]
-      end
-      table.insert(playerList, string.format("%s:%d:%d:%s", player, counts.old, counts.new, alt_source))
+  local actor = entry.actor or ""
+  local entryType = entry.type or "AWARD"
+  local details = string.gsub(entry.details or "", "|", "||")
+
+  local baseStr = string.format("%s|%d|%s|%s|%s", id, ts, actor, entryType, details)
+
+  -- Append expanded lines if present
+  if entry.details_expanded and table.getn(entry.details_expanded) > 0 then
+    local count = table.getn(entry.details_expanded)
+    local escapedLines = {}
+    for i = 1, count do
+      table.insert(escapedLines, string.gsub(tostring(entry.details_expanded[i]), "|", "||"))
     end
-    local playersStr = table.concat(playerList, ",")
-    -- Escape pipes in player data
-    playersStr = string.gsub(playersStr, "|", "||")
-    local raidData = string.format("RAID|%d|%d|%s", rd.ep or 0, table.getn(rd.players or {}), playersStr)
-    baseStr = baseStr .. "|" .. raidData
+    baseStr = baseStr .. "|EXP|" .. count .. "|" .. table.concat(escapedLines, "|")
   end
-  
+
   return baseStr
 end
 
 -- Helper: Deserialize entry from transmission
+-- Handles both new format (id|ts|actor|type|details[|EXP|N|lines...])
+-- and legacy format (id|ts|author|action[|RAID...]) for backward compatibility.
 local function deserializeEntry(data)
   if not data then return nil end
-  
+
   -- Split by pipe, handling escaped pipes (||)
   local parts = {}
   local current = ""
   local i = 1
-  
+
   while i <= string.len(data) do
     local char = string.sub(data, i, i)
     local nextChar = string.sub(data, i + 1, i + 1)
-    
+
     if char == "|" and nextChar == "|" then
-      -- Escaped pipe: add single pipe to current part
       current = current .. "|"
       i = i + 2
     elseif char == "|" then
-      -- Unescaped pipe: delimiter between parts
       table.insert(parts, current)
       current = ""
       i = i + 1
     else
-      -- Regular character
       current = current .. char
       i = i + 1
     end
   end
-  
   table.insert(parts, current)
-  
+
   if table.getn(parts) < 4 then return nil end
-  
+
   local entry = {
     id = parts[1],
     ts = tonumber(parts[2]) or 0,
-    author = parts[3],
-    action = parts[4]
   }
-  
-  -- Check if this is a raid entry (part 5 starts with "RAID")
-  if table.getn(parts) >= 5 and parts[5] == "RAID" then
-    local ep = tonumber(parts[6]) or 0
-    local playerCount = tonumber(parts[7]) or 0
-    local playersStr = parts[8] or ""
-    
-    local players = {}
-    local counts = {}
-    local alt_sources = {}
-    
-    -- Parse player list: player1:old:new:alt,player2:old:new:alt,...
-    -- alt field contains the alt character name that triggered this main's award (may be empty string for direct awards or legacy entries)
-    if playersStr ~= "" then
-      local playerEntries = {}
-      local currentEntry = ""
-      for j = 1, string.len(playersStr) do
-        local c = string.sub(playersStr, j, j)
-        if c == "," then
-          table.insert(playerEntries, currentEntry)
-          currentEntry = ""
-        else
-          currentEntry = currentEntry .. c
-        end
-      end
-      if currentEntry ~= "" then
-        table.insert(playerEntries, currentEntry)
-      end
-      
-      for k = 1, table.getn(playerEntries) do
-        local pEntry = playerEntries[k]
-        -- Split by :
-        local pParts = {}
-        local pCurrent = ""
-        for m = 1, string.len(pEntry) do
-          local c = string.sub(pEntry, m, m)
-          if c == ":" then
-            table.insert(pParts, pCurrent)
-            pCurrent = ""
-          else
-            pCurrent = pCurrent .. c
+
+  -- Determine format by checking whether parts[4] is a known type identifier
+  if VALID_TYPES[parts[4]] then
+    -- New format: id|ts|actor|type|details[|EXP|N|line_1|...|line_N]
+    entry.actor = parts[3]
+    entry.type = parts[4]
+    entry.details = parts[5] or ""
+
+    -- Parse optional expanded details
+    if table.getn(parts) >= 7 and parts[6] == "EXP" then
+      local count = tonumber(parts[7]) or 0
+      if count > 0 then
+        local lines = {}
+        for j = 8, 7 + count do
+          if parts[j] then
+            table.insert(lines, parts[j])
           end
         end
-        if pCurrent ~= "" then
-          table.insert(pParts, pCurrent)
-        end
-        
-        if table.getn(pParts) >= 3 then
-          local playerName = pParts[1]
-          local oldEP = tonumber(pParts[2]) or 0
-          local newEP = tonumber(pParts[3]) or 0
-          table.insert(players, playerName)
-          counts[playerName] = {old = oldEP, new = newEP}
-          -- Store alt source if present (4th field)
-          if pParts[4] and pParts[4] ~= "" then
-            alt_sources[playerName] = pParts[4]
-          end
+        if table.getn(lines) > 0 then
+          entry.details_expanded = lines
         end
       end
     end
-    
-    entry.raid_details = {
-      ep = ep,
-      players = players,
-      counts = counts,
-      alt_sources = alt_sources
-    }
+  else
+    -- Legacy format: id|ts|author|action[|RAID...]
+    entry.actor = parts[3]
+    entry.details = parts[4]
+
+    -- Attempt to infer type from legacy action prefix
+    local action = parts[4] or ""
+    if string.find(action, "%[DECAY%]") or string.find(action, "^%d+%% decay") then
+      entry.type = "DECAY"
+    elseif string.find(action, "%[RESET%]") or string.find(action, "reset") then
+      entry.type = "RESET"
+    elseif string.find(action, "%[RAID%]") then
+      entry.type = "AWARD"
+      -- Migrate old RAID expanded data to details_expanded if present
+      if table.getn(parts) >= 5 and parts[5] == "RAID" then
+        local rdEp = tonumber(parts[6]) or 0
+        local playersStr = parts[8] or ""
+        local lines = {}
+        if playersStr ~= "" then
+          local playerEntries = {}
+          local cur = ""
+          for k = 1, string.len(playersStr) do
+            local c = string.sub(playersStr, k, k)
+            if c == "," then
+              table.insert(playerEntries, cur)
+              cur = ""
+            else
+              cur = cur .. c
+            end
+          end
+          if cur ~= "" then table.insert(playerEntries, cur) end
+          for k = 1, table.getn(playerEntries) do
+            local pEntry = playerEntries[k]
+            local pParts = {}
+            local pc = ""
+            for m = 1, string.len(pEntry) do
+              local c = string.sub(pEntry, m, m)
+              if c == ":" then table.insert(pParts, pc); pc = ""
+              else pc = pc .. c end
+            end
+            if pc ~= "" then table.insert(pParts, pc) end
+            if table.getn(pParts) >= 3 then
+              local pname = pParts[1]
+              local oldEP = tonumber(pParts[2]) or 0
+              local newEP = tonumber(pParts[3]) or 0
+              local delta = newEP - oldEP
+              local altSrc = pParts[4]
+              local line
+              if altSrc and altSrc ~= "" then
+                line = string.format("%s (%s's main): %d -> %d (%+d)", pname, altSrc, oldEP, newEP, delta)
+              else
+                line = string.format("%s: %d -> %d (%+d)", pname, oldEP, newEP, delta)
+              end
+              table.insert(lines, line)
+            end
+          end
+        end
+        if table.getn(lines) > 0 then
+          entry.details_expanded = lines
+        end
+      end
+    elseif string.find(action, "Penalty") or (string.find(action, "%-") and not string.find(action, "%[RESET%]")) then
+      entry.type = "PENALTY"
+    else
+      entry.type = "AWARD"
+    end
   end
-  
+
   return entry
 end
 
@@ -412,15 +418,58 @@ local function applyAdminLogEntry(entry)
   end
 end
 
--- Load saved entries into runtime cache
+-- Load saved entries into runtime cache, migrating legacy field names if needed
 local function loadSavedEntries()
   adminLogRuntime = {}
-  
-  -- Load from saved order
+
   for i = 1, table.getn(GuildRoll_adminLogOrder) do
     local id = GuildRoll_adminLogOrder[i]
     local entry = GuildRoll_adminLogSaved[id]
     if entry then
+      -- Migrate legacy fields: author -> actor, action -> details
+      if entry.author and not entry.actor then
+        entry.actor = entry.author
+        entry.author = nil
+      end
+      if entry.action and not entry.details then
+        entry.details = entry.action
+        entry.action = nil
+      end
+      -- Migrate legacy raid_details -> details_expanded
+      if entry.raid_details and not entry.details_expanded then
+        local rd = entry.raid_details
+        local lines = {}
+        for j = 1, table.getn(rd.players or {}) do
+          local player = rd.players[j]
+          local counts = rd.counts and rd.counts[player] or {old=0, new=0}
+          local delta = counts.new - counts.old
+          local altSrc = rd.alt_sources and rd.alt_sources[player]
+          local line
+          if altSrc and altSrc ~= "" then
+            line = string.format("%s (%s's main): %d -> %d (%+d)", player, altSrc, counts.old, counts.new, delta)
+          else
+            line = string.format("%s: %d -> %d (%+d)", player, counts.old, counts.new, delta)
+          end
+          table.insert(lines, line)
+        end
+        if table.getn(lines) > 0 then
+          entry.details_expanded = lines
+        end
+        entry.raid_details = nil
+      end
+      -- Infer missing type field
+      if not entry.type then
+        local d = entry.details or ""
+        if string.find(d, "%[DECAY%]") or string.find(d, "decay") then
+          entry.type = "DECAY"
+        elseif string.find(d, "%[RESET%]") or string.find(d, "reset") then
+          entry.type = "RESET"
+        elseif string.find(d, "Penalty") then
+          entry.type = "PENALTY"
+        else
+          entry.type = "AWARD"
+        end
+      end
       adminLogRuntime[id] = entry
     end
   end
@@ -618,8 +667,8 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     local entryData = parts[4]
     local entry = deserializeEntry(entryData)
     if entry then
-      debugPrint(string.format("Applying ADD entry: id=%s, author=%s", 
-        entry.id or "nil", entry.author or "nil"))
+      debugPrint(string.format("Applying ADD entry: id=%s, actor=%s",
+        entry.id or "nil", entry.actor or "nil"))
       applyAdminLogEntry(entry)
       -- Update latestRemoteTS if this entry is newer
       if entry.ts and entry.ts > latestRemoteTS then
@@ -737,7 +786,7 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
     GuildRoll_adminLogSaved = {}
     GuildRoll_adminLogOrder = {}
     adminLogRuntime = {}
-    expandedRaidEntries = {}
+    expandedEntries = {}
     
     -- Refresh UI
     if T and T:IsRegistered("GuildRoll_AdminLog") then
@@ -750,74 +799,48 @@ local function handleAdminLogMessage(prefix, message, channel, sender)
 end
 
 -- Public API: Add a new admin log entry
-function GuildRoll:AdminLogAdd(text)
+-- entry is a table with fields:
+--   ts             (optional) numeric timestamp; defaults to time()
+--   actor          (optional) officer name; defaults to UnitName("player")
+--   type           required: "AWARD" | "PENALTY" | "DECAY" | "RESET" | "MANUAL"
+--   details        required: human-readable English summary string
+--   details_expanded (optional) array of strings for mass/raid awards
+function GuildRoll:AdminLogAdd(entry)
   if not self:IsAdmin() then
     self:defaultPrint("Only admins can add admin log entries.")
     return
   end
-  
-  if not text or text == "" then
-    self:defaultPrint("Usage: /gadminlog add <text>")
-    return
-  end
-  
-  local entry = {
-    id = generateEntryId(),
-    ts = time(),
-    author = UnitName("player") or "Unknown",
-    action = text
-  }
-  
-  -- Apply locally
-  applyAdminLogEntry(entry)
-  
-  -- Broadcast to guild
-  broadcastAdminLogEntry(entry)
-  
-  -- Refresh UI
-  if T and T:IsRegistered("GuildRoll_AdminLog") then
-    pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-  end
-end
 
--- Public API: Add a raid admin log entry with player details
-function GuildRoll:AdminLogAddRaid(ep, raid_data)
-  if not self:IsAdmin() then
+  if type(entry) ~= "table" then
+    self:defaultPrint("AdminLogAdd: entry must be a table.")
     return
   end
-  
-  if not raid_data or not raid_data.players or table.getn(raid_data.players) == 0 then
+
+  if not entry.type or not VALID_TYPES[entry.type] then
+    self:defaultPrint("AdminLogAdd: invalid or missing entry.type.")
     return
   end
-  
-  local playerCount = table.getn(raid_data.players)
-  local adminName = UnitName("player") or "Unknown"
-  local actionText
-  if ep < 0 then
-    actionText = string.format("[RAID] %d EP Penalty (%d players)", ep, playerCount)
-  else
-    actionText = string.format("[RAID] Giving %d EP (%d players)", ep, playerCount)
+
+  if not entry.details or entry.details == "" then
+    self:defaultPrint("AdminLogAdd: missing entry.details.")
+    return
   end
-  
-  local entry = {
-    id = generateEntryId(),
-    ts = time(),
-    author = adminName,
-    action = actionText,
-    raid_details = {
-      ep = ep,
-      players = raid_data.players,
-      counts = raid_data.counts,
-      alt_sources = raid_data.alt_sources
-    }
+
+  local record = {
+    id             = generateEntryId(),
+    ts             = entry.ts or time(),
+    actor          = entry.actor or (UnitName("player") or "Unknown"),
+    type           = entry.type,
+    details        = entry.details,
+    details_expanded = entry.details_expanded,
   }
-  
+
   -- Apply locally
-  applyAdminLogEntry(entry)
-  
+  applyAdminLogEntry(record)
+
   -- Broadcast to guild
-  broadcastAdminLogEntry(entry)
-  
+  broadcastAdminLogEntry(record)
+
   -- Refresh UI
   if T and T:IsRegistered("GuildRoll_AdminLog") then
     pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -987,14 +1010,14 @@ function GuildRoll_AdminLog:OnEnable()
           end
         )
         
-        -- Filter by author
+        -- Filter by actor
         GuildRoll:SafeDewdropAddLine(
-          "text", "Filter by Author",
+          "text", "Filter by Actor",
           "hasArrow", true,
           "hasSlider", false
         )
         GuildRoll:SafeDewdropAddLine(
-          "text", "All Authors",
+          "text", "All Actors",
           "tooltipText", "Show all admin log entries",
           "func", function()
             filterAuthor = nil
@@ -1002,17 +1025,17 @@ function GuildRoll_AdminLog:OnEnable()
           end,
           "level", 2
         )
-        
-        -- Build unique author list
+
+        -- Build unique actor list
         local authors = {}
         for i = 1, table.getn(GuildRoll_adminLogOrder) do
           local id = GuildRoll_adminLogOrder[i]
           local entry = adminLogRuntime[id]
-          if entry and entry.author then
-            authors[entry.author] = true
+          if entry and entry.actor then
+            authors[entry.actor] = true
           end
         end
-        
+
         for author, _ in pairs(authors) do
           GuildRoll:SafeDewdropAddLine(
             "text", author,
@@ -1064,7 +1087,7 @@ function GuildRoll_AdminLog:OnEnable()
             GuildRoll_adminLogSaved = {}
             GuildRoll_adminLogOrder = {}
             adminLogRuntime = {}
-            expandedRaidEntries = {}
+            expandedEntries = {}
             
             -- Refresh UI
             pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -1143,171 +1166,124 @@ end
 
 function GuildRoll_AdminLog:OnTooltipUpdate()
   local cat = T:AddCategory(
-    "columns", 3,
-    "text", "Time",
-    "child_textR", 1,
-    "child_textG", 1,
-    "child_textB", 1,
-    "child_justify", "LEFT",
-    "text2", "Author",
-    "child_text2R", 0.5,
-    "child_text2G", 1,
-    "child_text2B", 0.5,
-    "child_justify2", "LEFT",
-    "text3", "Action",
-    "child_text3R", 1,
-    "child_text3G", 1,
-    "child_text3B", 0.5,
-    "child_justify3", "RIGHT"
+    "columns", 4,
+    "text",  "Time",
+    "child_textR",   1, "child_textG",   1, "child_textB",   1, "child_justify",  "LEFT",
+    "text2", "Actor",
+    "child_text2R",  0.5, "child_text2G", 1, "child_text2B",  0.5, "child_justify2", "LEFT",
+    "text3", "Type",
+    "child_text3R",  0.7, "child_text3G", 0.9, "child_text3B", 1, "child_justify3", "LEFT",
+    "text4", "Details",
+    "child_text4R",  1, "child_text4G",  1, "child_text4B",  0.5, "child_justify4", "RIGHT"
   )
-  
-  -- Helper function to colorize numeric deltas in action text
-  local function colorizeAction(actionText)
-    if not actionText then return "" end
-    
-    -- Replace signed numbers with colorized versions
-    -- Pattern matches: +123, -456, or just numbers in context
-    local result = actionText
-    
-    -- First, colorize explicit signed numbers (+N or -N)
-    result = string.gsub(result, "(%+%d+)", function(match)
-      return C:Green(match)
-    end)
-    
-    result = string.gsub(result, "(-%d+)", function(match)
-      return C:Red(match)
-    end)
-    
+
+  -- Helper: colorize signed numeric deltas in text (+N green, -N red)
+  local function colorizeDetails(text)
+    if not text then return "" end
+    local result = string.gsub(text, "(%+%d+)", function(m) return C:Green(m) end)
+    result = string.gsub(result, "(%-[%d]+)", function(m) return C:Red(m) end)
     return result
   end
-  
+
   -- Build filtered entry list
   local displayEntries = {}
   for i = 1, table.getn(GuildRoll_adminLogOrder) do
     local id = GuildRoll_adminLogOrder[i]
     local entry = adminLogRuntime[id]
-    
+
     if entry then
-      -- Apply filters
       local include = true
-      
-      if filterAuthor and entry.author ~= filterAuthor then
+
+      if filterAuthor and entry.actor ~= filterAuthor then
         include = false
       end
-      
+
       if searchText and searchText ~= "" then
         local searchLower = string.lower(searchText)
-        local actionLower = string.lower(entry.action or "")
-        if not string.find(actionLower, searchLower, 1, true) then
+        local detailsLower = string.lower(entry.details or "")
+        local actorLower = string.lower(entry.actor or "")
+        if not string.find(detailsLower, searchLower, 1, true) and
+           not string.find(actorLower, searchLower, 1, true) then
           include = false
         end
       end
-      
+
       if include then
         table.insert(displayEntries, entry)
       end
     end
   end
-  
+
   -- Sort by timestamp descending (newest first)
   table.sort(displayEntries, function(a, b)
     return (a.ts or 0) > (b.ts or 0)
   end)
-  
+
   -- Display entries
   if table.getn(displayEntries) == 0 then
     cat:AddLine(
       "text", "No entries",
       "text2", "",
-      "text3", ""
+      "text3", "",
+      "text4", ""
     )
   else
     for i = 1, table.getn(displayEntries) do
       local entry = displayEntries[i]
       local timeStr = date("%Y-%m-%d %H:%M:%S", entry.ts)
-      
-      -- Check if this is a raid entry
-      if entry.raid_details then
-        local isExpanded = expandedRaidEntries[entry.id]
+      local typeStr = entry.type or "?"
+      local actorStr = entry.actor or "Unknown"
+
+      if entry.details_expanded and table.getn(entry.details_expanded) > 0 then
+        -- Entry has expandable details
+        local isExpanded = expandedEntries[entry.id]
         local expandIcon = isExpanded and "[-] " or "[+] "
-        
-        -- Colorize the action text for main raid entry
-        local colorizedAction = colorizeAction(entry.action or "")
-        
+        local colorizedDetails = colorizeDetails(entry.details or "")
+
         cat:AddLine(
-          "text", timeStr,
-          "text2", entry.author or "Unknown",
-          "text3", expandIcon .. colorizedAction,
+          "text",  timeStr,
+          "text2", actorStr,
+          "text3", typeStr,
+          "text4", expandIcon .. colorizedDetails,
           "func", function()
-            -- Toggle expansion
-            if expandedRaidEntries[entry.id] then
-              expandedRaidEntries[entry.id] = nil
+            if expandedEntries[entry.id] then
+              expandedEntries[entry.id] = nil
             else
-              expandedRaidEntries[entry.id] = true
+              expandedEntries[entry.id] = true
             end
             pcall(function() T:Refresh("GuildRoll_AdminLog") end)
           end
         )
-        
-        -- If expanded, show player details in a subcategory to prevent overlap
-        if isExpanded and entry.raid_details.players then
-          -- Create a subcategory for player details with single column, no inheritance
+
+        if isExpanded then
           local subcat = cat:AddCategory(
             "columns", 1,
             "hideBlankLine", true,
             "noInherit", true,
             "child_justify", "RIGHT"
           )
-          
-          for j = 1, table.getn(entry.raid_details.players) do
-            local player = entry.raid_details.players[j]
-            local counts = entry.raid_details.counts[player] or {old=0, new=0}
-            local delta = counts.new - counts.old
-            local alt_source = entry.raid_details.alt_sources and entry.raid_details.alt_sources[player]
-            
-            -- Colorize delta: green for positive/zero, red for negative
-            local deltaColored
-            if delta >= 0 then
-              deltaColored = C:Green(string.format("(+%d)", delta))
-            else
-              deltaColored = C:Red(string.format("(%d)", delta))
-            end
-            
-            -- Build display string based on whether this was alt-pooled
-            local displayText
-            if alt_source and alt_source ~= "" then
-              -- Alt-pooled: show "MainName (AltName's main) — Prev: X, New: Y (+Z)"
-              displayText = string.format("  %s (%s's main) — Prev: %d, New: %d %s", 
-                player, alt_source, counts.old, counts.new, deltaColored)
-            else
-              -- Normal: show "PlayerName — Prev: X, New: Y (+Z)"
-              displayText = string.format("  %s — Prev: %d, New: %d %s", 
-                player, counts.old, counts.new, deltaColored)
-            end
-            
-            subcat:AddLine(
-              "text", displayText
-            )
+          for j = 1, table.getn(entry.details_expanded) do
+            subcat:AddLine("text", "  " .. tostring(entry.details_expanded[j]))
           end
         end
       else
-        -- Regular entry (non-raid): colorize action text
-        local colorizedAction = colorizeAction(entry.action or "")
-        
+        -- Regular non-expandable entry
+        local colorizedDetails = colorizeDetails(entry.details or "")
         cat:AddLine(
-          "text", timeStr,
-          "text2", entry.author or "Unknown",
-          "text3", colorizedAction
+          "text",  timeStr,
+          "text2", actorStr,
+          "text3", typeStr,
+          "text4", colorizedDetails
         )
       end
     end
   end
-  
+
   -- Show filter/search status
   if filterAuthor or searchText then
     local statusParts = {}
     if filterAuthor then
-      table.insert(statusParts, string.format("Author: %s", filterAuthor))
+      table.insert(statusParts, string.format("Actor: %s", filterAuthor))
     end
     if searchText then
       table.insert(statusParts, string.format("Search: %s", searchText))
@@ -1444,7 +1420,7 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_CLEAR_CONFIRM"] = {
       GuildRoll_adminLogSaved = {}
       GuildRoll_adminLogOrder = {}
       adminLogRuntime = {}
-      expandedRaidEntries = {}
+      expandedEntries = {}
       
       -- Refresh UI
       pcall(function() T:Refresh("GuildRoll_AdminLog") end)

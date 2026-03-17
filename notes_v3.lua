@@ -170,48 +170,17 @@ function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action
     end
   end
   
-  if newnote then 
+  if newnote then
     -- Write officer note with pcall for defensiveness
     local success, err = pcall(function()
       GuildRosterSetOfficerNote(guild_index,newnote,true)
     end)
-    
+
     if not success then
       self:debugPrint(string.format("Error updating officer note for %s: %s", name or "unknown", tostring(err)))
     end
-    
-    -- Add personal logging for EP changes only with compact colorized format
-    if ep ~= nil then
-      local actor = UnitName("player")
-      local changeEP = ep - prevEP
-      
-      -- Get Crayon library for coloring (with fallback if not available)
-      local C
-      pcall(function() C = AceLibrary("Crayon-2.0") end)
-      
-      -- Colorize delta: green for positive, red for negative
-      local deltaStr
-      if C and changeEP >= 0 then
-        deltaStr = C:Green(string.format("+%d", changeEP))
-      elseif C then
-        deltaStr = C:Red(string.format("%d", changeEP))
-      else
-        -- Fallback if Crayon not available
-        deltaStr = string.format("%+d", changeEP)
-      end
-      
-      -- Build suffix based on special_action
-      local suffix = ""
-      if special_action == "RAID" then
-        suffix = " (Raid)"
-      elseif special_action == "DECAY" then
-        suffix = " (Decay)"
-      end
-      
-      -- Compact format: EP: Prev -> New (±N) by AdminName[ (Raid)|(Decay)]
-      local logMsg = string.format("EP: %d -> %d (%s) by %s%s", prevEP, ep, deltaStr, actor, suffix)
-      self:personalLogAdd(name, logMsg)
-    end
+    -- Personal log entries for EP changes are handled by the addon message handler
+    -- on each player's own client, ensuring only self-affecting actions are logged.
   end
 end
 

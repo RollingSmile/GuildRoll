@@ -165,31 +165,11 @@ function GuildRoll_logs:reverse(arr)
 end
 
 function GuildRoll_logs:BuildLogsTable()
-  -- Check if user is officer - show AdminLog
-  -- Otherwise show personal log
-  local isOfficer = GuildRoll:IsAdmin()
-
-  if isOfficer then
-    -- Build from synchronized AdminLog (GuildRoll_adminLogOrder + GuildRoll_adminLogSaved)
-    local result = {}
-    if GuildRoll_adminLogOrder and GuildRoll_adminLogSaved then
-      for i = 1, table.getn(GuildRoll_adminLogOrder) do
-        local id = GuildRoll_adminLogOrder[i]
-        local entry = GuildRoll_adminLogSaved[id]
-        if entry and entry.ts and entry.action then
-          -- Format timestamp to match existing log format: "%b/%d %H:%M:%S"
-          local timestamp = date("%b/%d %H:%M:%S", entry.ts)
-          table.insert(result, {timestamp, entry.action})
-        end
-      end
-    end
-    return self:reverse(result)
-  else
-    -- Show personal log for current player
-    local playerName = UnitName("player") or "player"
-    local personalLog = GuildRoll_personalLogs[playerName] or {}
-    return self:reverse(personalLog)
-  end
+  -- Always show the personal log for the current player.
+  -- Officers use the dedicated GuildRoll_AdminLog module for the admin log.
+  local playerName = UnitName("player") or "player"
+  local personalLog = GuildRoll_personalLogs[playerName] or {}
+  return self:reverse(personalLog)
 end
 
 function GuildRoll_logs:OnTooltipUpdate()
