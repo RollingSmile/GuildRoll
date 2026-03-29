@@ -170,16 +170,29 @@ function GuildRoll_logs:BuildLogsTable()
   local isOfficer = GuildRoll:IsAdmin()
 
   if isOfficer then
-    -- Build from synchronized AdminLog (GuildRoll_adminLogOrder + GuildRoll_adminLogSaved)
+    -- Build from local AdminLog (GuildRoll_adminLogOrder + GuildRoll_adminLogSaved)
     local result = {}
     if GuildRoll_adminLogOrder and GuildRoll_adminLogSaved then
       for i = 1, table.getn(GuildRoll_adminLogOrder) do
         local id = GuildRoll_adminLogOrder[i]
         local entry = GuildRoll_adminLogSaved[id]
-        if entry and entry.ts and entry.action then
-          -- Format timestamp to match existing log format: "%b/%d %H:%M:%S"
+        if entry and entry.ts then
           local timestamp = date("%b/%d %H:%M:%S", entry.ts)
-          table.insert(result, {timestamp, entry.action})
+          -- Support both new structured format and old format
+          local lineText
+          if entry.details ~= nil then
+            -- New format: combine action + target + details
+            local parts = {}
+            if entry.action and entry.action ~= "" then table.insert(parts, "[" .. entry.action .. "]") end
+            if entry.actor  and entry.actor  ~= "" then table.insert(parts, entry.actor) end
+            if entry.target and entry.target ~= "" then table.insert(parts, entry.target) end
+            if entry.details and entry.details ~= "" then table.insert(parts, entry.details) end
+            lineText = table.concat(parts, " ")
+          else
+            -- Old format
+            lineText = entry.action or ""
+          end
+          table.insert(result, {timestamp, lineText})
         end
       end
     end
