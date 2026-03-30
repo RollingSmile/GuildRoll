@@ -4,88 +4,6 @@ local L = AceLibrary("AceLocale-2.2"):new("guildroll")
 -- Ensure GuildRoll_RollPos is initialized with default values
 GuildRoll_RollPos = GuildRoll_RollPos or { x = 400, y = 300 }
 GuildRoll_showRollWindow = GuildRoll_showRollWindow == nil and true or GuildRoll_showRollWindow
--- Initialize CSR threshold (default = 3, meaning rank index 0-3 can see CSR)
-GuildRoll_CSRThreshold = GuildRoll_CSRThreshold or 3
--- Initialize EnableRollButtons flag (default = false)
-GuildRoll_EnableRollButtons = GuildRoll_EnableRollButtons or false
-
--- Helper: Check if player has permission to view CSR based on rank index
--- Robust version that handles stale/empty guild roster, strips realm names, compares rankIndex safely
-local function PlayerHasCSRPermission()
-    if not IsInGuild() then
-        return false
-    end
-
-    local threshold = tonumber(GuildRoll_CSRThreshold)
-    if not threshold then
-      -- No threshold set => CSR hidden
-      return false
-    end
-
-    local playerName = UnitName("player")
-    if playerName then
-        playerName = string.gsub(playerName, "%-[^%-]+$", "")
-    end
-
-    local numMembers = GetNumGuildMembers()
-    if not numMembers or numMembers == 0 then
-        pcall(GuildRoster)
-        return false
-    end
-
-    for i = 1, numMembers do
-        local name, rank, rankIndex = GetGuildRosterInfo(i)
-        if name then
-            name = string.gsub(name, "%-[^%-]+$", "")
-        end
-
-        if name == playerName and rankIndex then
-            local numericRank = tonumber(rankIndex)
-            return numericRank and numericRank <= threshold
-        end
-    end
-
-    return false
-end
-
--- Helper: Check if current character is an Alt using GuildRoll:parseAlt
--- Returns true if the character has an alt tag (has a main), false otherwise
-local function IsAlt()
-    if not GuildRoll or not GuildRoll.parseAlt then
-        return false
-    end
-    
-    local playerName = UnitName("player")
-    if not playerName then
-        return false
-    end
-    
-    -- Strip realm suffix from player name for comparison
-    local playerNameClean = string.gsub(playerName, "%-[^%-]+$", "")
-    
-    -- If guild roster is empty, trigger a refresh
-    local numMembers = GetNumGuildMembers()
-    if not numMembers or numMembers == 0 then
-        pcall(GuildRoster)
-        return false
-    end
-    
-    -- pcall-wrapped call to parseAlt with cleaned player name
-    local success, main = pcall(function()
-        return GuildRoll:parseAlt(playerNameClean)
-    end)
-    
-    -- If parseAlt returns a main character name, this is an alt
-    if success and main and type(main) == "string" then
-        -- Strip realm suffix from main name for comparison
-        local mainClean = string.gsub(main, "%-[^%-]+$", "")
-        if mainClean ~= playerNameClean then
-            return true
-        end
-    end
-    
-    return false
-end
 
 -- Helper: try to find the EditBox for a StaticPopup dialog robustly
 local function GetVisibleStaticPopupEditBox(dialog)
@@ -445,69 +363,16 @@ end
 -- Call reposition on load
 RepositionRollButtons()
 
--- ========================================================================
--- UPDATED FUNCTION: Show all 8 buttons always, but selectively disable them
--- ========================================================================
 local function UpdateRollPopupVisibility()
-    -- Reposition buttons first
     RepositionRollButtons()
-    
-    -- Get current state
-    local enableRollButtons = GuildRoll_EnableRollButtons == true
-    local isAlt = IsAlt()
-    local hasCSRPerm = PlayerHasCSRPermission()
-    
-    -- ALWAYS SHOW all buttons
-    rollPopupButtons.CSR:Show()
-    rollPopupButtons.SR:Show()
-    rollPopupButtons.EP:Show()
-    rollPopupButtons["101"]:Show()
-    rollPopupButtons["100"]:Show()
-    rollPopupButtons["99"]:Show()
-    rollPopupButtons.Tmog:Show()
-    rollPopupButtons.Standings:Show()
-    
-    -- Now handle enabling/disabling
-    if enableRollButtons then
-        -- ADMIN OVERRIDE: Enable all buttons for everyone
-        rollPopupButtons.CSR:Enable()
-        rollPopupButtons.SR:Enable()
-        rollPopupButtons.EP:Enable()
-        rollPopupButtons["101"]:Enable()
-        rollPopupButtons["100"]:Enable()
-        rollPopupButtons["99"]:Enable()
-        rollPopupButtons.Tmog:Enable()
-        rollPopupButtons.Standings:Enable()
-    else
-        -- NORMAL MODE: Apply restrictions
-        if isAlt then
-            -- ALT: Only 99, Tmog, Standings enabled
-            rollPopupButtons.CSR:Disable()
-            rollPopupButtons.SR:Disable()
-            rollPopupButtons.EP:Disable()
-            rollPopupButtons["101"]:Disable()
-            rollPopupButtons["100"]:Disable()
-            rollPopupButtons["99"]:Enable()
-            rollPopupButtons.Tmog:Enable()
-            rollPopupButtons.Standings:Enable()
-        else
-            -- MAIN: All enabled except CSR depends on rank
-            rollPopupButtons.SR:Enable()
-            rollPopupButtons.EP:Enable()
-            rollPopupButtons["101"]:Enable()
-            rollPopupButtons["100"]:Enable()
-            rollPopupButtons["99"]:Enable()
-            rollPopupButtons.Tmog:Enable()
-            rollPopupButtons.Standings:Enable()
-            
-            -- CSR: Enable/Disable based on rank threshold
-            if hasCSRPerm then
-                rollPopupButtons.CSR:Enable()
-            else
-                rollPopupButtons.CSR:Disable()
-            end
-        end
-    end
+    rollPopupButtons.CSR:Show()   rollPopupButtons.CSR:Enable()
+    rollPopupButtons.SR:Show()    rollPopupButtons.SR:Enable()
+    rollPopupButtons.EP:Show()    rollPopupButtons.EP:Enable()
+    rollPopupButtons["101"]:Show() rollPopupButtons["101"]:Enable()
+    rollPopupButtons["100"]:Show() rollPopupButtons["100"]:Enable()
+    rollPopupButtons["99"]:Show()  rollPopupButtons["99"]:Enable()
+    rollPopupButtons.Tmog:Show()  rollPopupButtons.Tmog:Enable()
+    rollPopupButtons.Standings:Show() rollPopupButtons.Standings:Enable()
 end
 
 -- Initial visibility update
