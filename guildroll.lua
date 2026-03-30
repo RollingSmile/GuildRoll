@@ -617,146 +617,6 @@ function GuildRoll:buildMenu()
       end,
     }
     
-    -- Cumulative rank threshold selector for CSR
-    -- Visual index 0 = "Select Rank:" (threshold nil)
-    -- Visual index 1 = rankIndex 0 (Guild Master) → threshold 0
-    -- Visual index 2 = rankIndex 1 (Officer) → threshold 1
-    -- etc.
-    -- Clicking visual index i sets threshold to i-1 and shows checkmarks on all visual indices 1..i
-    local function BuildCSRRankRadioGroup(container)
-      container.args = container.args or {}
-
-      container.args["info"] = {
-        type = "header",
-        name = "Checked ranks will see CSR button",
-      }
-
-      -- Helper: Check if current player has permission to edit CSR settings
-      local function hasCSREditPermission()
-        return IsGuildLeader() or admin()
-      end
-
-      local function applyThresholdChange(newThreshold)
-        local numericThreshold = tonumber(newThreshold)
-        if numericThreshold ~= nil and numericThreshold < 0 then
-          numericThreshold = 0
-        end
-        GuildRoll_CSRThreshold = numericThreshold
-        if GuildRoll and GuildRoll.shareSettings then 
-          GuildRoll:shareSettings(true)
-        end
-        if GuildRoll and GuildRoll.RebuildRollOptions then 
-          GuildRoll:RebuildRollOptions() 
-        end
-      end
-
-      -- Collect rank names from guild roster if available
-      local ranks = {}
-      local maxIndex = -1
-      local num = GetNumGuildMembers and GetNumGuildMembers(1) or 0
-      if num and num > 0 then
-        for i = 1, num do
-          local name, rank, rankIndex = GetGuildRosterInfo(i)
-          if rank and rankIndex then
-            ranks[rankIndex] = rank
-            if rankIndex > maxIndex then maxIndex = rankIndex end
-          end
-        end
-      end
-
-      -- If roster not ready, use standard placeholders
-      if maxIndex < 0 then
-        maxIndex = 4
-        ranks = { [0] = "Guild Master", [1] = "Officer", [2] = "Veteran", [3] = "Core Raider", [4] = "Raider" }
-      end
-
-      -- Rank items: starting from rank 0 (Guild Master)
-      -- Use local variable per iteration to ensure proper closure capture
-      for rankIdx = 0, maxIndex do
-        local currentRankIdx = rankIdx  -- Local per-iteration binding for closure
-        local rankName = ranks[currentRankIdx] or ("Rank " .. tostring(currentRankIdx))
-        local visualIdx = currentRankIdx + 1  -- Visual index starts at 1
-        local key = "rank_" .. tostring(currentRankIdx)
-        
-        local descText
-        if currentRankIdx == 0 then
-          descText = "Guild Master (always has CSR access, cannot be disabled)"
-        else
-          descText = string.format("Set threshold to %s.", rankName)
-        end
-        
-        container.args[key] = {
-          type = "toggle",
-          name = rankName,
-          desc = descText,
-          -- Cumulative checkbox: checked if current threshold >= this rankIndex
-          get = function()
-            local threshold = tonumber(GuildRoll_CSRThreshold)
-            return threshold ~= nil and threshold >= currentRankIdx
-          end,
-          set = function(v)
-            if v then
-              -- Set threshold to this rankIndex
-              applyThresholdChange(currentRankIdx)
-            else
-              -- Unchecking: set threshold to next higher rank (lower rankIdx = higher rank)
-              -- Note: Guild Master (rank 0) is disabled and should never reach here,
-              -- but if it does, applyThresholdChange will clamp to 0 minimum
-              applyThresholdChange(currentRankIdx - 1)
-            end
-          end,
-          -- Disable rank 0 (Guild Master) so it cannot be unchecked
-          disabled = currentRankIdx == 0,
-          order = visualIdx,
-        }
-      end
-    end
-    
-    -- Add CSR Threshold submenu under Admin Settings
-    options.args["options_group"].args["csr_threshold"] = {
-      type = "group",
-      name = "CSR Threshold",
-      desc = "Configure which ranks can see the CSR roll button",
-      order = 65,
-      hidden = function() return not admin() end,
-      args = {}
-    }
-    
-    -- Build the CSR threshold menu
-    BuildCSRRankRadioGroup(options.args["options_group"].args["csr_threshold"])
-    
-    -- Enable Roll Buttons Option
-    options.args["options_group"].args["enable_roll_buttons"] = {
-      type = "toggle",
-      name = L["Enable Roll Buttons"],
-      desc = L["Enable Roll Buttons description"],
-      order = 66,
-      hidden = function() return not (admin()) end,
-      get = function() return GuildRoll_EnableRollButtons == true end,
-      set = function(v)
-        GuildRoll_EnableRollButtons = v
-        
-        -- Log feedback to user
-        if GuildRoll and GuildRoll.defaultPrint then
-          if v then
-            GuildRoll:defaultPrint("Enable Roll Buttons: ON - All buttons visible and enabled for everyone")
-          else
-            GuildRoll:defaultPrint("Enable Roll Buttons: OFF - Normal visibility rules apply")
-          end
-        end
-        
-        -- Update locally
-        if GuildRoll and GuildRoll.RebuildRollOptions then 
-          GuildRoll:RebuildRollOptions() 
-        end
-        
-        -- Synchronize to all players
-        if GuildRoll and GuildRoll.shareSettings then 
-          GuildRoll:shareSettings(true) 
-        end
-      end,
-    }
-    
   end
   if (needInit) or (needRefresh) then
     local members = GuildRoll:buildRosterTable()
@@ -1314,28 +1174,6 @@ handleSharedSettings = function(message, sender)
 
   local changed = false
   
-  -- CSR Threshold handling
-  if settings.CSR then
-    local csr
-    if settings.CSR == "NONE" then 
-      csr = nil 
-    else 
-      csr = tonumber(settings.CSR) 
-    end
-    if csr ~= GuildRoll_CSRThreshold then 
-      GuildRoll_CSRThreshold = csr
-      changed = true 
-    end
-  end
-  
-  if settings.ERB then 
-    local erb = (settings.ERB == "1") and true or false
-    if erb ~= GuildRoll_EnableRollButtons then 
-      GuildRoll_EnableRollButtons = erb
-      changed = true
-    end
-  end
-  
   -- RO removed: raid-only toggles are now local runtime-only flags, not shared
   if settings.DC then 
     local dc = tonumber(settings.DC) 
@@ -1356,7 +1194,7 @@ handleSharedSettings = function(message, sender)
 end
 
 -- Share admin settings to guild members via addon message
--- Broadcasts key admin settings (CSR threshold, raid_only, decay, min EP, alt percent, report channel)
+-- Broadcasts key admin settings (decay, alt percent, report channel)
 -- force: if true, bypasses permission check and throttle
 function GuildRoll:shareSettings(force)
   -- Check permission: only guild leader or officer can share (admin() checks CanEditOfficerNote)
@@ -1371,12 +1209,9 @@ function GuildRoll:shareSettings(force)
     self._lastSettingsShare = now
     
     -- Build compact payload with admin settings
-    -- Format: SHARE:CSR=3;DC=0.5;ALT=1.0;SC=GUILD;SBR=0
-    -- CSR can be nil (disabled), use "NONE" to represent this in the payload
+    -- Format: SHARE:DC=0.5;ALT=1.0;SC=GUILD;SBR=0
     -- MIN removed: Minimum EP is now local to each admin and not shared
     -- RO removed: raid-only toggles are now local runtime-only flags, not shared
-    local csr = GuildRoll_CSRThreshold
-    local csrStr = csr and tostring(csr) or "NONE"
     local dc = GuildRoll_decay or 0
     local alt = GuildRollAltspool and "ON" or "OFF"
     local sc = GuildRoll_saychannel or "GUILD"
@@ -1386,10 +1221,8 @@ function GuildRoll:shareSettings(force)
     sc = string.gsub(sc, "=", "%%3D")
     sc = string.gsub(sc, ";", "%%3B")
     
-    local erbStr = (GuildRoll_EnableRollButtons == true) and "1" or "0"
-    
-    local payload = string.format("SHARE:CSR=%s;DC=%s;ALT=%s;SC=%s;SBR=%d;ERB=%s",
-      csrStr, tostring(dc), tostring(alt), sc, sbr, erbStr)
+    local payload = string.format("SHARE:DC=%s;ALT=%s;SC=%s;SBR=%d",
+      tostring(dc), tostring(alt), sc, sbr)
     
     -- Send via existing addonMessage method for consistency
     self:addonMessage(payload, "GUILD")
