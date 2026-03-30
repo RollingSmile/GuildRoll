@@ -338,22 +338,22 @@ function GuildRoll_AdminLog:setHideScript()
   end
 end
 
--- 4-column display: Data | Azione | Attore | Dettagli
+-- 4-column display: Date | Action | Officer | Details
 function GuildRoll_AdminLog:OnTooltipUpdate()
   local cat = T:AddCategory(
     "columns", 4,
-    "text",  C:Orange("Data"),
+    "text",  C:Orange("Date"),
     "child_textR", 1, "child_textG", 1, "child_textB", 1,
     "child_justify", "LEFT",
-    "text2", C:Orange("Azione"),
+    "text2", C:Orange("Action"),
     "child_text2R", 0.5, "child_text2G", 1, "child_text2B", 0.5,
     "child_justify2", "LEFT",
-    "text3", C:Orange("Attore"),
+    "text3", C:Orange("Officer"),
     "child_text3R", 0.8, "child_text3G", 0.8, "child_text3B", 1,
     "child_justify3", "LEFT",
-    "text4", C:Orange("Dettagli"),
+    "text4", C:Orange("Details"),
     "child_text4R", 1, "child_text4G", 1, "child_text4B", 0.5,
-    "child_justify4", "LEFT"
+    "child_justify4", "RIGHT"
   )
 
   -- Helper: colorize numeric deltas in text
