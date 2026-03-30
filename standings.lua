@@ -168,7 +168,7 @@ function GuildRoll_standings.import()
       if (ep_value) then
         count = count + 1
         -- Update EP value
-        GuildRoll:update_ep_v3(name, ep_value)
+        GuildRoll:update_epgp_v3(ep_value,i,name,officernote)
         t[name]=nil
       end
     end
@@ -338,12 +338,16 @@ function GuildRoll_standings:ToggleRaidOnly()
   self:Refresh()
 end
 
-local ep_sorter_standings = function(a,b)
-    return tonumber(a[4]) > tonumber(b[4])
+local pr_sorter_standings = function(a,b)
+    if a[5] ~= b[5] then
+      return tonumber(a[5]) > tonumber(b[5])
+    else
+      return tonumber(a[4]) > tonumber(b[4])
+    end
 end
 -- Builds a standings table with record:
--- displayName, class, armor_class, EP, originalName, rank
--- and sorted by EP
+-- name, class, armor_class, EP, PR (EP-based), originalName, rank
+-- and sorted by PR
 function GuildRoll_standings:BuildStandingsTable()
   local t = { }
   local r = { }
@@ -446,10 +450,10 @@ function GuildRoll_standings:BuildStandingsTable()
             displayName = name .. alt_suffix
           end
           
-          table.insert(t,{displayName,class,armor_class,ep,name,g_rank})
+          table.insert(t,{displayName,class,armor_class,ep,ep,name,g_rank})
         end
       else
-        table.insert(t,{displayName,class,armor_class,ep,name,g_rank})
+        table.insert(t,{displayName,class,armor_class,ep,ep,name,g_rank})
       end
     end
   end
@@ -457,15 +461,15 @@ function GuildRoll_standings:BuildStandingsTable()
   if (GuildRoll_groupbyclass) then
     table.sort(t, function(a,b)
       if (a[2] ~= b[2]) then return a[2] > b[2]
-      else return ep_sorter_standings(a,b) end
+      else return pr_sorter_standings(a,b) end
     end)
   elseif (GuildRoll_groupbyarmor) then
     table.sort(t, function(a,b)
       if (a[3] ~= b[3]) then return a[3] > b[3]
-      else return ep_sorter_standings(a,b) end
+      else return pr_sorter_standings(a,b) end
     end)
   else
-    table.sort(t, ep_sorter_standings)
+    table.sort(t, pr_sorter_standings)
   end
   return t
 end
@@ -497,7 +501,7 @@ function GuildRoll_standings:OnTooltipUpdate()
   local t = self:BuildStandingsTable()
   local separator
   for i = 1, table.getn(t) do
-    local displayName, class, armor_class, ep, originalName, rank = unpack(t[i])
+    local displayName, class, armor_class, ep, pr, originalName, rank = unpack(t[i])
     if (GuildRoll_groupbyarmor) then
       if not (separator) then
         separator = armor_text[armor_class]
@@ -536,7 +540,12 @@ function GuildRoll_standings:OnTooltipUpdate()
     end
 
     local text = C:Colorize(BC:GetHexColor(class), displayName)
-    local text2 = string.format("%.4g", ep)
+    local text2
+    if GuildRoll_minPE > 0 and ep < GuildRoll_minPE then
+      text2 = C:Red(string.format("%.4g", ep))
+    else
+      text2 = string.format("%.4g", ep)
+    end
     
     -- Ensure rank is displayed as empty string if nil (only used for admins)
     local text3 = rank or ""
@@ -568,5 +577,5 @@ function GuildRoll_standings:OnTooltipUpdate()
   end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_decay,GuildRoll_main
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs
