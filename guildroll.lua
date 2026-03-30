@@ -300,6 +300,7 @@ function GuildRoll:buildMenu()
       order = 3,
       func = function()
         pcall(function()
+          GuildRoll:ToggleModuleActive("GuildRoll_logs", true)
           if GuildRoll and GuildRoll.ShowPersonalLog then
             GuildRoll:ShowPersonalLog()
           elseif GuildRoll_logs and GuildRoll_logs.ShowPersonalLog and GuildRoll and GuildRoll._playerName then
@@ -1795,7 +1796,10 @@ function GuildRoll:OnClick(button)
     else
       -- Not admin: open Personal Log as fallback (no error message)
       if GuildRoll and GuildRoll.ShowPersonalLog then
-        pcall(function() GuildRoll:ShowPersonalLog() end)
+        pcall(function()
+          GuildRoll:ToggleModuleActive("GuildRoll_logs", true)
+          GuildRoll:ShowPersonalLog()
+        end)
       elseif GuildRoll and GuildRoll.SavePersonalLog then
         pcall(function() GuildRoll:SavePersonalLog() end)
       end
@@ -1806,7 +1810,10 @@ function GuildRoll:OnClick(button)
   -- Ctrl+Click: Always toggle Personal Log (no duplicate checks)
   if ctrl and not shift and not alt then
     if GuildRoll and GuildRoll.ShowPersonalLog then
-      pcall(function() GuildRoll:ShowPersonalLog() end)
+      pcall(function()
+        GuildRoll:ToggleModuleActive("GuildRoll_logs", true)
+        GuildRoll:ShowPersonalLog()
+      end)
     elseif GuildRoll and GuildRoll.SavePersonalLog then
       pcall(function() GuildRoll:SavePersonalLog() end)
     end

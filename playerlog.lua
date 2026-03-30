@@ -34,6 +34,7 @@ GuildRoll_personalLogs = GuildRoll_personalLogs or {} -- runtime cache
 function GuildRoll:personalLogAdd(target, action)
   if not target or not action then return end
   local name = target
+  if GuildRoll and GuildRoll.StripRealm then name = GuildRoll:StripRealm(target) end
   local ts = date("%Y-%m-%d %H:%M:%S")
   
   -- Add to runtime cache
@@ -309,6 +310,7 @@ function GuildRoll_logs:OnTooltipUpdatePersonal()
       "text2", C:Orange(L["Action"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT"
     )
   local name = currentPersonalName or UnitName("player")
+  if GuildRoll and GuildRoll.StripRealm then name = GuildRoll:StripRealm(name) end
   local t = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
   -- use reverse (show newest first)
   local rev = GuildRoll_logs:reverse(t)
@@ -334,6 +336,7 @@ end
 -- Helper function to show personal log with robust toggle behavior
 function GuildRoll:ShowPersonalLog(name)
   name = name or UnitName("player")
+  if self.StripRealm then name = self:StripRealm(name) end
 
   -- Fallback if logs/tablet not available
   if not GuildRoll_logs or not GuildRoll_logs.registerPersonalTablet then
