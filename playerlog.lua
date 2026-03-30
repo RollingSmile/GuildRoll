@@ -85,7 +85,7 @@ function GuildRoll_logs:OnEnable()
       end
     end)
   end
-  -- apri solo se non è già attached (coerente con gli altri moduli)
+  -- only open if not already attached (consistent with other modules)
   if not T:IsAttached("GuildRoll_logs") then
     pcall(function() T:Open("GuildRoll_logs") end)
   end
@@ -93,12 +93,6 @@ end
 
 function GuildRoll_logs:OnDisable()
   pcall(function() T:Close("GuildRoll_logs") end)
-end
-
-function GuildRoll_logs:ConfirmClear()
-  -- Legacy function removed: GuildRoll_log is deprecated.
-  -- AdminLog clearing is handled by the AdminLog module directly.
-  return
 end
 
 function GuildRoll_logs:Refresh()
@@ -165,44 +159,9 @@ function GuildRoll_logs:reverse(arr)
 end
 
 function GuildRoll_logs:BuildLogsTable()
-  -- Check if user is officer - show AdminLog
-  -- Otherwise show personal log
-  local isOfficer = GuildRoll:IsAdmin()
-
-  if isOfficer then
-    -- Build from local AdminLog (GuildRoll_adminLogOrder + GuildRoll_adminLogSaved)
-    local result = {}
-    if GuildRoll_adminLogOrder and GuildRoll_adminLogSaved then
-      for i = 1, table.getn(GuildRoll_adminLogOrder) do
-        local id = GuildRoll_adminLogOrder[i]
-        local entry = GuildRoll_adminLogSaved[id]
-        if entry and entry.ts then
-          local timestamp = date("%b/%d %H:%M:%S", entry.ts)
-          -- Support both new structured format and old format
-          local lineText
-          if entry.details ~= nil then
-            -- New format: combine action + target + details
-            local parts = {}
-            if entry.action and entry.action ~= "" then table.insert(parts, "[" .. entry.action .. "]") end
-            if entry.actor  and entry.actor  ~= "" then table.insert(parts, entry.actor) end
-            if entry.target and entry.target ~= "" then table.insert(parts, entry.target) end
-            if entry.details and entry.details ~= "" then table.insert(parts, entry.details) end
-            lineText = table.concat(parts, " ")
-          else
-            -- Old format
-            lineText = entry.action or ""
-          end
-          table.insert(result, {timestamp, lineText})
-        end
-      end
-    end
-    return self:reverse(result)
-  else
-    -- Show personal log for current player
-    local playerName = UnitName("player") or "player"
-    local personalLog = GuildRoll_personalLogs[playerName] or {}
-    return self:reverse(personalLog)
-  end
+  local playerName = UnitName("player") or "player"
+  local personalLog = GuildRoll_personalLogs[playerName] or {}
+  return self:reverse(personalLog)
 end
 
 function GuildRoll_logs:OnTooltipUpdate()
@@ -373,8 +332,8 @@ function GuildRoll_logs:OnTooltipUpdatePersonal()
 end
 
 -- Helper function to show personal log with robust toggle behavior
-function GuildRoll:ShowPersonalLog()
-  local name = UnitName("player")
+function GuildRoll:ShowPersonalLog(name)
+  name = name or UnitName("player")
 
   -- Fallback if logs/tablet not available
   if not GuildRoll_logs or not GuildRoll_logs.registerPersonalTablet then
@@ -512,6 +471,3 @@ function GuildRoll:SavePersonalLog(name)
     DEFAULT_CHAT_FRAME:AddMessage("=== End of Log ===")
   end
 end
-
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main
--- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs,GuildRoll_personalLogSaved,GuildRoll_personalLogs

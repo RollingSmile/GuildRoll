@@ -245,6 +245,7 @@ Results will print here when done.]],
   -- Standings improvements
   ["Give EP..."] = true,
   ["Award EP to this player"] = true,
+  ["Show personal EP log for this player"] = true,
   -- Personal log improvements
   ["Clear personal log"] = true,
   ["Clear your personal log"] = true,

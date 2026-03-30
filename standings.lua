@@ -554,17 +554,38 @@ function GuildRoll_standings:OnTooltipUpdate()
       text = string.format("(*)%s",text)
     end
     
-    -- Add line - admins get click-to-award-EP functionality and Rank column
+    -- Add line - admins get click-to-menu functionality and Rank column
     if isAdmin then
-      -- Admin: clicking opens Give EP dialog, show rank
+      -- Admin: clicking opens a mini-menu with Give EP and Show Personal Log options
       cat:AddLine(
         "text", text,
         "text2", text2,
         "text3", text3,
         "func", function()
-          if GuildRoll and GuildRoll.ShowGiveEPDialog then
-            GuildRoll:ShowGiveEPDialog(originalName)
-          end
+          D:Open(
+            "point", "TOPLEFT",
+            "relativePoint", "BOTTOMLEFT",
+            "children", function()
+              D:AddLine(
+                "text", L["Give EP..."],
+                "tooltipText", L["Award EP to this player"],
+                "func", function()
+                  if GuildRoll and GuildRoll.ShowGiveEPDialog then
+                    GuildRoll:ShowGiveEPDialog(originalName)
+                  end
+                end
+              )
+              D:AddLine(
+                "text", L["Show Personal Log"],
+                "tooltipText", L["Show personal EP log for this player"],
+                "func", function()
+                  if GuildRoll and GuildRoll.ShowPersonalLog then
+                    GuildRoll:ShowPersonalLog(originalName)
+                  end
+                end
+              )
+            end
+          )
         end
       )
     else

@@ -42,6 +42,6 @@ notes_v3.lua
 roll.lua
 standings.lua 
 alts.lua
-logs.lua
+playerlog.lua
 adminlog.lua
 buffcheck.lua
