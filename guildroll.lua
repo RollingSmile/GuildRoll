@@ -13,7 +13,6 @@ local T = AceLibrary("Tablet-2.0")      -- Tooltip display
 local L = AceLibrary("AceLocale-2.2"):new("guildroll") -- Localization
 GuildRoll.VARS = {
   CSRWeekBonus = 10,  -- Bonus per week for CSR (weeks 2-15: (weeks-1)*10)
-  minPE = 0,
   baseawardpoints = 10,
   decay = 0.5,
   max = 1000,
@@ -53,10 +52,8 @@ local RaidKey = {}
 -- Forward-declare handler for SHARE: admin settings so addonComms can call it early
 local handleSharedSettings
 
--- Constants for note length and migration timing
+-- Constants for note length
 local MAX_NOTE_LEN = 31
-local MIGRATION_THROTTLE_SECONDS = 30
-local MIGRATION_AUTO_DELAY_SECONDS = 5
 
 -- Helper: trim public note with tag to ensure it fits within max length
 -- existing: current public note
@@ -83,75 +80,6 @@ local function _trim_public_with_tag(existing, tag, maxlen)
     -- Trim existing to fit
     return string.sub(existing, 1, availableLen) .. tag
   end
-end
-
--- Helper: insert tag before {EP} pattern in officer note
--- officernote: current officer note
--- tag: tag to insert
--- Returns: new officer note with tag inserted before {EP} pattern
-local function _insertTagBeforeEP(officernote, tag)
-  -- Ensure inputs are strings
-  if type(officernote) ~= "string" then officernote = "" end
-  if type(tag) ~= "string" then tag = "" end
-  
-  -- Return early if tag is empty
-  if tag == "" then
-    return officernote
-  end
-  
-  -- Remove any existing occurrences of this tag from the officer note
-  -- Escape pattern characters in the tag for safe pattern matching
-  local escapedTag = string.gsub(tag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-  officernote = string.gsub(officernote, escapedTag, "")
-  
-  -- Try to find new {EP} pattern first (e.g., {123})
-  local prefix, ep, postfix = string.match(officernote, "^(.-)({%d+})(.*)$")
-  
-  if ep then
-    -- Found new {EP} pattern; insert tag before it
-    return prefix .. tag .. ep .. postfix
-  end
-  
-  -- Try to find legacy {EP:GP} pattern (e.g., {123:456})
-  prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
-  
-  if epgp then
-    -- Found legacy pattern; insert tag before it
-    return prefix .. tag .. epgp .. postfix
-  else
-    -- No pattern found; append tag to end
-    return officernote .. tag
-  end
-end
-
--- Helper: attempt to run main tag migration with throttle check
--- Returns true if migration was attempted, false if throttled
-local function _attemptThrottledMigration(self)
-  -- Check throttle: don't run more often than once every 30 seconds
-  local now = GetTime()
-  if self._lastMigrateRun and (now - self._lastMigrateRun) < MIGRATION_THROTTLE_SECONDS then
-    return false
-  end
-  
-  -- Set timestamp before attempting to prevent rapid retries on failure
-  -- This ensures we don't spam attempts when guild roster isn't available yet
-  self._lastMigrateRun = now
-  
-  -- Verify guild roster is available
-  local ok, numMembers = pcall(function()
-    if not IsInGuild() then return 0 end
-    return GetNumGuildMembers(1) or 0
-  end)
-  
-  if ok and numMembers > 0 then
-    -- Run migration
-    pcall(function()
-      GuildRoll:MovePublicMainTagsToOfficerNotes()
-    end)
-    return true
-  end
-  
-  return false
 end
 
 local options
@@ -364,29 +292,7 @@ function GuildRoll:buildMenu()
         GuildRoll:SetRefresh(true)
       end,
     }
-    
-    -- 2. Set Min EP (text) - second in EP Actions, shows current value in name
-    options.args["ep_actions"].args["set_min_ep"] = {
-      type = "text",
-      -- Dewdrop-2.0 requires 'name' to be a string, not a function.
-      -- Compute the display string at menu-build time so the current value is visible.
-      name = string.format(L["Set Min EP (Current: %s)"], GuildRoll_minPE),
-      desc = L["Set Minimum MainStanding"],
-      usage = "<minPE>",
-      order = 2,
-      get = function() return GuildRoll_minPE end,
-      set = function(v) 
-        GuildRoll_minPE = tonumber(v)
-        -- The name will show updated value on next menu open (buildMenu is called each time)
-        GuildRoll:refreshPRTablets()
-        -- Removed shareSettings call: Minimum EP is now local to each admin
-      end,
-      validate = function(v) 
-        local n = tonumber(v)
-        return n and n >= 0 and n <= GuildRoll.VARS.max
-      end,
-    }
-    
+
     -- 3. +EP to Member (MainStanding group) - third in EP Actions
     options.args["ep_actions"].args["MainStanding"] = {
       type = "group",
@@ -585,18 +491,7 @@ function GuildRoll:buildMenu()
         end
       end,
     }
-    
-    options.args["options_group"].args["migrate_main_tags"] = {
-      type = "execute",
-      name = "Migrate Main Tags",
-      desc = "Move {MainCharacter} tags from public notes to officer notes (Admin only).",
-      order = 110,
-      hidden = function() return not admin() end,
-      func = function() 
-        GuildRoll:MovePublicMainTagsToOfficerNotes()
-      end,
-    }
-    
+
     -- Reset Frames (moved to root level, visible to all)
     options.args["reset_frames"] = {
       type = "execute",
@@ -658,7 +553,6 @@ end
 function GuildRoll:OnInitialize() -- ADDON_LOADED (1) unless LoD
   if GuildRoll_saychannel == nil then GuildRoll_saychannel = "GUILD" end
   if GuildRoll_decay == nil then GuildRoll_decay = GuildRoll.VARS.decay end
-  if GuildRoll_minPE == nil then GuildRoll_minPE = GuildRoll.VARS.minPE end
   if GuildRollAltspool == nil then GuildRollAltspool = true end
   if GuildRoll_altpercent == nil then GuildRoll_altpercent = 1.0 end
   if GuildRoll_debug == nil then GuildRoll_debug = {} end
@@ -819,12 +713,6 @@ function GuildRoll:delayedInit()
       self:Hook("GuildRosterSetOfficerNote")
     end
     
-    -- Auto-run migration 5 seconds after init for admins
-    self:ScheduleEvent("guildroll_auto_migrate", function()
-      _attemptThrottledMigration(self)
-    end, MIGRATION_AUTO_DELAY_SECONDS)
-  end
-  
   -- Schedule alt main prompt check after a short delay to allow roster to populate
   self:ScheduleEvent("guildroll_check_alt_main", function()
     self:CheckAltAndPromptSetMain()
@@ -850,10 +738,7 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
     self.hooks["GuildRosterSetOfficerNote"](index,note)
   else
     local name, _, _, _, _, _, _, prevnote, _, _ = GetGuildRosterInfo(index)
-    -- Check for both old {EP:GP} and new {EP} formats
-    local _,_,_,oldepgp,_ = string.find(prevnote or "","(.*)({%d+:%-?%d+})(.*)")
     local _,_,_,oldep,_ = string.find(prevnote or "","(.-)({%d+})(.*)")
-    local _,_,_,epgp,_ = string.find(note or "","(.*)({%d+:%-?%d+})(.*)")
     local _,_,_,ep,_ = string.find(note or "","(.-)({%d+})(.*)")
     
     if (GuildRollAltspool) then
@@ -865,19 +750,13 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
           self:defaultPrint(string.format(L["|cffff0000Manually modified %s\'s note. Previous main was %s|r"],name,oldmain))
         end
       end
-    end    
-    -- Check if EP tag was modified (support both {EP} and legacy {EP:GP} formats)
-    local oldTag = oldepgp or oldep
-    local newTag = epgp or ep
-    if oldTag ~= nil then
-      if newTag == nil or newTag ~= oldTag then
-        -- legacy PUG/Bank handling removed: just report the modification to admins
-        self:adminSay(string.format(L["Manually modified %s\'s note. Standing was %s"],name,oldTag))
-        self:defaultPrint(string.format(L["|cffff0000Manually modified %s\'s note. Standing was %s|r"],name,oldTag))
+    end
+    if oldep ~= nil then
+      if ep == nil or ep ~= oldep then
+        self:adminSay(string.format(L["Manually modified %s\'s note. Standing was %s"],name,oldep))
+        self:defaultPrint(string.format(L["|cffff0000Manually modified %s\'s note. Standing was %s|r"],name,oldep))
       end
     end
-    -- No need to sanitize with new {EP} format - it's already clean
-    -- Just pass through the note as-is
     return self.hooks["GuildRosterSetOfficerNote"](index,note)    
   end
 end
@@ -955,18 +834,6 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     return
   end
   
-  -- Handle MIGRATE_MAIN_TAG_REQUEST messages
-  if message == "MIGRATE_MAIN_TAG_REQUEST" then
-    -- Only admins process migration requests
-    if not GuildRoll:IsAdmin() then
-      return
-    end
-    
-    -- Attempt throttled migration
-    _attemptThrottledMigration(self)
-    return
-  end
-  
   local who,what,amount,raidFlag
   -- Parse 3-field or 4-field message format for backward compatibility
   for name,epgp,change,flag in string.gfind(message,"([^;]+);([^;]+);([^;]+);?([^;]*)") do
@@ -1041,7 +908,6 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
       for progress,discount,decay,minPE,alts,altspct in string.gfind(what, "([^:]+):([^:]+):([^:]+):([^:]+):([^:]+):([^:]+)") do
         discount = tonumber(discount)
         decay = tonumber(decay)
-        minPE = tonumber(minPE)
         alts = (alts == "true") and true or false
         altspct = tonumber(altspct)
         local settings_notice
@@ -1183,9 +1049,6 @@ handleSharedSettings = function(message, sender)
     end 
   end
   
-  -- MIN removed: Minimum EP is now local to each admin and not updated from incoming messages
-  --if settings.MIN then local minep = tonumber(settings.MIN) if minep and minep ~= GuildRoll_minPE then GuildRoll_minPE = minep; changed = true end end
-  
   if changed then
     if GuildRoll and GuildRoll.RebuildRollOptions then
       GuildRoll:RebuildRollOptions()
@@ -1226,15 +1089,10 @@ function GuildRoll:shareSettings(force)
     
     -- Send via existing addonMessage method for consistency
     self:addonMessage(payload, "GUILD")
-    
-    -- Also send legacy SETTINGS message for backwards compatibility
-    -- Use neutral default for minPE to avoid leaking local admin preferences
-    local addonMsg = string.format("SETTINGS;%s:%s:%s:%s:%s:%s;1",0,0,dc,self.VARS.minPE,tostring(GuildRollAltspool),alt)
-    self:addonMessage(addonMsg,"GUILD")
   end
 end
 
-function GuildRoll:refreshPRTablets()
+function GuildRoll:refreshStandingsTablet()
   --if not T:IsAttached("GuildRoll_standings") then
   GuildRoll_standings:Refresh()
   --end
@@ -1244,7 +1102,7 @@ end
 -- Helper function to perform immediate UI refresh after EP-affecting actions
 -- Refreshes standings, AdminLog, personal logs, and requests guild roster update
 function GuildRoll:refreshAllEPUI()
-  pcall(function() self:refreshPRTablets() end)
+  pcall(function() self:refreshStandingsTablet() end)
   if T then
     pcall(function()
       if T.IsRegistered and T:IsRegistered("GuildRoll_AdminLog") then
@@ -1317,7 +1175,7 @@ function GuildRoll:give_ep_to_raid(ep) -- awards ep to raid members in zone
           for j = 1, GetNumGuildMembers(1) do
             local gname, _, _, _, gclass, _, gnote, gofficernote, _, _ = GetGuildRosterInfo(j)
             if gname == actualName then
-              self:update_epgp_v3(newep, j, gname, gofficernote, "RAID")
+          self:update_ep_v3(gname, newep)
               break
             end
           end
@@ -1641,7 +1499,7 @@ function GuildRoll:decay_ep_v3()
     if (prevEP~=nil) then
       local newEP = self:num_round(prevEP*GuildRoll_decay)
       local changeEP = newEP - prevEP
-      self:update_epgp_v3(newEP,i,name,officernote,"DECAY")
+      self:update_ep_v3(name, newEP)
       
       -- Send addon message to notify the player of decay
       local addonMsg = string.format("%s;%s;%s;%s",name,"MainStanding",changeEP,"DECAY")
@@ -1678,7 +1536,7 @@ function GuildRoll:reset_ep_v3()
       local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
       local ep = self:get_ep_v3(name,officernote)
       if ep then
-        self:update_epgp_v3(0,i,name,officernote)
+        self:update_ep_v3(name, 0)
       end
     end
     local msg = "All EP has been reset to 0."
@@ -1700,29 +1558,6 @@ function GuildRoll:reset_ep_v3()
     -- Immediate UI refresh after reset
     self:refreshAllEPUI()
   end
-end
-
--- Backward-compatible wrapper for ep_reset_v3
-function GuildRoll:ep_reset_v3()
-  return self:reset_ep_v3()
-end
-
-
-
-function GuildRoll:my_epgp_announce(use_main)
-  local ep
-  if (use_main) then
-    ep = self:get_ep_v3(GuildRoll_main) or 0
-  else
-    ep = self:get_ep_v3(self._playerName) or 0
-  end
-  local msg = string.format(L["You now have: %d MainStanding"], ep)
-  self:defaultPrint(msg)
-end
-
-function GuildRoll:my_epgp(use_main)
-  GuildRoster()
-  self:ScheduleEvent("guildrollRosterRefresh",self.my_epgp_announce,3,self,use_main)
 end
 
 ---------
@@ -1840,7 +1675,7 @@ end
 function GuildRoll:SetRefresh(flag)
   needRefresh = flag
   if (flag) then
-    self:refreshPRTablets()
+    self:refreshStandingsTablet()
   end
 end
 
@@ -1929,7 +1764,7 @@ function GuildRoll:buildClassMemberTable(roster,epgp)
         c[class].args[name].desc = string.format(desc,name)
         c[class].args[name].usage = usage
         c[class].args[name].get = false
-        c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshPRTablets() end
+        c[class].args[name].set = function(v) GuildRoll:givename_ep(name, tonumber(v)) GuildRoll:refreshStandingsTablet() end
         c[class].args[name].validate = function(v) 
           local num = tonumber(v)
           return (type(v) == "number" or num) 
@@ -2129,86 +1964,6 @@ function GuildRoll:CheckAltAndPromptSetMain()
   
   -- All conditions met: show the prompt
   StaticPopup_Show("GUILDROLL_SET_MAIN_PROMPT")
-end
-
--- MovePublicMainTagsToOfficerNotes: Admin function to migrate main tags from public to officer notes
--- Requires admin permission (GuildRoll:IsAdmin)
--- Iterates through guild roster and moves {MainName} tags from public note to officer note
--- Returns: number of tags moved
-function GuildRoll:MovePublicMainTagsToOfficerNotes()
-  if not GuildRoll:IsAdmin() then
-    self:defaultPrint("You do not have permission to edit officer notes.")
-    return 0
-  end
-  
-  local movedCount = 0
-  local numMembers = GetNumGuildMembers(1)
-  
-  -- Validate numMembers is a valid number
-  if not numMembers or type(numMembers) ~= "number" or numMembers < 1 then
-    return 0
-  end
-  
-  for i = 1, numMembers do
-    -- Wrap GetGuildRosterInfo in pcall for safety
-    local success, name, r2, r3, r4, r5, r6, publicNote, officerNote, r9, r10 = pcall(function()
-      return GetGuildRosterInfo(i)
-    end)
-    
-    -- Process only if GetGuildRosterInfo succeeded and returned valid data
-    if success and name then
-      publicNote = publicNote or ""
-      officerNote = officerNote or ""
-      
-      -- Ensure publicNote and officerNote are strings
-      if type(publicNote) == "string" and type(officerNote) == "string" then
-        -- Check if public note contains a main tag pattern {name} (min 2 chars)
-        local mainTag = string.match(publicNote, "({%a%a%a*})")
-        if mainTag and type(mainTag) == "string" and string.len(mainTag) > 2 then
-          -- Insert main tag before {EP} in officer note first (to avoid data loss)
-          local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
-          
-          -- Validate newOfficer is a string before writing
-          if type(newOfficer) == "string" then
-            -- Write officer note first (wrapped in pcall for safety)
-            local successOfficer = pcall(function()
-              GuildRosterSetOfficerNote(i, newOfficer, true)
-            end)
-            
-            -- Only remove from public note if officer note write succeeded
-            if successOfficer then
-              movedCount = movedCount + 1
-              
-              -- Escape pattern characters for safe replacement
-              local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-              -- Remove only first occurrence of the main tag from public note
-              local newPublic = string.gsub(publicNote, escapedTag, "", 1)
-              
-              -- Trim leading and trailing whitespace
-              newPublic = string.gsub(newPublic, "^%s*(.-)%s*$", "%1")
-              
-              -- If empty, use a single space to ensure server accepts it
-              if newPublic == "" then
-                newPublic = " "
-              end
-              
-              -- Attempt to write public note (removal is best-effort)
-              pcall(function()
-                GuildRosterSetPublicNote(i, newPublic)
-              end)
-            end
-          end
-        end
-      end
-    end
-  end
-  
-  -- Only print summary if at least one tag was moved
-  if movedCount > 0 then
-    self:defaultPrint(string.format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
-  end
-  
-  return movedCount
 end
 
 
@@ -2717,7 +2472,7 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
       -- Schedule a delayed refresh to allow roster data to update (2 seconds delay)
       pcall(function()
         GuildRoll:ScheduleEvent("GuildRoll_RefreshAfterEPAward", function()
-          GuildRoll:refreshPRTablets()
+          GuildRoll:refreshStandingsTablet()
         end, 2)
       end)
     end
@@ -2748,7 +2503,7 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
     
     -- Call give_ep_to_member which handles validation, alt->main conversion, scaling, logging
     pcall(function() GuildRoll:give_ep_to_member(targetName, epValue) end)
-    GuildRoll:refreshPRTablets()
+    GuildRoll:refreshStandingsTablet()
     
     -- Clear pending variables to prevent stale data on next dialog open
     pcall(function()
@@ -3030,5 +2785,5 @@ function GuildRollMSG:OnCHAT_MSG_ADDON( prefix, text, channel, sender)
 		end
 end
 
--- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRollAltspool,GuildRoll_altpercent,GuildRoll_log,GuildRoll_dbver,GuildRoll_debug,GuildRoll_fubar,GuildRoll_showRollWindow
+-- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_main,GuildRollAltspool,GuildRoll_altpercent,GuildRoll_log,GuildRoll_dbver,GuildRoll_debug,GuildRoll_fubar,GuildRoll_showRollWindow
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs
