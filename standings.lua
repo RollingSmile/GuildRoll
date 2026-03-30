@@ -251,6 +251,13 @@ function GuildRoll_standings:OnEnable()
        	end
     )
     
+    -- Create a reusable 1x1 anchor frame for the Dewdrop mini-menu
+    if not GuildRoll_standings._menuAnchor then
+      GuildRoll_standings._menuAnchor = CreateFrame("Frame", nil, UIParent)
+      GuildRoll_standings._menuAnchor:SetWidth(1)
+      GuildRoll_standings._menuAnchor:SetHeight(1)
+    end
+
     -- Ensure tooltip has a valid owner to prevent "Detached tooltip has no owner" error
     -- This is required for Tablet-2.0 compatibility when detaching tooltips
     pcall(function()
@@ -557,18 +564,11 @@ function GuildRoll_standings:OnTooltipUpdate()
     -- Add line - admins get click-to-menu functionality and Rank column
     if isAdmin then
       -- Admin: clicking opens a mini-menu with Give EP and Show Personal Log options
-      local capturedName = originalName
       cat:AddLine(
         "text", text,
         "text2", text2,
         "text3", text3,
         "func", function()
-          local name = capturedName
-          if not GuildRoll_standings._menuAnchor then
-            GuildRoll_standings._menuAnchor = CreateFrame("Frame", nil, UIParent)
-            GuildRoll_standings._menuAnchor:SetWidth(1)
-            GuildRoll_standings._menuAnchor:SetHeight(1)
-          end
           local anchor = GuildRoll_standings._menuAnchor
           local scale = UIParent:GetScale()
           local cx, cy = GetCursorPosition()
@@ -581,7 +581,7 @@ function GuildRoll_standings:OnTooltipUpdate()
                 "tooltipText", L["Award EP to this player"],
                 "func", function()
                   if GuildRoll and GuildRoll.ShowGiveEPDialog then
-                    GuildRoll:ShowGiveEPDialog(name)
+                    GuildRoll:ShowGiveEPDialog(originalName)
                   end
                 end
               )
@@ -590,7 +590,7 @@ function GuildRoll_standings:OnTooltipUpdate()
                 "tooltipText", L["Show personal EP log for this player"],
                 "func", function()
                   if GuildRoll and GuildRoll.ShowPersonalLog then
-                    GuildRoll:ShowPersonalLog(name)
+                    GuildRoll:ShowPersonalLog(originalName)
                   end
                 end
               )
