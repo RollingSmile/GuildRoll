@@ -614,68 +614,23 @@ local function GetMissingPaladinBlessings(unit, requiredBlessings)
   return missing
 end
 
--- Helper: Count distinct priest buff types on a unit
--- Priest has 3 buff types: Fortitude, Spirit, Shadow Protection (each in short/long version)
-local function CountPriestBuffTypes(unit)
-  local buffTypes = {}
-  local priestBuffCategories = {
-    ["Fortitude"] = true,
-    ["Spirit"] = true,
-    ["Shadow Protection"] = true,
-  }
-  
-  for i = 1, 32 do
-    local buffTexture = UnitBuff(unit, i)
-    if not buffTexture then break end
-    
-    local buffName = GetBuffName(unit, i)
-    if buffName then
-      -- Check if this is a priest buff using BUFF_REQUIREMENTS patterns
-      local isPriestBuff = false
-      if BUFF_REQUIREMENTS["PRIEST"] then
-        for _, pattern in ipairs(BUFF_REQUIREMENTS["PRIEST"]) do
-          if MatchBuff(buffName, pattern) then
-            isPriestBuff = true
-            break
-          end
-        end
-      end
-      
-      if isPriestBuff then
-        -- Extract buff type (Fortitude, Spirit, Shadow Protection)
-        for buffType, _ in pairs(priestBuffCategories) do
-          if string.find(string.lower(buffName), string.lower(buffType), 1, true) then
-            buffTypes[buffType] = true
-            break
-          end
-        end
-      end
-    end
-  end
-  
-  local count = 0
-  for _, _ in pairs(buffTypes) do
-    count = count + 1
-  end
-  return count
-end
-
--- Helper: Get list of missing priest buff types for a unit
-local function GetMissingPriestBuffs(unit)
-  local buffTypes = {}
+-- Helper: Get priest buff info for a unit.
+-- Returns count (number of distinct buff types present) and missingList (array of short names for missing types).
+-- Priest has 3 buff types: Fortitude (Stam), Spirit, Shadow Protection (ShadowProt).
+local function GetPriestBuffInfo(unit)
   local priestBuffCategories = {
     ["Fortitude"] = "Stam",
     ["Spirit"] = "Spirit",
     ["Shadow Protection"] = "ShadowProt",
   }
-  
+  local buffTypes = {}
+
   for i = 1, 32 do
     local buffTexture = UnitBuff(unit, i)
     if not buffTexture then break end
-    
+
     local buffName = GetBuffName(unit, i)
     if buffName then
-      -- Check if this is a priest buff using BUFF_REQUIREMENTS patterns
       local isPriestBuff = false
       if BUFF_REQUIREMENTS["PRIEST"] then
         for _, pattern in ipairs(BUFF_REQUIREMENTS["PRIEST"]) do
@@ -685,9 +640,8 @@ local function GetMissingPriestBuffs(unit)
           end
         end
       end
-      
+
       if isPriestBuff then
-        -- Extract buff type (Fortitude, Spirit, Shadow Protection)
         for buffType, _ in pairs(priestBuffCategories) do
           if string.find(string.lower(buffName), string.lower(buffType), 1, true) then
             buffTypes[buffType] = true
@@ -697,15 +651,17 @@ local function GetMissingPriestBuffs(unit)
       end
     end
   end
-  
-  -- Return list of missing buff types
+
+  local count = 0
   local missing = {}
   for buffType, shortName in pairs(priestBuffCategories) do
-    if not buffTypes[buffType] then
+    if buffTypes[buffType] then
+      count = count + 1
+    else
       table.insert(missing, shortName)
     end
   end
-  return missing
+  return count, missing
 end
 
 -- Helper: Check if class is present in raid
@@ -746,7 +702,6 @@ end
 
 -- Main check functions
 function GuildRoll_BuffCheck:CheckBuffs()
-  -- Clear previous state
   ClearReportState(self)
   
   local numRaid = GetNumRaidMembers()
@@ -799,7 +754,7 @@ function GuildRoll_BuffCheck:CheckBuffs()
     
     -- Check priest buffs (requires all 3 buff types)
     if providers["PRIEST"] then
-      local missingPriestBuffs = GetMissingPriestBuffs(unit)
+      local _, missingPriestBuffs = GetPriestBuffInfo(unit)
       for _, shortName in ipairs(missingPriestBuffs) do
         table.insert(missingBuffs, shortName)
         missingCount = missingCount + 1
@@ -841,7 +796,6 @@ function GuildRoll_BuffCheck:CheckBuffs()
     end
   end
   
-  -- Sort report by subgroup ascending, then by player name ascending
   table.sort(report, function(a, b)
     if a.group ~= b.group then
       return a.group < b.group
@@ -849,15 +803,11 @@ function GuildRoll_BuffCheck:CheckBuffs()
     return (a.player or "") < (b.player or "")
   end)
   
-  -- Show results in Tablet
   self:ShowReport(report, "Buff Check", allOk)
-  
-  -- Refresh Tablet window in-place
   self:Refresh()
 end
 
 function GuildRoll_BuffCheck:CheckConsumes()
-  -- Clear previous state
   ClearReportState(self)
   
   local numRaid = GetNumRaidMembers()
@@ -868,7 +818,7 @@ function GuildRoll_BuffCheck:CheckConsumes()
   
   -- Resolve patterns to localized consumables (now primarily pattern-based)
   resolveIDLists()
-  
+
   local report = {}
   local allOk = true
   local minRequired = CONSUMABLE_MIN_REQUIRED
@@ -915,20 +865,16 @@ function GuildRoll_BuffCheck:CheckConsumes()
   end
   
   if allOk then
-    -- Show confirmation popup
     StaticPopupDialogs["GUILDROLL_CONSUMES_AWARD_EP"].text = L["All members have required consumes. Award EP to raid?"] or "All members have required consumes. Award EP to raid?"
     StaticPopup_Show("GUILDROLL_CONSUMES_AWARD_EP")
   else
-    -- Show report in Tablet
     self:ShowReport(report, "Consumables Check", allOk)
   end
-  
-  -- Refresh Tablet window in-place
+
   self:Refresh()
 end
 
 function GuildRoll_BuffCheck:CheckFlasks()
-  -- Clear previous state
   ClearReportState(self)
   
   local numRaid = GetNumRaidMembers()
@@ -961,26 +907,24 @@ function GuildRoll_BuffCheck:CheckFlasks()
   end
   
   if allOk then
-    -- Show confirmation popup
     StaticPopupDialogs["GUILDROLL_FLASKS_AWARD_EP"].text = L["All members have required flasks. Award EP to raid?"] or "All members have required flasks. Award EP to raid?"
     StaticPopup_Show("GUILDROLL_FLASKS_AWARD_EP")
   else
-    -- Show report in Tablet
     self:ShowReport(report, "Flasks Check", allOk)
   end
-  
-  -- Refresh Tablet window in-place
+
   self:Refresh()
 end
 
--- Show report in Tablet
 function GuildRoll_BuffCheck:ShowReport(report, title, allOk)
-  -- Store report for display
   self._currentReport = report
   self._reportTitle = title
   self._reportAllOk = allOk
-  
-  -- Toggle Tablet display
+  -- Toggle(true) with forceShow=true calls Refresh() instead of re-attaching the tablet,
+  -- so the detached window updates in-place. This was intentionally kept after PR #213 was
+  -- reverted: calling Detach+Refresh directly caused the window to re-open unexpectedly
+  -- when the tablet was already attached. Toggle(true) handles the attached/detached
+  -- distinction correctly.
   self:Toggle(true)
 end
 
@@ -1067,14 +1011,7 @@ function GuildRoll_BuffCheck:DumpBuffs(unit)
   GuildRoll:defaultPrint("=== End of buff dump ===")
 end
 
--- Runtime helper: Add spell IDs to the configured lists
--- NOTE: This function is no longer supported after simplifying resolveIDLists()
--- to use only text/name-based matching. Spell ID-based matching has been removed.
-function GuildRoll_BuffCheck:AddSpellIDs(kind, idlist)
-  GuildRoll:defaultPrint("AddSpellIDs is no longer supported.")
-  GuildRoll:defaultPrint("The addon now uses only text/name-based matching from BUFF_REQUIREMENTS, CONSUMABLES, and FLASKS tables.")
-  GuildRoll:defaultPrint("Please modify those tables directly in buffcheck.lua if you need to add custom buffs.")
-end
+-- AddSpellIDs removed: use BUFF_REQUIREMENTS table directly.
 
 -- Slash command handler for /dumpbuffs
 local function SlashCommandHandler(msg)
@@ -1132,15 +1069,6 @@ function GuildRoll_BuffCheck:OnEnable()
         )
       end
     )
-    
-    -- Ensure tooltip has a valid owner
-    pcall(function()
-      if T and T.registry and T.registry.GuildRoll_BuffCheck and T.registry.GuildRoll_BuffCheck.tooltip then
-        if not T.registry.GuildRoll_BuffCheck.tooltip.owner then
-          T.registry.GuildRoll_BuffCheck.tooltip.owner = GuildRoll:EnsureTabletOwner()
-        end
-      end
-    end)
   end
   if not T:IsAttached("GuildRoll_BuffCheck") then
     pcall(function() T:Open("GuildRoll_BuffCheck") end)
