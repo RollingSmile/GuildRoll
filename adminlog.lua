@@ -214,6 +214,37 @@ local function entryInvolvesPlayer(entry, name)
   return false
 end
 
+-- Case-insensitive partial match version (used by Search, Filter by Author, Filter by Target)
+local function entryInvolvesPlayerPartial(entry, searchLower)
+  if not entry or not searchLower or searchLower == "" then return false end
+
+  -- GIVE/PENALTY: direct target match
+  if entry.target and string.find(string.lower(entry.target), searchLower, 1, true) then
+    return true
+  end
+
+  -- RAID: search in raid_details.players
+  if entry.raid_details and entry.raid_details.players then
+    for i = 1, table.getn(entry.raid_details.players) do
+      local p = entry.raid_details.players[i]
+      if p and string.find(string.lower(p), searchLower, 1, true) then
+        return true
+      end
+    end
+  end
+
+  -- DECAY: search in affected table (keys are player names)
+  if entry.affected then
+    for name, _ in pairs(entry.affected) do
+      if name and string.find(string.lower(name), searchLower, 1, true) then
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
 -- ── Serialization helpers for officer sync ──────────────────────────────────
 
 local FIELD_SEP = "\t"  -- tab between serialized fields
@@ -480,6 +511,27 @@ function GuildRoll_AdminLog:OnEnable()
       "showHintWhenDetached", true,
       "cantAttach", true,
       "menu", function()
+        -- Search
+        GuildRoll:SafeDewdropAddLine(
+          "text", "Search",
+          "tooltipText", "Search admin log entries",
+          "func", function()
+            StaticPopup_Show("GUILDROLL_ADMINLOG_SEARCH")
+          end
+        )
+
+        -- Clear Search (only when active)
+        if searchText then
+          GuildRoll:SafeDewdropAddLine(
+            "text", "Clear Search",
+            "tooltipText", "Clear search filter",
+            "func", function()
+              searchText = nil
+              pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+            end
+          )
+        end
+
         -- Filter by Author
         GuildRoll:SafeDewdropAddLine(
           "text", "Filter by Author",
@@ -489,11 +541,11 @@ function GuildRoll_AdminLog:OnEnable()
           end
         )
 
-        -- Clear author filter (only when active)
+        -- Remove Author Filter (only when active)
         if filterAuthor then
           GuildRoll:SafeDewdropAddLine(
-            "text", "Clear Author Filter",
-            "tooltipText", string.format("Clear author filter (%s)", filterAuthor),
+            "text", "Remove Author Filter",
+            "tooltipText", string.format("Remove author filter (%s)", filterAuthor),
             "func", function()
               filterAuthor = nil
               pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -510,32 +562,11 @@ function GuildRoll_AdminLog:OnEnable()
           end
         )
 
-        -- Search
-        GuildRoll:SafeDewdropAddLine(
-          "text", "Search",
-          "tooltipText", "Search admin log entries",
-          "func", function()
-            StaticPopup_Show("GUILDROLL_ADMINLOG_SEARCH")
-          end
-        )
-
-        -- Clear search
-        if searchText then
-          GuildRoll:SafeDewdropAddLine(
-            "text", "Clear Search",
-            "tooltipText", "Clear search filter",
-            "func", function()
-              searchText = nil
-              pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-            end
-          )
-        end
-
-        -- Clear target filter
+        -- Remove Target Filter (only when active)
         if filterTarget then
           GuildRoll:SafeDewdropAddLine(
-            "text", "Clear Target Filter",
-            "tooltipText", "Clear target filter",
+            "text", "Remove Target Filter",
+            "tooltipText", string.format("Remove target filter (%s)", filterTarget),
             "func", function()
               filterTarget = nil
               pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -543,19 +574,16 @@ function GuildRoll_AdminLog:OnEnable()
           )
         end
 
-        -- Refresh
+        -- Spacer (non-clickable empty entry)
         GuildRoll:SafeDewdropAddLine(
-          "text", "Refresh",
-          "tooltipText", "Refresh admin log display",
-          "func", function()
-            pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-          end
+          "text", " ",
+          "tooltipText", ""
         )
 
-        -- Clear Local (admins only)
+        -- Reset Log
         GuildRoll:SafeDewdropAddLine(
-          "text", "Clear Local",
-          "tooltipText", "Clear local admin log data",
+          "text", "Reset Log",
+          "tooltipText", "Clear all local admin log data",
           "func", function()
             GuildRoll_adminLogSaved = {}
             GuildRoll_adminLogOrder = {}
@@ -642,6 +670,11 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
     return result
   end
 
+  -- Pre-compute lowercase filter values once outside the loop
+  local filterAuthorLower = filterAuthor and string.lower(filterAuthor) or nil
+  local filterTargetLower = filterTarget and string.lower(filterTarget) or nil
+  local searchLower = (searchText and searchText ~= "") and string.lower(searchText) or nil
+
   -- Build filtered entry list
   local displayEntries = {}
   for i = 1, table.getn(GuildRoll_adminLogOrder) do
@@ -652,23 +685,22 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
       local include = true
 
       -- Apply author/actor filter
-      if filterAuthor then
-        local entryActor = entry.actor or entry.author
-        if entryActor ~= filterAuthor then
+      if filterAuthorLower then
+        local entryActor = string.lower(entry.actor or entry.author or "")
+        if not string.find(entryActor, filterAuthorLower, 1, true) then
           include = false
         end
       end
 
-      -- Apply target filter using entryInvolvesPlayer helper
-      if include and filterTarget then
-        if not entryInvolvesPlayer(entry, filterTarget) then
+      -- Apply target filter using entryInvolvesPlayerPartial helper
+      if include and filterTargetLower then
+        if not entryInvolvesPlayerPartial(entry, filterTargetLower) then
           include = false
         end
       end
 
-      -- Apply search filter: check text fields plus all player names via entryInvolvesPlayer
-      if include and searchText and searchText ~= "" then
-        local searchLower = string.lower(searchText)
+      -- Apply search filter: check text fields plus all player names via entryInvolvesPlayerPartial
+      if include and searchLower then
         local actionLower  = string.lower(entry.action  or "")
         local detailsLower = string.lower(entry.details or "")
         local targetLower  = string.lower(entry.target  or "")
@@ -677,7 +709,7 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
           or string.find(detailsLower, searchLower, 1, true)
           or string.find(targetLower, searchLower, 1, true)
           or string.find(actorLower, searchLower, 1, true)
-          or entryInvolvesPlayer(entry, searchText)
+          or entryInvolvesPlayerPartial(entry, searchLower)
         if not found then
           include = false
         end
