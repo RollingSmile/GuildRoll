@@ -2802,6 +2802,21 @@ StaticPopupDialogs["GUILDROLL_GIVE_EP"] = {
   hideOnEscape = 1
 }
 
+StaticPopupDialogs["GUILDROLL_CONSOLIDATE_EP"] = {
+  text = "Move all EP from alts to their respective mains. This cannot be undone. Continue?",
+  button1 = TEXT(ACCEPT),
+  button2 = TEXT(CANCEL),
+  OnAccept = function()
+    if GuildRollAlts and GuildRollAlts.ConsolidateEP then
+      GuildRollAlts:ConsolidateEP()
+    end
+  end,
+  timeout = 0,
+  exclusive = 1,
+  whileDead = 1,
+  hideOnEscape = 1
+}
+
 
 function GuildRoll:EasyMenu_Initialize(level, menuList)
   for i, info in ipairs(menuList) do

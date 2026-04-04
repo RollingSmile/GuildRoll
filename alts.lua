@@ -42,6 +42,15 @@ function GuildRollAlts:OnEnable()
           "tooltipText", L["Refresh window"],
           "func", function() GuildRollAlts:Refresh() end
         )
+        if GuildRoll:IsAdmin() then
+          GuildRoll:SafeDewdropAddLine(
+            "text", "Consolidate EP",
+            "tooltipText", "Move alt EP to their mains",
+            "func", function()
+              StaticPopup_Show("GUILDROLL_CONSOLIDATE_EP")
+            end
+          )
+        end
       end      
     )
     
@@ -116,7 +125,39 @@ function GuildRollAlts:Toggle(forceShow)
 end
 
 function GuildRollAlts:BuildAltsTable()
-  return GuildRoll.alts
+  local mainData = {}  -- mainName -> { mainName, mainClass, alts = {} }
+  local numMembers = GetNumGuildMembers(1)
+
+  -- Build a lookup of name -> class for main class resolution
+  local memberClass = {}
+  for i = 1, numMembers do
+    local name, _, _, _, class = GetGuildRosterInfo(i)
+    if name then
+      memberClass[name] = class
+    end
+  end
+
+  -- Find alts and register them under their mains
+  for i = 1, numMembers do
+    local name, _, _, _, class, _, _, officernote = GetGuildRosterInfo(i)
+    if name then
+      local mainName, mainClass = GuildRoll:parseAlt(name, officernote)
+      if mainName then
+        if not mainData[mainName] then
+          local mClass = mainClass or memberClass[mainName] or "WARRIOR"
+          mainData[mainName] = { mainName = mainName, mainClass = mClass, alts = {} }
+        end
+        table.insert(mainData[mainName].alts, { name = name, class = class })
+      end
+    end
+  end
+
+  -- Convert to list (only mains that have at least one alt)
+  local result = {}
+  for _, entry in pairs(mainData) do
+    table.insert(result, entry)
+  end
+  return result
 end
 
 function GuildRollAlts:OnTooltipUpdate()
@@ -126,22 +167,100 @@ function GuildRollAlts:OnTooltipUpdate()
       "text2", C:Yellow(L["Alts"]),  "child_text2R",   0, "child_text2G",   1, "child_text2B",   0, "child_justify2", "RIGHT"
     )
   local t = self:BuildAltsTable()
-  for main, alts in pairs(t) do
+  for _, entry in ipairs(t) do
+    local mainEP = GuildRoll:get_ep_v3(entry.mainName) or 0
+    local coloredMain = C:Colorize(BC:GetHexColor(entry.mainClass), entry.mainName)
+    local mainStr = string.format("%s (%d)", coloredMain, mainEP)
+
     local altstring = ""
-    for alt,class in pairs(alts) do
-      local coloredalt = C:Colorize(BC:GetHexColor(class), alt)
+    for _, alt in ipairs(entry.alts) do
+      local altEP = GuildRoll:get_ep_v3(alt.name) or 0
+      local coloredalt = C:Colorize(BC:GetHexColor(alt.class), alt.name)
+      local altStr = string.format("%s (%d)", coloredalt, altEP)
       if altstring == "" then
-        altstring = coloredalt
+        altstring = altStr
       else
-        altstring = string.format("%s, %s",altstring,coloredalt)
+        altstring = string.format("%s, %s", altstring, altStr)
       end
     end
     cat:AddLine(
-      "text", main,
-      "text2", altstring--,
+      "text", mainStr,
+      "text2", altstring
     )
   end
 end
+
+function GuildRollAlts:ConsolidateEP()
+  if not GuildRoll:IsAdmin() then return end
+
+  local altsTable = self:BuildAltsTable()
+  local transfers = 0
+
+  -- Build a single name -> {index, officernote} lookup to avoid repeated roster scans
+  local rosterLookup = {}
+  local numMembers = GetNumGuildMembers(1)
+  for i = 1, numMembers do
+    local name, _, _, _, _, _, _, officernote = GetGuildRosterInfo(i)
+    if name then
+      rosterLookup[name] = { index = i, officernote = officernote }
+    end
+  end
+
+  for _, entry in ipairs(altsTable) do
+    local mainName = entry.mainName
+    for _, alt in ipairs(entry.alts) do
+      local altName = alt.name
+      local altEP = GuildRoll:get_ep_v3(altName) or 0
+      if altEP > 0 then
+        -- Read main EP fresh each iteration to handle multiple alts sequentially
+        local mainEP = GuildRoll:get_ep_v3(mainName) or 0
+        local newMainEP = mainEP + altEP
+
+        local mainEntry = rosterLookup[mainName]
+        local altEntry  = rosterLookup[altName]
+
+        if mainEntry then
+          GuildRoll:update_epgp_v3(newMainEP, mainEntry.index, mainName, mainEntry.officernote)
+        end
+        if altEntry then
+          GuildRoll:update_epgp_v3(0, altEntry.index, altName, altEntry.officernote)
+        end
+
+        -- AdminLog
+        pcall(function()
+          GuildRoll:AdminLogAdd({
+            action  = "CONSOLIDATE",
+            actor   = UnitName("player"),
+            target  = mainName,
+            details = string.format("Consolidated EP from alt %s: %d -> %d (+%d)", altName, mainEP, newMainEP, altEP)
+          })
+        end)
+
+        -- Personal log for main
+        pcall(function()
+          GuildRoll:personalLogAdd(mainName, string.format("EP consolidated from alt %s: +%d EP (Prev: %d, New: %d)", altName, altEP, mainEP, newMainEP))
+        end)
+
+        -- Personal log for alt
+        pcall(function()
+          GuildRoll:personalLogAdd(altName, string.format("EP transferred to main %s: -%d EP (Prev: %d, New: 0)", mainName, altEP, altEP))
+        end)
+
+        transfers = transfers + 1
+      end
+    end
+  end
+
+  if transfers > 0 then
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("Consolidation complete. %d transfer(s) performed.", transfers))
+  else
+    DEFAULT_CHAT_FRAME:AddMessage("Consolidation complete. No EP to transfer.")
+  end
+
+  GuildRollAlts:Refresh()
+  GuildRoll:refreshAllEPUI()
+end
+
 
 -- GLOBALS: GuildRoll_saychannel,GuildRoll_groupbyclass,GuildRoll_groupbyarmor,GuildRoll_groupbyrole,GuildRoll_decay,GuildRoll_minPE,GuildRoll_main,GuildRoll_log,GuildRoll_dbver
 -- GLOBALS: GuildRoll,GuildRoll_prices,GuildRoll_standings,GuildRoll_bids,GuildRoll_loot,GuildRollAlts,GuildRoll_logs
