@@ -574,10 +574,10 @@ function GuildRoll_AdminLog:OnEnable()
           )
         end
 
-        -- Spacer (non-clickable empty entry)
+        -- Spacer (non-clickable)
         GuildRoll:SafeDewdropAddLine(
           "text", " ",
-          "tooltipText", ""
+          "isTitle", true
         )
 
         -- Reset Log
@@ -585,13 +585,7 @@ function GuildRoll_AdminLog:OnEnable()
           "text", "Reset Log",
           "tooltipText", "Clear all local admin log data",
           "func", function()
-            GuildRoll_adminLogSaved = {}
-            GuildRoll_adminLogOrder = {}
-            adminLogRuntime = {}
-            expandedRaidEntries = {}
-            pendingChunks = {}
-            pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-            GuildRoll:defaultPrint("Admin log cleared (local).")
+            StaticPopup_Show("GUILDROLL_ADMINLOG_CLEAR_CONFIRM")
           end
         )
       end
