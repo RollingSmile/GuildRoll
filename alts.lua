@@ -44,8 +44,8 @@ function GuildRollAlts:OnEnable()
         )
         if GuildRoll:IsAdmin() then
           GuildRoll:SafeDewdropAddLine(
-            "text", "Consolidate EP",
-            "tooltipText", "Move alt EP to their mains",
+            "text", L["Consolidate EP"],
+            "tooltipText", L["Move alt EP to their mains"],
             "func", function()
               StaticPopup_Show("GUILDROLL_CONSOLIDATE_EP")
             end
@@ -252,9 +252,9 @@ function GuildRollAlts:ConsolidateEP()
   end
 
   if transfers > 0 then
-    DEFAULT_CHAT_FRAME:AddMessage(string.format("Consolidation complete. %d transfer(s) performed.", transfers))
+    GuildRoll:defaultPrint(string.format("Consolidation complete. %d transfer(s) performed.", transfers))
   else
-    DEFAULT_CHAT_FRAME:AddMessage("Consolidation complete. No EP to transfer.")
+    GuildRoll:defaultPrint("Consolidation complete. No EP to transfer.")
   end
 
   GuildRollAlts:Refresh()

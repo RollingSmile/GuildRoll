@@ -2247,24 +2247,6 @@ end
 -- Utility 
 ------------
 
-function GuildRoll:inRaid(name)
-  for i=1,GetNumRaidMembers() do
-    if name == (UnitName(raidUnit[i])) then
-      return true
-    end
-  end
-  return false
-end
-
-function GuildRoll:lootMaster()
-  local method, lootmasterID = GetLootMethod()
-  if method == "master" and lootmasterID == 0 then
-    return true
-  else
-    return false
-  end
-end
-
 function GuildRoll:testMain()
   self:PromptSetMainIfMissing()
 end
@@ -3031,10 +3013,8 @@ function GuildRoll:SendMessage(subject, msg , prio)
 		ChatThrottleLib:SendAddonMessage(prio, GuildRollMSG.prefix..subject, msg, "RAID")
     end
 end
-function GuildRollMSG:DBGMSG(msg)
-		GuildRollMSG:DBGMSG(msg, false)
-end
 function GuildRollMSG:DBGMSG(msg, red)
+	red = red or false
 	if GuildRollMSG.dbg then 
 		if red then
 			DEFAULT_CHAT_FRAME:AddMessage( msg ,0.5,0.5,0.8 )   

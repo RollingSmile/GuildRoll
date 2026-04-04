@@ -127,8 +127,7 @@ function GuildRoll:init_notes_v3(guild_index,name,officernote)
     local hasLegacy = string.find(officernote,"{%d+:%-?%d+}")
     if hasLegacy then
       -- Convert legacy {EP:GP} to {EP}
-      -- Pattern captures: prefix, fullTag, epVal, gpVal, postfix (5 total)
-      local _, _, prefix, fullTag, epVal, gpVal, postfix = string.find(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+      local _, _, prefix, _, epVal, gpVal, postfix = string.find(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
       if epVal then
         -- Convert to new format
         local newTag = string.format("{%d}", tonumber(epVal))
@@ -156,7 +155,7 @@ function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action
   local newnote
   if ep ~= nil then 
     -- Try to match legacy {EP:GP} format first
-    local _, _, prefix, fullTag, oldEP, oldGP, postfix = string.find(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
+    local _, _, prefix, _, oldEP, oldGP, postfix = string.find(officernote, "^(.-)({(%d+):(%-?%d+)})(.*)$")
     if oldEP then
       -- Has legacy format - convert to new {EP} format
       newnote = string.gsub(officernote,"(.-)({%d+:%-?%d+})(.*)",function(prefix,tag,postfix)
@@ -271,13 +270,8 @@ function GuildRoll:MovePublicMainTagsToOfficerNotes()
   end
   
   for i = 1, numMembers do
-    -- Wrap GetGuildRosterInfo in pcall for safety
-    local success, name, r2, r3, r4, r5, r6, publicNote, officerNote, r9, r10 = pcall(function()
-      return GetGuildRosterInfo(i)
-    end)
-    
-    -- Process only if GetGuildRosterInfo succeeded and returned valid data
-    if success and name then
+    local name, _, _, _, _, _, publicNote, officerNote = GetGuildRosterInfo(i)
+    if name then
       publicNote = publicNote or ""
       officerNote = officerNote or ""
       

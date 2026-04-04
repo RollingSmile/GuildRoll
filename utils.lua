@@ -80,13 +80,9 @@ function GuildRoll:parseVersion(version,otherVersion)
   end
 end
 
--- Guild member verification wrapper (with silent flag)
-function GuildRoll:verifyGuildMember(name,silent)
-  return GuildRoll:verifyGuildMember(name,silent,false)
-end
-
 -- Guild member verification: Check if player is in guild and meets requirements
 function GuildRoll:verifyGuildMember(name,silent,ignorelevel)
+  ignorelevel = ignorelevel or false
   for i=1,GetNumGuildMembers(1) do
     local g_name, g_rank, g_rankIndex, g_level, g_class, g_zone, g_note, g_officernote, g_online = GetGuildRosterInfo(i)
     if (string.lower(name) == string.lower(g_name)) and (ignorelevel or tonumber(g_level) >= GuildRoll.VARS.minlevel) then 
@@ -149,7 +145,7 @@ end
 -- Contains utilities for managing Tablet tooltips, frames, and UI interactions
 
 -- Constant for maximum number of detached frames to scan
-local MAX_DETACHED_FRAMES = 100
+local MAX_DETACHED_FRAMES = 20
 
 -- Cached dummy owner frame for Tablet tooltips
 -- This prevents "Detached tooltip has no owner" errors from Tablet-2.0

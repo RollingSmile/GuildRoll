@@ -450,8 +450,9 @@ function GuildRoll:SavePersonalLog(name)
   end
 
   -- Fallback: Try to use guildep_export frame from standings.lua if available
-  if guildep_export and guildep_export.title and guildep_export.edit then
-    guildep_export.title:SetText("Save Personal Log: " .. name)
+  local exportFrame = _G["guildep_exportframe"]
+  if exportFrame and exportFrame.title and exportFrame.edit then
+    exportFrame.title:SetText("Save Personal Log: " .. name)
     local text = ""
     for i = table.getn(logs), 1, -1 do
       local entry = logs[i]
@@ -459,9 +460,9 @@ function GuildRoll:SavePersonalLog(name)
         text = text .. entry[1] .. " - " .. entry[2] .. "\n"
       end
     end
-    guildep_export.edit:SetText(text)
-    guildep_export.edit:HighlightText()
-    guildep_export:Show()
+    exportFrame.edit:SetText(text)
+    exportFrame.edit:HighlightText()
+    exportFrame:Show()
   else
     -- Fallback to chat frame
     DEFAULT_CHAT_FRAME:AddMessage("=== Personal Log for " .. name .. " (Copy from chat) ===")

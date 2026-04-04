@@ -2,11 +2,10 @@ world of warcraft addon data
 ## Interface: 11200
 ## Title: guildroll
 ## Author: RollingSmile
-## X-Website: https://github.com/RollingSmile/GuildEP
+## X-Website: https://github.com/RollingSmile/GuildRoll
 ## X-Category: Guild
 ## X-Credits: Roadblock, Qcat, Excinerus
 ## Version: 1.4.2c
-## X-Alpha: Test
 ## OptionalDeps: Ace2
 ## Notes: EP rolls - Basic Effort Points manager for TurtleWoW
 ## SavedVariables: GuildRoll_saychannel, GuildRoll_groupbyclass, GuildRoll_groupbyarmor, GuildRoll_groupbyrole, GuildRoll_dbver, GuildRoll_debug, GuildRoll_fubar, GuildRoll_VARS, GuildRoll_adminLogSaved, GuildRoll_adminLogOrder, GuildRoll_debugAdminLog, GuildRoll_showAllRollButtons
