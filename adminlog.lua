@@ -483,94 +483,32 @@ function GuildRoll_AdminLog:OnEnable()
         -- Filter by Author
         GuildRoll:SafeDewdropAddLine(
           "text", "Filter by Author",
-          "hasArrow", true,
-          "hasSlider", false
-        )
-        GuildRoll:SafeDewdropAddLine(
-          "text", "All Authors",
-          "tooltipText", "Show all admin log entries",
+          "tooltipText", "Filter log by officer name",
           "func", function()
-            filterAuthor = nil
-            pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-          end,
-          "level", 2
+            StaticPopup_Show("GUILDROLL_ADMINLOG_FILTER_AUTHOR")
+          end
         )
 
-        -- Build unique actor/author list
-        local authors = {}
-        for i = 1, table.getn(GuildRoll_adminLogOrder) do
-          local id = GuildRoll_adminLogOrder[i]
-          local entry = adminLogRuntime[id]
-          if entry then
-            local a = entry.actor or entry.author
-            if a then authors[a] = true end
-          end
-        end
-
-        for author, _ in pairs(authors) do
+        -- Clear author filter (only when active)
+        if filterAuthor then
           GuildRoll:SafeDewdropAddLine(
-            "text", author,
-            "tooltipText", string.format("Show only entries by %s", author),
+            "text", "Clear Author Filter",
+            "tooltipText", string.format("Clear author filter (%s)", filterAuthor),
             "func", function()
-              filterAuthor = author
+              filterAuthor = nil
               pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-            end,
-            "level", 2
+            end
           )
         end
 
         -- Filter by Target
         GuildRoll:SafeDewdropAddLine(
           "text", "Filter by Target",
-          "hasArrow", true,
-          "hasSlider", false
-        )
-        GuildRoll:SafeDewdropAddLine(
-          "text", "All Targets",
-          "tooltipText", "Show all admin log entries",
+          "tooltipText", "Filter log by target player name",
           "func", function()
-            filterTarget = nil
-            pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-          end,
-          "level", 3
-        )
-
-        -- Build unique target list from all entry types
-        local targets = {}
-        for i = 1, table.getn(GuildRoll_adminLogOrder) do
-          local id = GuildRoll_adminLogOrder[i]
-          local entry = adminLogRuntime[id]
-          if entry then
-            -- GIVE/PENALTY: direct target (player name)
-            if entry.target and entry.target ~= "" and entry.target ~= "Raid" and entry.target ~= "All" then
-              targets[entry.target] = true
-            end
-            -- RAID: each player in raid_details.players
-            if entry.raid_details and entry.raid_details.players then
-              for j = 1, table.getn(entry.raid_details.players) do
-                targets[entry.raid_details.players[j]] = true
-              end
-            end
-            -- DECAY: each player in affected
-            if entry.affected then
-              for name, _ in pairs(entry.affected) do
-                targets[name] = true
-              end
-            end
+            StaticPopup_Show("GUILDROLL_ADMINLOG_FILTER_TARGET")
           end
-        end
-
-        for target, _ in pairs(targets) do
-          GuildRoll:SafeDewdropAddLine(
-            "text", target,
-            "tooltipText", string.format("Show entries involving %s", target),
-            "func", function()
-              filterTarget = target
-              pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-            end,
-            "level", 3
-          )
-        end
+        )
 
         -- Search
         GuildRoll:SafeDewdropAddLine(
@@ -1063,6 +1001,110 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_SEARCH"] = {
       searchText = text
       pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
     end
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
+  end,
+  EditBoxOnEscapePressed = function(editBox)
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
+  end,
+  timeout = 0,
+  exclusive = 1,
+  whileDead = 1,
+  hideOnEscape = 1
+}
+
+-- Static popup for filter by author
+StaticPopupDialogs["GUILDROLL_ADMINLOG_FILTER_AUTHOR"] = {
+  text = "Filter by Author:",
+  button1 = TEXT(ACCEPT),
+  button2 = TEXT(CANCEL),
+  hasEditBox = 1,
+  maxLetters = 50,
+  OnAccept = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
+    if text and text ~= "" then
+      filterAuthor = text
+    else
+      filterAuthor = nil
+    end
+    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
+  end,
+  OnShow = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then
+      editBox:SetText(filterAuthor or "")
+      if editBox.SetFocus then editBox:SetFocus() end
+    end
+  end,
+  OnHide = function(self)
+    if ChatFrameEditBox and ChatFrameEditBox.IsVisible and ChatFrameEditBox:IsVisible() then
+      ChatFrameEditBox:SetFocus()
+    end
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then editBox:SetText("") end
+  end,
+  EditBoxOnEnterPressed = function(editBox)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
+    if text and text ~= "" then
+      filterAuthor = text
+    else
+      filterAuthor = nil
+    end
+    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
+  end,
+  EditBoxOnEscapePressed = function(editBox)
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
+  end,
+  timeout = 0,
+  exclusive = 1,
+  whileDead = 1,
+  hideOnEscape = 1
+}
+
+-- Static popup for filter by target
+StaticPopupDialogs["GUILDROLL_ADMINLOG_FILTER_TARGET"] = {
+  text = "Filter by Target Player:",
+  button1 = TEXT(ACCEPT),
+  button2 = TEXT(CANCEL),
+  hasEditBox = 1,
+  maxLetters = 50,
+  OnAccept = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
+    if text and text ~= "" then
+      filterTarget = text
+    else
+      filterTarget = nil
+    end
+    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
+  end,
+  OnShow = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then
+      editBox:SetText(filterTarget or "")
+      if editBox.SetFocus then editBox:SetFocus() end
+    end
+  end,
+  OnHide = function(self)
+    if ChatFrameEditBox and ChatFrameEditBox.IsVisible and ChatFrameEditBox:IsVisible() then
+      ChatFrameEditBox:SetFocus()
+    end
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then editBox:SetText("") end
+  end,
+  EditBoxOnEnterPressed = function(editBox)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
+    if text and text ~= "" then
+      filterTarget = text
+    else
+      filterTarget = nil
+    end
+    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
     local parent = editBox and editBox.GetParent and editBox:GetParent()
     if parent and parent.Hide then parent:Hide() end
   end,
