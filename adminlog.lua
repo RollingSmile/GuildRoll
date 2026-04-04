@@ -670,6 +670,11 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
     return result
   end
 
+  -- Pre-compute lowercase filter values once outside the loop
+  local filterAuthorLower = filterAuthor and string.lower(filterAuthor) or nil
+  local filterTargetLower = filterTarget and string.lower(filterTarget) or nil
+  local searchLower = (searchText and searchText ~= "") and string.lower(searchText) or nil
+
   -- Build filtered entry list
   local displayEntries = {}
   for i = 1, table.getn(GuildRoll_adminLogOrder) do
@@ -680,23 +685,22 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
       local include = true
 
       -- Apply author/actor filter
-      if filterAuthor then
+      if filterAuthorLower then
         local entryActor = string.lower(entry.actor or entry.author or "")
-        if not string.find(entryActor, string.lower(filterAuthor), 1, true) then
+        if not string.find(entryActor, filterAuthorLower, 1, true) then
           include = false
         end
       end
 
       -- Apply target filter using entryInvolvesPlayerPartial helper
-      if include and filterTarget then
-        if not entryInvolvesPlayerPartial(entry, string.lower(filterTarget)) then
+      if include and filterTargetLower then
+        if not entryInvolvesPlayerPartial(entry, filterTargetLower) then
           include = false
         end
       end
 
       -- Apply search filter: check text fields plus all player names via entryInvolvesPlayerPartial
-      if include and searchText and searchText ~= "" then
-        local searchLower = string.lower(searchText)
+      if include and searchLower then
         local actionLower  = string.lower(entry.action  or "")
         local detailsLower = string.lower(entry.details or "")
         local targetLower  = string.lower(entry.target  or "")
