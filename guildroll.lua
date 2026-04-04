@@ -944,6 +944,17 @@ function GuildRoll:addonMessage(message,channel,sender)
 end
 
 function GuildRoll:addonComms(prefix,message,channel,sender)
+  -- Route AdminLog sync messages to dedicated handler
+  if prefix == "GR_ALOG" then
+    if sender == self._playerName then return end
+    local name_g = self:verifyGuildMember(sender, true)
+    if not name_g then return end
+    if GuildRoll_AdminLog and GuildRoll_AdminLog.handleSyncMessage then
+      pcall(function() GuildRoll_AdminLog:handleSyncMessage(message, sender) end)
+    end
+    return
+  end
+
   -- Accept both the legacy prefix (VARS.prefix) and the new stable sync prefix
   if prefix ~= self.VARS.prefix and prefix ~= self.ADDON_SYNC_PREFIX then return end -- we don't care for messages from other addons
   if sender == self._playerName then return end -- we don't care for messages from ourselves
@@ -1636,6 +1647,7 @@ end
 function GuildRoll:decay_ep_v3()
   if not (admin()) then return end
   local memberCount = 0
+  local affected = {}  -- per-player {old, new} for AdminLog
   for i = 1, GetNumGuildMembers(1) do
     local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
     local prevEP = self:get_ep_v3(name,officernote)
@@ -1648,6 +1660,7 @@ function GuildRoll:decay_ep_v3()
       local addonMsg = string.format("%s;%s;%s;%s",name,"MainStanding",changeEP,"DECAY")
       self:addonMessage(addonMsg,"GUILD")
       
+      affected[name] = {old=prevEP, new=newEP}
       memberCount = memberCount + 1
     end
   end
@@ -1657,14 +1670,15 @@ function GuildRoll:decay_ep_v3()
   if not (GuildRoll_saychannel=="OFFICER") then self:adminSay(msg) end
   local addonMsg = string.format("ALL;DECAY;%s",decayPercent)
   self:addonMessage(addonMsg,"GUILD")
-  -- Add structured AdminLog entry for decay
+  -- Add structured AdminLog entry for decay with per-player affected data
   if self.AdminLogAdd then
     pcall(function()
       self:AdminLogAdd({
-        action  = "DECAY",
-        actor   = self:GetAdminName(),
-        target  = "All",
-        details = string.format("%.0f%% decay applied to %d members", decayPercent, memberCount),
+        action   = "DECAY",
+        actor    = self:GetAdminName(),
+        target   = "All",
+        details  = string.format("%.0f%% decay applied to %d members", decayPercent, memberCount),
+        affected = affected,
       })
     end)
   end
