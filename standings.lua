@@ -563,7 +563,7 @@ function GuildRoll_standings:OnTooltipUpdate()
     
     -- Add line - admins get click-to-menu functionality and Rank column
     if isAdmin then
-      -- Admin: clicking opens a mini-menu with Give EP and Show Personal Log options
+      -- Admin: clicking opens a mini-menu with Give EP and Show Admin Log options
       cat:AddLine(
         "text", text,
         "text2", text2,
@@ -586,11 +586,12 @@ function GuildRoll_standings:OnTooltipUpdate()
                 end
               )
               D:AddLine(
-                "text", L["Show Personal Log"],
-                "tooltipText", L["Show personal EP log for this player"],
+                "text", L["Show Admin Log"],
+                "tooltipText", "Show admin log filtered for this player",
                 "func", function()
-                  if GuildRoll and GuildRoll.ShowPersonalLog then
-                    GuildRoll:ShowPersonalLog(originalName)
+                  if GuildRoll_AdminLog and GuildRoll_AdminLog.OpenForPlayer then
+                    GuildRoll:ToggleModuleActive("GuildRoll_AdminLog", true)
+                    GuildRoll_AdminLog:OpenForPlayer(originalName)
                   end
                 end
               )

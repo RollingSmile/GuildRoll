@@ -49,9 +49,12 @@ GuildRoll_AdminLog = GuildRoll:NewModule("GuildRoll_AdminLog", "AceDB-2.0", "Ace
 
 -- Local state
 local adminLogRuntime = {}      -- runtime cache indexed by entry id
-local filterAuthor = nil        -- for UI filtering
+local filterAuthor = nil        -- for UI filtering by actor/author
+local filterTarget = nil        -- for UI filtering by target player
 local searchText = nil          -- for UI search
-local expandedRaidEntries = {}  -- track which raid entries are expanded (key = entry.id)
+local expandedRaidEntries = {}  -- track which entries are expanded (key = entry.id)
+local ALOG_SYNC_PREFIX = "GR_ALOG"  -- prefix for AdminLog officer sync messages
+local pendingChunks = {}        -- for reassembly of multi-chunk sync messages
 
 -- Helper: Debug print (protected by GuildRoll.DEBUG)
 local function debugPrint(msg)
@@ -72,6 +75,16 @@ local function generateEntryId()
   local random = math.random(1000, 9999)
   return string.format("%d_%d", timestamp, random)
 end
+
+-- Per-type maximum entry counts
+local maxEntriesByType = {
+  GIVE    = 1000,
+  PENALTY = 1000,
+  RAID    = 160,
+  DECAY   = 60,
+  RESET   = 5,
+  DEFAULT = 200,
+}
 
 -- Apply an admin log entry locally (deduplicates by id)
 local function applyAdminLogEntry(entry)
@@ -101,16 +114,68 @@ local function applyAdminLogEntry(entry)
     table.insert(GuildRoll_adminLogOrder, entry.id)
   end
 
-  -- Trim order array to last 400 entries
-  local maxEntries = 400
-  if table.getn(GuildRoll_adminLogOrder) > maxEntries then
-    local toRemove = table.getn(GuildRoll_adminLogOrder) - maxEntries
-    for i = 1, toRemove do
-      local oldId = GuildRoll_adminLogOrder[1]
-      table.remove(GuildRoll_adminLogOrder, 1)
-      GuildRoll_adminLogSaved[oldId] = nil
-      adminLogRuntime[oldId] = nil
+  -- Per-type trimming: enforce separate limits for each tracked action type
+  local trackedTypes = {"GIVE", "PENALTY", "RAID", "DECAY", "RESET"}
+  for _, actionType in ipairs(trackedTypes) do
+    local limit = maxEntriesByType[actionType]
+    local typeIds = {}
+    for i = 1, table.getn(GuildRoll_adminLogOrder) do
+      local id = GuildRoll_adminLogOrder[i]
+      local e = adminLogRuntime[id]
+      if e and e.action == actionType then
+        table.insert(typeIds, id)
+      end
     end
+    if table.getn(typeIds) > limit then
+      local toRemove = table.getn(typeIds) - limit
+      local removeSet = {}
+      for i = 1, toRemove do
+        removeSet[typeIds[i]] = true
+      end
+      local newOrder = {}
+      for i = 1, table.getn(GuildRoll_adminLogOrder) do
+        local id = GuildRoll_adminLogOrder[i]
+        if removeSet[id] then
+          GuildRoll_adminLogSaved[id] = nil
+          adminLogRuntime[id] = nil
+        else
+          table.insert(newOrder, id)
+        end
+      end
+      GuildRoll_adminLogOrder = newOrder
+    end
+  end
+
+  -- Default type trimming: all action types not in the tracked list share DEFAULT limit
+  local defaultLimit = maxEntriesByType.DEFAULT
+  local defaultIds = {}
+  for i = 1, table.getn(GuildRoll_adminLogOrder) do
+    local id = GuildRoll_adminLogOrder[i]
+    local e = adminLogRuntime[id]
+    if e then
+      local t = e.action or ""
+      if t ~= "GIVE" and t ~= "PENALTY" and t ~= "RAID" and t ~= "DECAY" and t ~= "RESET" then
+        table.insert(defaultIds, id)
+      end
+    end
+  end
+  if table.getn(defaultIds) > defaultLimit then
+    local toRemove = table.getn(defaultIds) - defaultLimit
+    local removeSet = {}
+    for i = 1, toRemove do
+      removeSet[defaultIds[i]] = true
+    end
+    local newOrder = {}
+    for i = 1, table.getn(GuildRoll_adminLogOrder) do
+      local id = GuildRoll_adminLogOrder[i]
+      if removeSet[id] then
+        GuildRoll_adminLogSaved[id] = nil
+        adminLogRuntime[id] = nil
+      else
+        table.insert(newOrder, id)
+      end
+    end
+    GuildRoll_adminLogOrder = newOrder
   end
 end
 
@@ -126,9 +191,237 @@ local function loadSavedEntries()
   end
 end
 
+-- Helper: check whether entry involves the named player
+local function entryInvolvesPlayer(entry, name)
+  if not entry or not name or name == "" then return false end
+
+  -- GIVE/PENALTY: direct target match
+  if entry.target == name then return true end
+
+  -- RAID: search in raid_details.players
+  if entry.raid_details and entry.raid_details.players then
+    for i = 1, table.getn(entry.raid_details.players) do
+      if entry.raid_details.players[i] == name then return true end
+    end
+  end
+
+  -- DECAY: search in affected table (keys are player names)
+  if entry.affected then
+    if entry.affected[name] then return true end
+  end
+
+  -- RESET: never match by player (no per-player data stored)
+  return false
+end
+
+-- Case-insensitive partial match version (used by Search, Filter by Author, Filter by Target)
+local function entryInvolvesPlayerPartial(entry, searchLower)
+  if not entry or not searchLower or searchLower == "" then return false end
+
+  -- GIVE/PENALTY: direct target match
+  if entry.target and string.find(string.lower(entry.target), searchLower, 1, true) then
+    return true
+  end
+
+  -- RAID: search in raid_details.players
+  if entry.raid_details and entry.raid_details.players then
+    for i = 1, table.getn(entry.raid_details.players) do
+      local p = entry.raid_details.players[i]
+      if p and string.find(string.lower(p), searchLower, 1, true) then
+        return true
+      end
+    end
+  end
+
+  -- DECAY: search in affected table (keys are player names)
+  if entry.affected then
+    for name, _ in pairs(entry.affected) do
+      if name and string.find(string.lower(name), searchLower, 1, true) then
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
+-- ── Serialization helpers for officer sync ──────────────────────────────────
+
+local FIELD_SEP = "\t"  -- tab between serialized fields
+local CHUNK_SIZE = 235  -- max bytes per sync message chunk (255 limit minus ~20 bytes protocol overhead)
+local EM_DASH = "\226\128\148"  -- UTF-8 em dash used in player detail display lines
+
+-- Split str on tab characters; handles empty fields correctly
+local function splitTab(str)
+  local t = {}
+  local pos = 1
+  local len = string.len(str)
+  while pos <= len do
+    local s = string.find(str, "\t", pos, true)
+    if s then
+      table.insert(t, string.sub(str, pos, s - 1))
+      pos = s + 1
+    else
+      table.insert(t, string.sub(str, pos))
+      break
+    end
+  end
+  return t
+end
+
+-- Serialize an entry to a tab-delimited string for sync
+local function serializeEntry(entry)
+  local parts = {
+    tostring(entry.id      or ""),
+    tostring(entry.ts      or 0),
+    tostring(entry.action  or "LOG"),
+    tostring(entry.actor   or ""),
+    tostring(entry.target  or ""),
+    tostring(entry.details or ""),
+  }
+
+  if entry.raid_details then
+    table.insert(parts, "RAID_DETAILS")
+    table.insert(parts, tostring(entry.raid_details.ep or 0))
+    if entry.raid_details.players then
+      for i = 1, table.getn(entry.raid_details.players) do
+        local player = entry.raid_details.players[i]
+        local counts = (entry.raid_details.counts and entry.raid_details.counts[player]) or {old=0,new=0}
+        local altsrc = (entry.raid_details.alt_sources and entry.raid_details.alt_sources[player]) or ""
+        table.insert(parts, player)
+        table.insert(parts, tostring(counts.old or 0))
+        table.insert(parts, tostring(counts.new or 0))
+        table.insert(parts, (altsrc ~= "") and altsrc or "_")
+      end
+    end
+  end
+
+  if entry.affected then
+    table.insert(parts, "AFFECTED")
+    for name, data in pairs(entry.affected) do
+      table.insert(parts, name)
+      table.insert(parts, tostring(data.old or 0))
+      table.insert(parts, tostring(data.new or 0))
+    end
+  end
+
+  return table.concat(parts, FIELD_SEP)
+end
+
+-- Deserialize a tab-delimited string back into an entry table
+local function deserializeEntry(str)
+  if not str or str == "" then return nil end
+  local fields = splitTab(str)
+  if table.getn(fields) < 6 then return nil end
+
+  local entry = {
+    id      = fields[1],
+    ts      = tonumber(fields[2]) or 0,
+    action  = fields[3],
+    actor   = fields[4],
+    target  = fields[5],
+    details = fields[6],
+  }
+  if not entry.id or entry.id == "" then return nil end
+
+  local i = 7
+  local n = table.getn(fields)
+  while i <= n do
+    local marker = fields[i]
+    if marker == "RAID_DETAILS" then
+      i = i + 1
+      local ep = tonumber(fields[i] or "") or 0
+      i = i + 1
+      entry.raid_details = {ep=ep, players={}, counts={}, alt_sources={}}
+      while i + 3 <= n do
+        local player = fields[i]
+        if player == "AFFECTED" or player == "RAID_DETAILS" then break end
+        local old_  = tonumber(fields[i+1] or "") or 0
+        local new_  = tonumber(fields[i+2] or "") or 0
+        local altsrc = fields[i+3] or "_"
+        if altsrc == "_" then altsrc = "" end
+        table.insert(entry.raid_details.players, player)
+        entry.raid_details.counts[player] = {old=old_, new=new_}
+        if altsrc ~= "" then
+          entry.raid_details.alt_sources[player] = altsrc
+        end
+        i = i + 4
+      end
+    elseif marker == "AFFECTED" then
+      i = i + 1
+      entry.affected = {}
+      while i + 2 <= n do
+        local player = fields[i]
+        if player == "RAID_DETAILS" or player == "AFFECTED" then break end
+        local old_ = tonumber(fields[i+1] or "") or 0
+        local new_ = tonumber(fields[i+2] or "") or 0
+        entry.affected[player] = {old=old_, new=new_}
+        i = i + 3
+      end
+    else
+      i = i + 1
+    end
+  end
+
+  return entry
+end
+
+-- Parse the protocol header from a sync message (Lua-5.0-compatible; no string.match)
+-- Returns: msgType ("S" or "C"), id, number, data  — or nil on parse failure
+local function parseProtocolMsg(message)
+  local pipe1 = string.find(message, "|", 1, true)
+  if not pipe1 then return nil end
+  local msgType = string.sub(message, 1, pipe1 - 1)
+  if msgType ~= "S" and msgType ~= "C" then return nil end
+
+  local pipe2 = string.find(message, "|", pipe1 + 1, true)
+  if not pipe2 then return nil end
+  local id = string.sub(message, pipe1 + 1, pipe2 - 1)
+
+  local pipe3 = string.find(message, "|", pipe2 + 1, true)
+  if not pipe3 then return nil end
+  local num = tonumber(string.sub(message, pipe2 + 1, pipe3 - 1))
+  if not num then return nil end
+
+  local data = string.sub(message, pipe3 + 1)
+  return msgType, id, num, data
+end
+
+-- Send an entry to other officers via chunked addon messages
+local function sendAdminLogSync(entry)
+  if not entry or not entry.id then return end
+  if not GuildRoll or not GuildRoll.IsAdmin or not GuildRoll:IsAdmin() then return end
+
+  local serialized = serializeEntry(entry)
+  if not serialized then return end
+
+  local len = string.len(serialized)
+  if len <= CHUNK_SIZE then
+    local msg = "S|" .. entry.id .. "|1|" .. serialized
+    pcall(function() SendAddonMessage(ALOG_SYNC_PREFIX, msg, "OFFICER") end)
+  else
+    local chunks = {}
+    local pos = 1
+    while pos <= len do
+      table.insert(chunks, string.sub(serialized, pos, pos + CHUNK_SIZE - 1))
+      pos = pos + CHUNK_SIZE
+    end
+    local total = table.getn(chunks)
+    for ci = 1, total do
+      local msg
+      if ci == 1 then
+        msg = "S|" .. entry.id .. "|" .. total .. "|" .. chunks[ci]
+      else
+        msg = "C|" .. entry.id .. "|" .. ci .. "|" .. chunks[ci]
+      end
+      pcall(function() SendAddonMessage(ALOG_SYNC_PREFIX, msg, "OFFICER") end)
+    end
+  end
+end
+
 -- Public API: Add a structured admin log entry (local only, no network)
 -- entry must be a table with fields: ts, action, actor, target, details
--- raid_details (optional) for RAID entries.
+-- raid_details (optional) for RAID entries; affected (optional) for DECAY entries.
 function GuildRoll:AdminLogAdd(entry)
   if not self:IsAdmin() then return end
   if not entry or type(entry) ~= "table" then return end
@@ -147,7 +440,15 @@ function GuildRoll:AdminLogAdd(entry)
     e.raid_details = entry.raid_details
   end
 
+  -- Preserve optional affected if present (for DECAY entries)
+  if entry.affected then
+    e.affected = entry.affected
+  end
+
   applyAdminLogEntry(e)
+
+  -- Broadcast to other online officers for sync
+  pcall(function() sendAdminLogSync(e) end)
 
   if T and T:IsRegistered("GuildRoll_AdminLog") then
     pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -185,6 +486,9 @@ function GuildRoll:AdminLogAddRaid(ep, raid_data)
 
   applyAdminLogEntry(entry)
 
+  -- Broadcast to other online officers for sync
+  pcall(function() sendAdminLogSync(entry) end)
+
   if T and T:IsRegistered("GuildRoll_AdminLog") then
     pcall(function() T:Refresh("GuildRoll_AdminLog") end)
   end
@@ -207,45 +511,6 @@ function GuildRoll_AdminLog:OnEnable()
       "showHintWhenDetached", true,
       "cantAttach", true,
       "menu", function()
-        -- Filter by author
-        GuildRoll:SafeDewdropAddLine(
-          "text", "Filter by Author",
-          "hasArrow", true,
-          "hasSlider", false
-        )
-        GuildRoll:SafeDewdropAddLine(
-          "text", "All Authors",
-          "tooltipText", "Show all admin log entries",
-          "func", function()
-            filterAuthor = nil
-            pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-          end,
-          "level", 2
-        )
-
-        -- Build unique actor/author list
-        local authors = {}
-        for i = 1, table.getn(GuildRoll_adminLogOrder) do
-          local id = GuildRoll_adminLogOrder[i]
-          local entry = adminLogRuntime[id]
-          if entry then
-            local a = entry.actor or entry.author
-            if a then authors[a] = true end
-          end
-        end
-
-        for author, _ in pairs(authors) do
-          GuildRoll:SafeDewdropAddLine(
-            "text", author,
-            "tooltipText", string.format("Show only entries by %s", author),
-            "func", function()
-              filterAuthor = author
-              pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-            end,
-            "level", 2
-          )
-        end
-
         -- Search
         GuildRoll:SafeDewdropAddLine(
           "text", "Search",
@@ -255,7 +520,7 @@ function GuildRoll_AdminLog:OnEnable()
           end
         )
 
-        -- Clear search
+        -- Clear Search (only when active)
         if searchText then
           GuildRoll:SafeDewdropAddLine(
             "text", "Clear Search",
@@ -267,26 +532,60 @@ function GuildRoll_AdminLog:OnEnable()
           )
         end
 
-        -- Refresh
+        -- Filter by Author
         GuildRoll:SafeDewdropAddLine(
-          "text", "Refresh",
-          "tooltipText", "Refresh admin log display",
+          "text", "Filter by Author",
+          "tooltipText", "Filter log by officer name",
           "func", function()
-            pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+            StaticPopup_Show("GUILDROLL_ADMINLOG_FILTER_AUTHOR")
           end
         )
 
-        -- Clear Local (admins only)
+        -- Remove Author Filter (only when active)
+        if filterAuthor then
+          GuildRoll:SafeDewdropAddLine(
+            "text", "Remove Author Filter",
+            "tooltipText", string.format("Remove author filter (%s)", filterAuthor),
+            "func", function()
+              filterAuthor = nil
+              pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+            end
+          )
+        end
+
+        -- Filter by Target
         GuildRoll:SafeDewdropAddLine(
-          "text", "Clear Local",
-          "tooltipText", "Clear local admin log data",
+          "text", "Filter by Target",
+          "tooltipText", "Filter log by target player name",
           "func", function()
-            GuildRoll_adminLogSaved = {}
-            GuildRoll_adminLogOrder = {}
-            adminLogRuntime = {}
-            expandedRaidEntries = {}
-            pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-            GuildRoll:defaultPrint("Admin log cleared (local).")
+            StaticPopup_Show("GUILDROLL_ADMINLOG_FILTER_TARGET")
+          end
+        )
+
+        -- Remove Target Filter (only when active)
+        if filterTarget then
+          GuildRoll:SafeDewdropAddLine(
+            "text", "Remove Target Filter",
+            "tooltipText", string.format("Remove target filter (%s)", filterTarget),
+            "func", function()
+              filterTarget = nil
+              pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+            end
+          )
+        end
+
+        -- Spacer (non-clickable)
+        GuildRoll:SafeDewdropAddLine(
+          "text", " ",
+          "isTitle", true
+        )
+
+        -- Reset Log
+        GuildRoll:SafeDewdropAddLine(
+          "text", "Reset Log",
+          "tooltipText", "Clear all local admin log data",
+          "func", function()
+            StaticPopup_Show("GUILDROLL_ADMINLOG_CLEAR_CONFIRM")
           end
         )
       end
@@ -365,6 +664,11 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
     return result
   end
 
+  -- Pre-compute lowercase filter values once outside the loop
+  local filterAuthorLower = filterAuthor and string.lower(filterAuthor) or nil
+  local filterTargetLower = filterTarget and string.lower(filterTarget) or nil
+  local searchLower = (searchText and searchText ~= "") and string.lower(searchText) or nil
+
   -- Build filtered entry list
   local displayEntries = {}
   for i = 1, table.getn(GuildRoll_adminLogOrder) do
@@ -375,24 +679,32 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
       local include = true
 
       -- Apply author/actor filter
-      if filterAuthor then
-        local entryActor = entry.actor or entry.author
-        if entryActor ~= filterAuthor then
+      if filterAuthorLower then
+        local entryActor = string.lower(entry.actor or entry.author or "")
+        if not string.find(entryActor, filterAuthorLower, 1, true) then
           include = false
         end
       end
 
-      -- Apply search filter
-      if include and searchText and searchText ~= "" then
-        local searchLower = string.lower(searchText)
+      -- Apply target filter using entryInvolvesPlayerPartial helper
+      if include and filterTargetLower then
+        if not entryInvolvesPlayerPartial(entry, filterTargetLower) then
+          include = false
+        end
+      end
+
+      -- Apply search filter: check text fields plus all player names via entryInvolvesPlayerPartial
+      if include and searchLower then
         local actionLower  = string.lower(entry.action  or "")
         local detailsLower = string.lower(entry.details or "")
         local targetLower  = string.lower(entry.target  or "")
         local actorLower   = string.lower(entry.actor or entry.author or "")
-        if not string.find(actionLower, searchLower, 1, true)
-           and not string.find(detailsLower, searchLower, 1, true)
-           and not string.find(targetLower, searchLower, 1, true)
-           and not string.find(actorLower, searchLower, 1, true) then
+        local found = string.find(actionLower, searchLower, 1, true)
+          or string.find(detailsLower, searchLower, 1, true)
+          or string.find(targetLower, searchLower, 1, true)
+          or string.find(actorLower, searchLower, 1, true)
+          or entryInvolvesPlayerPartial(entry, searchLower)
+        if not found then
           include = false
         end
       end
@@ -427,7 +739,7 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
         -- New structured format
         actionStr  = entry.action or "LOG"
         actorStr   = entry.actor  or "Unknown"
-        -- Combine target + details for the Dettagli column
+        -- Combine target + details for the Details column
         if entry.target and entry.target ~= "" then
           detailsStr = entry.target .. " - " .. (entry.details or "")
         else
@@ -437,12 +749,12 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
         -- Old format: entry.author + entry.action (full text)
         actorStr = entry.author or "Unknown"
         -- Try to extract tag like [DECAY], [GIVE], [RESET], [RAID]
-        local tag = string.match(entry.action or "", "^%[([%w]+)%]")
-        actionStr  = tag or "LOG"
+        local _, _, captured = string.find(entry.action or "", "^%[([%w]+)%]")
+        actionStr  = captured or "LOG"
         detailsStr = entry.action or ""
       end
 
-      -- Check if this is a raid entry (expandable)
+      -- Expandable entries: RAID (raid_details) and DECAY with affected data
       if entry.raid_details then
         local isExpanded = expandedRaidEntries[entry.id]
         local expandIcon = isExpanded and "[-] " or "[+] "
@@ -486,18 +798,67 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
 
             local displayText
             if alt_source and alt_source ~= "" then
-              displayText = string.format("  %s (%s's main) — Prev: %d, New: %d %s",
+              displayText = string.format("  %s (%s's main) " .. EM_DASH .. " Prev: %d, New: %d %s",
                 player, alt_source, counts.old, counts.new, deltaColored)
             else
-              displayText = string.format("  %s — Prev: %d, New: %d %s",
+              displayText = string.format("  %s " .. EM_DASH .. " Prev: %d, New: %d %s",
                 player, counts.old, counts.new, deltaColored)
             end
 
             subcat:AddLine("text", displayText)
           end
         end
+      elseif entry.affected then
+        -- DECAY entry with per-player data (expandable)
+        local isExpanded = expandedRaidEntries[entry.id]
+        local expandIcon = isExpanded and "[-] " or "[+] "
+
+        cat:AddLine(
+          "text",  timeStr,
+          "text2", actionStr,
+          "text3", actorStr,
+          "text4", expandIcon .. colorizeText(detailsStr),
+          "func", function()
+            if expandedRaidEntries[entry.id] then
+              expandedRaidEntries[entry.id] = nil
+            else
+              expandedRaidEntries[entry.id] = true
+            end
+            pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+          end
+        )
+
+        -- If expanded, show per-player decay data sorted alphabetically
+        if isExpanded then
+          local subcat = cat:AddCategory(
+            "columns", 1,
+            "hideBlankLine", true,
+            "noInherit", true,
+            "child_justify", "RIGHT"
+          )
+
+          local playerNames = {}
+          for name, _ in pairs(entry.affected) do
+            table.insert(playerNames, name)
+          end
+          table.sort(playerNames)
+
+          for _, player in ipairs(playerNames) do
+            local data = entry.affected[player]
+            local delta = (data.new or 0) - (data.old or 0)
+            local deltaColored
+            if delta >= 0 then
+              deltaColored = C:Green(string.format("(+%d)", delta))
+            else
+              deltaColored = C:Red(string.format("(%d)", delta))
+            end
+            local displayText = string.format("  %s " .. EM_DASH .. " Prev: %d, New: %d %s",
+              player, data.old or 0, data.new or 0, deltaColored)
+            subcat:AddLine("text", displayText)
+          end
+        end
       else
-        -- Regular (non-raid) entry
+        -- Regular (non-expandable) entry
         cat:AddLine(
           "text",  timeStr,
           "text2", actionStr,
@@ -509,10 +870,13 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
   end
 
   -- Show filter/search status hint
-  if filterAuthor or searchText then
+  if filterAuthor or filterTarget or searchText then
     local statusParts = {}
     if filterAuthor then
       table.insert(statusParts, string.format("Actor: %s", filterAuthor))
+    end
+    if filterTarget then
+      table.insert(statusParts, string.format("Target: %s", filterTarget))
     end
     if searchText then
       table.insert(statusParts, string.format("Search: %s", searchText))
@@ -534,6 +898,75 @@ function GuildRoll_AdminLog:Toggle()
     self:setHideScript()
   else
     pcall(function() T:Attach("GuildRoll_AdminLog") end)
+  end
+end
+
+-- Public API: open AdminLog with target filter pre-set to the given player name
+function GuildRoll_AdminLog:OpenForPlayer(name)
+  if not name or name == "" then return end
+  filterTarget = name
+  filterAuthor = nil
+  searchText = nil
+
+  if not T:IsRegistered("GuildRoll_AdminLog") then return end
+
+  if T:IsAttached("GuildRoll_AdminLog") then
+    pcall(function() T:Detach("GuildRoll_AdminLog") end)
+    if T.IsLocked and T:IsLocked("GuildRoll_AdminLog") then
+      pcall(function() T:ToggleLocked("GuildRoll_AdminLog") end)
+    end
+    self:setHideScript()
+  end
+  pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+end
+
+-- Receive and reassemble sync messages sent by other officers via GR_ALOG prefix
+function GuildRoll_AdminLog:handleSyncMessage(message, sender)
+  if not message then return end
+
+  local msgType, id, num, data = parseProtocolMsg(message)
+  if not msgType or not id or not num or data == nil then return end
+
+  if msgType == "S" then
+    local total = num
+    if total == 1 then
+      -- Single-chunk entry: process immediately
+      local entry = deserializeEntry(data)
+      if entry then
+        applyAdminLogEntry(entry)
+        if T and T:IsRegistered("GuildRoll_AdminLog") then
+          pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+        end
+      end
+    else
+      -- First chunk of a multi-chunk entry
+      pendingChunks[id] = {total=total, chunks={}, received=0}
+      pendingChunks[id].chunks[1] = data
+      pendingChunks[id].received = 1
+    end
+  elseif msgType == "C" then
+    -- Subsequent chunk
+    if not pendingChunks[id] then return end
+    local chunkIdx = num
+    pendingChunks[id].chunks[chunkIdx] = data
+    pendingChunks[id].received = (pendingChunks[id].received or 0) + 1
+
+    if pendingChunks[id].received == pendingChunks[id].total then
+      -- All chunks received: assemble and process
+      local assembled = ""
+      for ci = 1, pendingChunks[id].total do
+        assembled = assembled .. (pendingChunks[id].chunks[ci] or "")
+      end
+      pendingChunks[id] = nil
+
+      local entry = deserializeEntry(assembled)
+      if entry then
+        applyAdminLogEntry(entry)
+        if T and T:IsRegistered("GuildRoll_AdminLog") then
+          pcall(function() T:Refresh("GuildRoll_AdminLog") end)
+        end
+      end
+    end
   end
 end
 
@@ -594,6 +1027,110 @@ StaticPopupDialogs["GUILDROLL_ADMINLOG_SEARCH"] = {
       searchText = text
       pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
     end
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
+  end,
+  EditBoxOnEscapePressed = function(editBox)
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
+  end,
+  timeout = 0,
+  exclusive = 1,
+  whileDead = 1,
+  hideOnEscape = 1
+}
+
+-- Static popup for filter by author
+StaticPopupDialogs["GUILDROLL_ADMINLOG_FILTER_AUTHOR"] = {
+  text = "Filter by Author:",
+  button1 = TEXT(ACCEPT),
+  button2 = TEXT(CANCEL),
+  hasEditBox = 1,
+  maxLetters = 50,
+  OnAccept = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
+    if text and text ~= "" then
+      filterAuthor = text
+    else
+      filterAuthor = nil
+    end
+    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
+  end,
+  OnShow = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then
+      editBox:SetText(filterAuthor or "")
+      if editBox.SetFocus then editBox:SetFocus() end
+    end
+  end,
+  OnHide = function(self)
+    if ChatFrameEditBox and ChatFrameEditBox.IsVisible and ChatFrameEditBox:IsVisible() then
+      ChatFrameEditBox:SetFocus()
+    end
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then editBox:SetText("") end
+  end,
+  EditBoxOnEnterPressed = function(editBox)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
+    if text and text ~= "" then
+      filterAuthor = text
+    else
+      filterAuthor = nil
+    end
+    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
+  end,
+  EditBoxOnEscapePressed = function(editBox)
+    local parent = editBox and editBox.GetParent and editBox:GetParent()
+    if parent and parent.Hide then parent:Hide() end
+  end,
+  timeout = 0,
+  exclusive = 1,
+  whileDead = 1,
+  hideOnEscape = 1
+}
+
+-- Static popup for filter by target
+StaticPopupDialogs["GUILDROLL_ADMINLOG_FILTER_TARGET"] = {
+  text = "Filter by Target Player:",
+  button1 = TEXT(ACCEPT),
+  button2 = TEXT(CANCEL),
+  hasEditBox = 1,
+  maxLetters = 50,
+  OnAccept = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
+    if text and text ~= "" then
+      filterTarget = text
+    else
+      filterTarget = nil
+    end
+    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
+  end,
+  OnShow = function(self)
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then
+      editBox:SetText(filterTarget or "")
+      if editBox.SetFocus then editBox:SetFocus() end
+    end
+  end,
+  OnHide = function(self)
+    if ChatFrameEditBox and ChatFrameEditBox.IsVisible and ChatFrameEditBox:IsVisible() then
+      ChatFrameEditBox:SetFocus()
+    end
+    local editBox = GetVisibleStaticPopupEditBox(self)
+    if editBox and editBox.SetText then editBox:SetText("") end
+  end,
+  EditBoxOnEnterPressed = function(editBox)
+    local text = editBox and editBox.GetText and editBox:GetText() or nil
+    if text and text ~= "" then
+      filterTarget = text
+    else
+      filterTarget = nil
+    end
+    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
     local parent = editBox and editBox.GetParent and editBox:GetParent()
     if parent and parent.Hide then parent:Hide() end
   end,
