@@ -1660,7 +1660,7 @@ function GuildRoll:decay_ep_v3()
       local addonMsg = string.format("%s;%s;%s;%s",name,"MainStanding",changeEP,"DECAY")
       self:addonMessage(addonMsg,"GUILD")
       
-      affected[name] = {old=prevEP, new=newEP}
+      affected[name] = {old=prevEP, new=newEP}  -- aggregate per-player data for the AdminLog entry built after the loop
       memberCount = memberCount + 1
     end
   end

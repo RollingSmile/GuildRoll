@@ -217,7 +217,8 @@ end
 -- ── Serialization helpers for officer sync ──────────────────────────────────
 
 local FIELD_SEP = "\t"  -- tab between serialized fields
-local CHUNK_SIZE = 200  -- max bytes per sync message chunk
+local CHUNK_SIZE = 235  -- max bytes per sync message chunk (255 limit minus ~20 bytes protocol overhead)
+local EM_DASH = "\226\128\148"  -- UTF-8 em dash used in player detail display lines
 
 -- Split str on tab characters; handles empty fields correctly
 local function splitTab(str)
@@ -784,10 +785,8 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
         -- Old format: entry.author + entry.action (full text)
         actorStr = entry.author or "Unknown"
         -- Try to extract tag like [DECAY], [GIVE], [RESET], [RAID]
-        local tag
-        local ts, te, tc = string.find(entry.action or "", "^%[([%w]+)%]")
-        if tc then tag = tc end
-        actionStr  = tag or "LOG"
+        local _, _, captured = string.find(entry.action or "", "^%[([%w]+)%]")
+        actionStr  = captured or "LOG"
         detailsStr = entry.action or ""
       end
 
@@ -835,10 +834,10 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
 
             local displayText
             if alt_source and alt_source ~= "" then
-              displayText = string.format("  %s (%s's main) \226\128\148 Prev: %d, New: %d %s",
+              displayText = string.format("  %s (%s's main) " .. EM_DASH .. " Prev: %d, New: %d %s",
                 player, alt_source, counts.old, counts.new, deltaColored)
             else
-              displayText = string.format("  %s \226\128\148 Prev: %d, New: %d %s",
+              displayText = string.format("  %s " .. EM_DASH .. " Prev: %d, New: %d %s",
                 player, counts.old, counts.new, deltaColored)
             end
 
@@ -889,7 +888,7 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
             else
               deltaColored = C:Red(string.format("(%d)", delta))
             end
-            local displayText = string.format("  %s \226\128\148 Prev: %d, New: %d %s",
+            local displayText = string.format("  %s " .. EM_DASH .. " Prev: %d, New: %d %s",
               player, data.old or 0, data.new or 0, deltaColored)
             subcat:AddLine("text", displayText)
           end
