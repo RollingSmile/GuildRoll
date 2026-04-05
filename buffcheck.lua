@@ -1067,6 +1067,15 @@ function GuildRoll_BuffCheck:OnEnable()
           "tooltipText", L["Refresh window"],
           "func", function() self:Refresh() end
         )
+        GuildRoll:SafeDewdropAddLine(
+          "text", "Close window",
+          "tooltipText", "Close this window",
+          "func", function()
+            pcall(function() D:Close() end)
+            local frame = GuildRoll:FindDetachedFrame("GuildRoll_BuffCheck")
+            if frame and frame.Hide then frame:Hide() end
+          end
+        )
       end
     )
   end

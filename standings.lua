@@ -248,6 +248,15 @@ function GuildRoll_standings:OnEnable()
           "func", function() GuildRoll_standings:Import() end
         )
         end
+        GuildRoll:SafeDewdropAddLine(
+          "text", "Close window",
+          "tooltipText", "Close this window",
+          "func", function()
+            pcall(function() D:Close() end)
+            local frame = GuildRoll:FindDetachedFrame("GuildRoll_standings")
+            if frame and frame.Hide then frame:Hide() end
+          end
+        )
        	end
     )
     

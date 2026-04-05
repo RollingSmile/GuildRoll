@@ -73,6 +73,15 @@ function GuildRoll_logs:OnEnable()
           "tooltipText", L["Refresh window"],
           "func", function() GuildRoll_logs:Refresh() end
         )
+        GuildRoll:SafeDewdropAddLine(
+          "text", "Close window",
+          "tooltipText", "Close this window",
+          "func", function()
+            pcall(function() D:Close() end)
+            local frame = GuildRoll:FindDetachedFrame("GuildRoll_logs")
+            if frame and frame.Hide then frame:Hide() end
+          end
+        )
       end      
     )
     
@@ -240,6 +249,15 @@ function GuildRoll_logs:registerPersonalTablet()
         "text", L["Refresh"],
         "tooltipText", L["Refresh window"],
         "func", function() GuildRoll_logs:RefreshPersonal() end
+      )
+      GuildRoll:SafeDewdropAddLine(
+        "text", "Close window",
+        "tooltipText", "Close this window",
+        "func", function()
+          pcall(function() D:Close() end)
+          local frame = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")
+          if frame and frame.Hide then frame:Hide() end
+        end
       )
     end
   )
