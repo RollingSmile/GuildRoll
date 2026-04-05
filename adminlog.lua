@@ -588,6 +588,23 @@ function GuildRoll_AdminLog:OnEnable()
             StaticPopup_Show("GUILDROLL_ADMINLOG_CLEAR_CONFIRM")
           end
         )
+
+        -- Spacer
+        GuildRoll:SafeDewdropAddLine(
+          "text", " ",
+          "isTitle", true
+        )
+
+        -- Close window
+        GuildRoll:SafeDewdropAddLine(
+          "text", "Close window",
+          "tooltipText", "Close this window",
+          "func", function()
+            pcall(function() D:Close() end)
+            local frame = GuildRoll:FindDetachedFrame("GuildRoll_AdminLog")
+            if frame and frame.Hide then frame:Hide() end
+          end
+        )
       end
     )
 
