@@ -53,107 +53,6 @@ local RaidKey = {}
 -- Forward-declare handler for SHARE: admin settings so addonComms can call it early
 local handleSharedSettings
 
--- Constants for note length and migration timing
-local MAX_NOTE_LEN = 31
-local MIGRATION_THROTTLE_SECONDS = 30
-local MIGRATION_AUTO_DELAY_SECONDS = 5
-
--- Helper: trim public note with tag to ensure it fits within max length
--- existing: current public note
--- tag: tag to append
--- maxlen: maximum allowed length (default MAX_NOTE_LEN)
--- Returns: trimmed note with tag appended
-local function _trim_public_with_tag(existing, tag, maxlen)
-  maxlen = maxlen or MAX_NOTE_LEN
-  existing = existing or ""
-  tag = tag or ""
-  
-  local tagLen = string.len(tag)
-  local availableLen = maxlen - tagLen
-  
-  if availableLen < 0 then
-    -- Tag itself is too long; return just the tag truncated
-    return string.sub(tag, 1, maxlen)
-  end
-  
-  if string.len(existing) <= availableLen then
-    -- Existing note fits; append tag
-    return existing .. tag
-  else
-    -- Trim existing to fit
-    return string.sub(existing, 1, availableLen) .. tag
-  end
-end
-
--- Helper: insert tag before {EP} pattern in officer note
--- officernote: current officer note
--- tag: tag to insert
--- Returns: new officer note with tag inserted before {EP} pattern
-local function _insertTagBeforeEP(officernote, tag)
-  -- Ensure inputs are strings
-  if type(officernote) ~= "string" then officernote = "" end
-  if type(tag) ~= "string" then tag = "" end
-  
-  -- Return early if tag is empty
-  if tag == "" then
-    return officernote
-  end
-  
-  -- Remove any existing occurrences of this tag from the officer note
-  -- Escape pattern characters in the tag for safe pattern matching
-  local escapedTag = string.gsub(tag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-  officernote = string.gsub(officernote, escapedTag, "")
-  
-  -- Try to find new {EP} pattern first (e.g., {123})
-  local prefix, ep, postfix = string.match(officernote, "^(.-)({%d+})(.*)$")
-  
-  if ep then
-    -- Found new {EP} pattern; insert tag before it
-    return prefix .. tag .. ep .. postfix
-  end
-  
-  -- Try to find legacy {EP:GP} pattern (e.g., {123:456})
-  prefix, epgp, postfix = string.match(officernote, "^(.-)({%d+:%d+})(.*)$")
-  
-  if epgp then
-    -- Found legacy pattern; insert tag before it
-    return prefix .. tag .. epgp .. postfix
-  else
-    -- No pattern found; append tag to end
-    return officernote .. tag
-  end
-end
-
--- Helper: attempt to run main tag migration with throttle check
--- Returns true if migration was attempted, false if throttled
-local function _attemptThrottledMigration(self)
-  -- Check throttle: don't run more often than once every 30 seconds
-  local now = GetTime()
-  if self._lastMigrateRun and (now - self._lastMigrateRun) < MIGRATION_THROTTLE_SECONDS then
-    return false
-  end
-  
-  -- Set timestamp before attempting to prevent rapid retries on failure
-  -- This ensures we don't spam attempts when guild roster isn't available yet
-  self._lastMigrateRun = now
-  
-  -- Verify guild roster is available
-  local ok, numMembers = pcall(function()
-    if not IsInGuild() then return 0 end
-    return GetNumGuildMembers(1) or 0
-  end)
-  
-  if ok and numMembers > 0 then
-    -- Run migration
-    pcall(function()
-      GuildRoll:MovePublicMainTagsToOfficerNotes()
-    end)
-    return true
-  end
-  
-  return false
-end
-
 local options
 do
   for i=1,40 do
@@ -220,7 +119,6 @@ local cmdtable_shared = {
       type = "range",
       name = "Roll Cumulative SR",
       desc = "Roll Cumulative Soft Reserve with your standing",
-      get = "Roll Cumulative Soft Reserve with your standing",
       min = 1,
       max = 10,
       step = 1,
@@ -807,7 +705,6 @@ function GuildRoll:delayedInit()
     -- number is between 2 and 15
     return (number - 1) * GuildRoll.VARS.CSRWeekBonus
   end
-  --self:RegisterEvent("CHAT_MSG_ADDON","addonComms")  
   -- broadcast our version
   local addonMsg = string.format("GuildRollVERSION;%s;%d",GuildRoll._versionString,major_ver or 0)
   self:addonMessage(addonMsg,"GUILD")
@@ -822,8 +719,8 @@ function GuildRoll:delayedInit()
     
     -- Auto-run migration 5 seconds after init for admins
     self:ScheduleEvent("guildroll_auto_migrate", function()
-      _attemptThrottledMigration(self)
-    end, MIGRATION_AUTO_DELAY_SECONDS)
+      GuildRoll._attemptThrottledMigration(self)
+    end, 5)
   end
   
   -- Schedule alt main prompt check after a short delay to allow roster to populate
@@ -842,7 +739,6 @@ function GuildRoll:OnUpdate(elapsed)
 
   if lastUpdate > 0.5 then
     lastUpdate = 0
-    -- GuildRoll_reserves:Refresh() removed (reserves feature removed)
   end
 end
 
@@ -872,7 +768,6 @@ function GuildRoll:GuildRosterSetOfficerNote(index,note,fromAddon)
     local newTag = epgp or ep
     if oldTag ~= nil then
       if newTag == nil or newTag ~= oldTag then
-        -- legacy PUG/Bank handling removed: just report the modification to admins
         self:adminSay(string.format(L["Manually modified %s\'s note. Standing was %s"],name,oldTag))
         self:defaultPrint(string.format(L["|cffff0000Manually modified %s\'s note. Standing was %s|r"],name,oldTag))
       end
@@ -975,7 +870,7 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     end
     
     -- Attempt throttled migration
-    _attemptThrottledMigration(self)
+    GuildRoll._attemptThrottledMigration(self)
     return
   end
   
@@ -1221,20 +1116,19 @@ function GuildRoll:shareSettings(force)
     self._lastSettingsShare = now
     
     -- Build compact payload with admin settings
-    -- Format: SHARE:DC=0.5;ALT=1.0;SC=GUILD;SBR=0
+    -- Format: SHARE:DC=0.5;ALT=1.0;SC=GUILD
     -- MIN removed: Minimum EP is now local to each admin and not shared
     -- RO removed: raid-only toggles are now local runtime-only flags, not shared
     local dc = GuildRoll_decay or 0
     local alt = GuildRollAltspool and "ON" or "OFF"
     local sc = GuildRoll_saychannel or "GUILD"
-    local sbr = GuildRoll_standings_raidonly and 1 or 0
     
     -- Escape special chars (= and ;) in string values if needed
     sc = string.gsub(sc, "=", "%%3D")
     sc = string.gsub(sc, ";", "%%3B")
     
-    local payload = string.format("SHARE:DC=%s;ALT=%s;SC=%s;SBR=%d",
-      tostring(dc), tostring(alt), sc, sbr)
+    local payload = string.format("SHARE:DC=%s;ALT=%s;SC=%s",
+      tostring(dc), tostring(alt), sc)
     
     -- Send via existing addonMessage method for consistency
     self:addonMessage(payload, "GUILD")
@@ -1541,7 +1435,6 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
     return false, getname
   end
 
-  -- PUG support removed: do not call self:isPug
   local postfix, alt = ""
 
   -- Keep alt -> main handling if Altspool is enabled
@@ -2056,7 +1949,7 @@ function GuildRoll:ProcessSetMainInput(inputMain)
   end
   
   -- Append main tag to public note
-  local newPublic = _trim_public_with_tag(playerPublicNote, mainTag, MAX_NOTE_LEN)
+  local newPublic = GuildRoll._trim_public_with_tag(playerPublicNote, mainTag)
   
   -- Write the new public note (wrapped in pcall for safety)
   local success, err = pcall(function()
@@ -2152,96 +2045,11 @@ function GuildRoll:CheckAltAndPromptSetMain()
   StaticPopup_Show("GUILDROLL_SET_MAIN_PROMPT")
 end
 
--- MovePublicMainTagsToOfficerNotes: Admin function to migrate main tags from public to officer notes
--- Requires admin permission (GuildRoll:IsAdmin)
--- Iterates through guild roster and moves {MainName} tags from public note to officer note
--- Returns: number of tags moved
-function GuildRoll:MovePublicMainTagsToOfficerNotes()
-  if not GuildRoll:IsAdmin() then
-    self:defaultPrint("You do not have permission to edit officer notes.")
-    return 0
-  end
-  
-  local movedCount = 0
-  local numMembers = GetNumGuildMembers(1)
-  
-  -- Validate numMembers is a valid number
-  if not numMembers or type(numMembers) ~= "number" or numMembers < 1 then
-    return 0
-  end
-  
-  for i = 1, numMembers do
-    -- Wrap GetGuildRosterInfo in pcall for safety
-    local success, name, r2, r3, r4, r5, r6, publicNote, officerNote, r9, r10 = pcall(function()
-      return GetGuildRosterInfo(i)
-    end)
-    
-    -- Process only if GetGuildRosterInfo succeeded and returned valid data
-    if success and name then
-      publicNote = publicNote or ""
-      officerNote = officerNote or ""
-      
-      -- Ensure publicNote and officerNote are strings
-      if type(publicNote) == "string" and type(officerNote) == "string" then
-        -- Check if public note contains a main tag pattern {name} (min 2 chars)
-        local mainTag = string.match(publicNote, "({%a%a%a*})")
-        if mainTag and type(mainTag) == "string" and string.len(mainTag) > 2 then
-          -- Insert main tag before {EP} in officer note first (to avoid data loss)
-          local newOfficer = _insertTagBeforeEP(officerNote, mainTag)
-          
-          -- Validate newOfficer is a string before writing
-          if type(newOfficer) == "string" then
-            -- Write officer note first (wrapped in pcall for safety)
-            local successOfficer = pcall(function()
-              GuildRosterSetOfficerNote(i, newOfficer, true)
-            end)
-            
-            -- Only remove from public note if officer note write succeeded
-            if successOfficer then
-              movedCount = movedCount + 1
-              
-              -- Escape pattern characters for safe replacement
-              local escapedTag = string.gsub(mainTag, "([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
-              -- Remove only first occurrence of the main tag from public note
-              local newPublic = string.gsub(publicNote, escapedTag, "", 1)
-              
-              -- Trim leading and trailing whitespace
-              newPublic = string.gsub(newPublic, "^%s*(.-)%s*$", "%1")
-              
-              -- If empty, use a single space to ensure server accepts it
-              if newPublic == "" then
-                newPublic = " "
-              end
-              
-              -- Attempt to write public note (removal is best-effort)
-              pcall(function()
-                GuildRosterSetPublicNote(i, newPublic)
-              end)
-            end
-          end
-        end
-      end
-    end
-  end
-  
-  -- Only print summary if at least one tag was moved
-  if movedCount > 0 then
-    self:defaultPrint(string.format("Migration complete. Moved %d main tags from public to officer notes.", movedCount))
-  end
-  
-  return movedCount
-end
-
 
 ------------
 -- Logging
 ------------
-function GuildRoll:addToLog(line,skipTime)
-  -- No-op: AdminLog entries are now added directly via structured AdminLogAdd calls
-  -- from give_ep_to_member, decay_ep_v3, reset_ep_v3, and AdminLogAddRaid.
-  -- This function is kept for backward compatibility only.
-  -- Personal logs are maintained separately via personalLogAdd
-end
+function GuildRoll:addToLog(line, skipTime) end -- removed: use AdminLogAdd instead
 
 ------------
 -- Utility 
@@ -2999,9 +2807,6 @@ function GuildRoll:GetGuildKey(g)
 	return (string.gsub(g ," ",""))
 end
  
-
-local lastHostInfoDispatch = 0
-local HostInfoRequestsSinceLastDispatch = 0
 
 function GuildRoll:SendMessage(subject, msg , prio)
 	prio = prio or "BULK"

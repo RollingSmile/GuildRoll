@@ -597,8 +597,8 @@ function GuildRoll_AdminLog:OnEnable()
 
         -- Close window
         GuildRoll:SafeDewdropAddLine(
-          "text", "Close window",
-          "tooltipText", "Close this window",
+          "text", L["Close window"],
+          "tooltipText", L["Close this window"],
           "func", function()
             pcall(function() D:Close() end)
             local frame = GuildRoll:FindDetachedFrame("GuildRoll_AdminLog")

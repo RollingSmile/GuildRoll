@@ -224,6 +224,8 @@ Results will print here when done.]],
   ["All members have required consumes. Award EP to raid?"] = true,
   ["All members have required flasks. Award EP to raid?"] = true,
   -- Menu reorganization
+  ["Close window"] = true,
+  ["Close this window"] = true,
   ["Quick Actions"] = true,
   ["EP Actions"] = true,
   ["Options"] = true,
