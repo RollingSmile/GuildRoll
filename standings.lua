@@ -557,7 +557,8 @@ function GuildRoll_standings:OnTooltipUpdate()
 
     local text = C:Colorize(BC:GetHexColor(class), displayName)
     local text2
-    if GuildRoll_minPE > 0 and ep < GuildRoll_minPE then
+    if ep <= 1 then
+      -- EP at or below 1: highlight in red, will be zeroed on next decay
       text2 = C:Red(string.format("%.4g", ep))
     else
       text2 = string.format("%.4g", ep)
