@@ -52,8 +52,8 @@ function GuildRollAlts:OnEnable()
           )
         end
         GuildRoll:SafeDewdropAddLine(
-          "text", "Close window",
-          "tooltipText", "Close this window",
+          "text", L["Close window"],
+          "tooltipText", L["Close this window"],
           "func", function()
             pcall(function() D:Close() end)
             local frame = GuildRoll:FindDetachedFrame("GuildRollAlts")
