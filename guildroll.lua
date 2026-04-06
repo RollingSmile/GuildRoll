@@ -833,6 +833,8 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
   -- Route AdminLog sync messages to dedicated handler
   if prefix == "GR_ALOG" then
     if sender == self._playerName then return end
+    -- Only admins process AdminLog sync messages
+    if not GuildRoll:IsAdmin() then return end
     local name_g = self:verifyGuildMember(sender, true)
     if not name_g then return end
     if GuildRoll_AdminLog and GuildRoll_AdminLog.handleSyncMessage then
