@@ -250,42 +250,32 @@ function GuildRoll:buildMenu()
       args = {}
     }
     
-    -- 1. Raid Only (toggle) - first in EP Actions
+    -- 1. Raid Only toggle (EP member list only, order 1)
     options.args["ep_actions"].args["raid_only"] = {
       type = "toggle",
-      name = L["Raid Only"],
-      desc = L["Only show members in raid."],
+      name = "Raid Only",
+      desc = "Only show members currently in raid in the EP to Member list.",
       order = 1,
       get = function() return not not GuildRoll_memberlist_raidonly end,
-      set = function(v) 
+      set = function(v)
         GuildRoll_memberlist_raidonly = not GuildRoll_memberlist_raidonly
-        -- Trigger local UI refresh
         GuildRoll:SetRefresh(true)
       end,
     }
-    
-    -- 2. Set Min EP (text) - second in EP Actions, shows current value in name
-    options.args["ep_actions"].args["set_min_ep"] = {
-      type = "text",
-      -- Dewdrop-2.0 requires 'name' to be a string, not a function.
-      -- Compute the display string at menu-build time so the current value is visible.
-      name = string.format(L["Set Min EP (Current: %s)"], GuildRoll_minPE),
-      desc = L["Set Minimum MainStanding"],
-      usage = "<minPE>",
+
+    -- 2. Alt Only toggle (EP member list only, order 2)
+    options.args["ep_actions"].args["alt_only"] = {
+      type = "toggle",
+      name = "Alt Only",
+      desc = "Only show alt characters in the EP to Member list.",
       order = 2,
-      get = function() return GuildRoll_minPE end,
-      set = function(v) 
-        GuildRoll_minPE = tonumber(v)
-        -- The name will show updated value on next menu open (buildMenu is called each time)
-        GuildRoll:refreshPRTablets()
-        -- Removed shareSettings call: Minimum EP is now local to each admin
-      end,
-      validate = function(v) 
-        local n = tonumber(v)
-        return n and n >= 0 and n <= GuildRoll.VARS.max
+      get = function() return not not GuildRoll_memberlist_altonly end,
+      set = function(v)
+        GuildRoll_memberlist_altonly = not GuildRoll_memberlist_altonly
+        GuildRoll:SetRefresh(true)
       end,
     }
-    
+
     -- 3. +EP to Member (MainStanding group) - third in EP Actions
     options.args["ep_actions"].args["MainStanding"] = {
       type = "group",
@@ -576,6 +566,7 @@ function GuildRoll:OnInitialize() -- ADDON_LOADED (1) unless LoD
   if GuildRoll_debugAdminLog == nil then GuildRoll_debugAdminLog = false end
   -- Initialize runtime-only raid filter flags (not saved to SavedVariables)
   GuildRoll_memberlist_raidonly = false
+  GuildRoll_memberlist_altonly = false  -- runtime only, not saved
   GuildRoll_standings_raidonly = false
   self:RegisterDB("GuildRoll_fubar")
   self:RegisterDefaults("char",{})
@@ -1545,7 +1536,12 @@ function GuildRoll:decay_ep_v3()
     local name,_,_,_,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
     local prevEP = self:get_ep_v3(name,officernote)
     if (prevEP~=nil) then
-      local newEP = self:num_round(prevEP*GuildRoll_decay)
+      local newEP
+      if prevEP <= 1 then
+        newEP = 0
+      else
+        newEP = self:num_round(prevEP * GuildRoll_decay)
+      end
       local changeEP = newEP - prevEP
       self:update_epgp_v3(newEP,i,name,officernote,"DECAY")
       
@@ -1774,7 +1770,9 @@ function GuildRoll:buildRosterTable()
     local member_name,_,_,level,class,_,note,officernote,_,_ = GetGuildRosterInfo(i)
     if member_name and member_name ~= "" then
       local main, main_class, main_rank = self:parseAlt(member_name,officernote)
-      local is_raid_level = tonumber(level) and level >= GuildRoll.VARS.minlevel
+      local is_raid_level = tonumber(level) and level >= 60
+      -- determine if character is an alt
+      local isAlt = (main ~= nil)
       if (main) then
         if ((self._playerName) and (member_name == self._playerName)) then
           if (not GuildRoll_main) or (GuildRoll_main and GuildRoll_main ~= main) then
@@ -1798,11 +1796,19 @@ function GuildRoll:buildRosterTable()
       end
       if (GuildRoll_memberlist_raidonly) and next(r) then
         if r[member_name] and is_raid_level then
-          table.insert(g,{["name"]=member_name,["class"]=class})
+          if GuildRoll_memberlist_altonly and not isAlt then
+            -- alt only filter: skip mains
+          else
+            table.insert(g, {["name"]=member_name, ["class"]=class})
+          end
         end
       else
         if is_raid_level then
-          table.insert(g,{["name"]=member_name,["class"]=class})
+          if GuildRoll_memberlist_altonly and not isAlt then
+            -- alt only filter: skip mains
+          else
+            table.insert(g, {["name"]=member_name, ["class"]=class})
+          end
         end
       end
     end
