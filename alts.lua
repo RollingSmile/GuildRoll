@@ -247,12 +247,22 @@ function GuildRollAlts:ConsolidateEP()
 
         -- Personal log for main
         pcall(function()
-          GuildRoll:personalLogAdd(mainName, string.format("EP consolidated from alt %s: +%d EP (Prev: %d, New: %d)", altName, altEP, mainEP, newMainEP))
+          GuildRoll:personalLogAdd(
+            mainName,
+            "CONSOLIDATE",
+            UnitName("player"),
+            string.format("EP consolidated from alt %s: +%d (Prev: %d, New: %d)", altName, altEP, mainEP, newMainEP)
+          )
         end)
 
         -- Personal log for alt
         pcall(function()
-          GuildRoll:personalLogAdd(altName, string.format("EP transferred to main %s: -%d EP (Prev: %d, New: 0)", mainName, altEP, altEP))
+          GuildRoll:personalLogAdd(
+            altName,
+            "CONSOLIDATE",
+            UnitName("player"),
+            string.format("EP transferred to main %s: -%d (Prev: %d, New: 0)", mainName, altEP, altEP)
+          )
         end)
 
         transfers = transfers + 1

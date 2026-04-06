@@ -31,20 +31,37 @@ GuildRoll_logs.tmp = CP:Acquire()
 GuildRoll_personalLogSaved = GuildRoll_personalLogSaved or {} -- saved between sessions (SavedVariable if added to .toc)
 GuildRoll_personalLogs = GuildRoll_personalLogs or {} -- runtime cache
 
-function GuildRoll:personalLogAdd(target, action)
+-- Colorize numeric deltas: +N green, -N red
+local function colorizeText(txt)
+  if not txt then return "" end
+  local result = txt
+  result = string.gsub(result, "(%+%d+)", function(m) return C:Green(m) end)
+  result = string.gsub(result, "(-%d+)",  function(m) return C:Red(m) end)
+  return result
+end
+
+function GuildRoll:personalLogAdd(target, action, actor, details)
   if not target or not action then return end
   local name = target
   if GuildRoll and GuildRoll.StripRealm then name = GuildRoll:StripRealm(target) end
   local ts = date("%Y-%m-%d %H:%M:%S")
-  
+
+  -- Build entry: 4-field format when actor/details provided, legacy 2-field otherwise
+  local entry
+  if actor ~= nil or details ~= nil then
+    entry = {ts, action, actor or "", details or ""}
+  else
+    entry = {ts, action}
+  end
+
   -- Add to runtime cache
   GuildRoll_personalLogs[name] = GuildRoll_personalLogs[name] or {}
-  table.insert(GuildRoll_personalLogs[name], {ts, action})
-  
+  table.insert(GuildRoll_personalLogs[name], entry)
+
   -- Add to persistent storage
   GuildRoll_personalLogSaved[name] = GuildRoll_personalLogSaved[name] or {}
-  table.insert(GuildRoll_personalLogSaved[name], {ts, action})
-  
+  table.insert(GuildRoll_personalLogSaved[name], entry)
+
   -- Trim to last 100 entries efficiently
   local max_keep = 100
   if table.getn(GuildRoll_personalLogSaved[name]) > max_keep then
@@ -176,18 +193,39 @@ end
 
 function GuildRoll_logs:OnTooltipUpdate()
   local cat = T:AddCategory(
-      "columns", 2,
-      "text",  C:Orange(L["Time"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify",  "LEFT",
-      "text2", C:Orange(L["Action"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT"
+      "columns", 4,
+      "text",  C:Orange("Date"),
+      "child_textR", 1, "child_textG", 1, "child_textB", 1,
+      "child_justify", "LEFT",
+      "text2", C:Orange("Action"),
+      "child_text2R", 0.5, "child_text2G", 1, "child_text2B", 0.5,
+      "child_justify2", "CENTER",
+      "text3", C:Orange("Officer"),
+      "child_text3R", 0.8, "child_text3G", 0.8, "child_text3B", 1,
+      "child_justify3", "CENTER",
+      "text4", C:Orange("Details"),
+      "child_text4R", 1, "child_text4G", 1, "child_text4B", 0.5,
+      "child_justify4", "RIGHT"
     )
   local t = GuildRoll_logs:BuildLogsTable()
   for i = 1, table.getn(t) do
-    local timestamp, line = unpack(t[i])
-    cat:AddLine(
-      "text", C:Silver(timestamp),
-      "text2", line
-    )
-  end  
+    local ts, actionField, actorField, detailsField = unpack(t[i])
+    if not actorField and not detailsField then
+      cat:AddLine(
+        "text",  C:Silver(ts),
+        "text2", "LOG",
+        "text3", "",
+        "text4", colorizeText(actionField or "")
+      )
+    else
+      cat:AddLine(
+        "text",  C:Silver(ts),
+        "text2", actionField or "LOG",
+        "text3", actorField or "",
+        "text4", colorizeText(detailsField or "")
+      )
+    end
+  end
 end
 
 -- Personal log Tablet support
@@ -323,9 +361,19 @@ end
 
 function GuildRoll_logs:OnTooltipUpdatePersonal()
   local cat = T:AddCategory(
-      "columns", 2,
-      "text",  C:Orange(L["Time"]),   "child_textR",    1, "child_textG",    1, "child_textB",    1, "child_justify",  "LEFT",
-      "text2", C:Orange(L["Action"]),     "child_text2R",   1, "child_text2G",   1, "child_text2B",   1, "child_justify2", "RIGHT"
+      "columns", 4,
+      "text",  C:Orange("Date"),
+      "child_textR", 1, "child_textG", 1, "child_textB", 1,
+      "child_justify", "LEFT",
+      "text2", C:Orange("Action"),
+      "child_text2R", 0.5, "child_text2G", 1, "child_text2B", 0.5,
+      "child_justify2", "CENTER",
+      "text3", C:Orange("Officer"),
+      "child_text3R", 0.8, "child_text3G", 0.8, "child_text3B", 1,
+      "child_justify3", "CENTER",
+      "text4", C:Orange("Details"),
+      "child_text4R", 1, "child_text4G", 1, "child_text4B", 0.5,
+      "child_justify4", "RIGHT"
     )
   local name = currentPersonalName or UnitName("player")
   if GuildRoll and GuildRoll.StripRealm then name = GuildRoll:StripRealm(name) end
@@ -337,17 +385,28 @@ function GuildRoll_logs:OnTooltipUpdatePersonal()
     -- Show a friendly message when the personal log is empty
     cat:AddLine(
       "text", C:Yellow("Personal log is empty"),
-      "text2", ""
+      "text2", "", "text3", "", "text4", ""
     )
     return
   end
 
   for i = 1, table.getn(rev) do
-    local timestamp, line = unpack(rev[i])
-    cat:AddLine(
-      "text", C:Silver(timestamp),
-      "text2", line
-    )
+    local ts, actionField, actorField, detailsField = unpack(rev[i])
+    if not actorField and not detailsField then
+      cat:AddLine(
+        "text",  C:Silver(ts),
+        "text2", "LOG",
+        "text3", "",
+        "text4", colorizeText(actionField or "")
+      )
+    else
+      cat:AddLine(
+        "text",  C:Silver(ts),
+        "text2", actionField or "LOG",
+        "text3", actorField or "",
+        "text4", colorizeText(detailsField or "")
+      )
+    end
   end
 end
 

@@ -205,11 +205,24 @@ function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action
         suffix = " (Raid)"
       elseif special_action == "DECAY" then
         suffix = " (Decay)"
+      elseif special_action == "RESET" then
+        suffix = " (Reset)"
       end
-      
-      -- Compact format: EP: Prev -> New (±N) by AdminName[ (Raid)|(Decay)]
-      local logMsg = string.format("EP: %d -> %d (%s) by %s%s", prevEP, ep, deltaStr, actor, suffix)
-      self:personalLogAdd(name, logMsg)
+
+      -- Determine action tag for 4-field personal log
+      local actionTag = "GIVE"
+      if special_action == "RAID" then
+        actionTag = "RAID"
+      elseif special_action == "DECAY" then
+        actionTag = "DECAY"
+      elseif special_action == "RESET" then
+        actionTag = "RESET"
+      end
+
+      -- Details without actor and without the tag suffix
+      local detailsMsg = string.format("EP: %d -> %d (%s)", prevEP, ep, deltaStr)
+
+      self:personalLogAdd(name, actionTag, actor, detailsMsg)
     end
   end
 end
