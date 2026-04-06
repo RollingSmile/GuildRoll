@@ -398,7 +398,7 @@ local function sendAdminLogSync(entry)
   local len = string.len(serialized)
   if len <= CHUNK_SIZE then
     local msg = "S|" .. entry.id .. "|1|" .. serialized
-    pcall(function() SendAddonMessage(ALOG_SYNC_PREFIX, msg, "OFFICER") end)
+    pcall(function() SendAddonMessage(ALOG_SYNC_PREFIX, msg, "GUILD") end)
   else
     local chunks = {}
     local pos = 1
@@ -414,7 +414,7 @@ local function sendAdminLogSync(entry)
       else
         msg = "C|" .. entry.id .. "|" .. ci .. "|" .. chunks[ci]
       end
-      pcall(function() SendAddonMessage(ALOG_SYNC_PREFIX, msg, "OFFICER") end)
+      pcall(function() SendAddonMessage(ALOG_SYNC_PREFIX, msg, "GUILD") end)
     end
   end
 end
