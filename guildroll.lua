@@ -836,6 +836,10 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     -- Only admins process AdminLog sync messages
     if not GuildRoll:IsAdmin() then return end
     local name_g = self:verifyGuildMember(sender, true)
+    -- If roster is not yet loaded (login in progress), accept the message without verification
+    if not name_g and GetNumGuildMembers(1) == 0 then
+      name_g = sender
+    end
     if not name_g then return end
     if GuildRoll_AdminLog and GuildRoll_AdminLog.handleSyncMessage then
       pcall(function() GuildRoll_AdminLog:handleSyncMessage(message, sender) end)
@@ -909,8 +913,18 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
         end
         
         -- Compact format: EP: Prev -> New (±N) by AdminName[(Raid) or (Decay)]
-        local logMsg = string.format("EP: %d -> %d (%s) by %s%s", prevEP, newEP, deltaStr, sender, suffix)
-        self:personalLogAdd(who, logMsg)
+        local actionTag
+        if raidFlag == "RAID" then
+          actionTag = "RAID"
+        elseif raidFlag == "DECAY" then
+          actionTag = "DECAY"
+        elseif amount < 0 then
+          actionTag = "PENALTY"
+        else
+          actionTag = "GIVE"
+        end
+        local detailsMsg = string.format("EP: %d -> %d (%s)%s", prevEP, newEP, deltaStr, suffix)
+        self:personalLogAdd(who, actionTag, sender, detailsMsg)
         
         -- User-facing message with admin name, old/new EP, and raid tag
         if amount < 0 then
@@ -1488,13 +1502,13 @@ function GuildRoll:give_ep_to_member(getname,ep,block) -- awards ep to a single 
       -- Personal log for main
       if self.personalLogAdd then
         pcall(function()
-          self:personalLogAdd(getname, string.format("EP received via alt %s: %s EP (Prev: %d, New: %d)", altNameClean, deltaStr, old, newep))
+          self:personalLogAdd(getname, actionType, self:GetAdminName(), string.format("EP: %d -> %d (%s) via alt %s", old, newep, deltaStr, altNameClean))
         end)
       end
       -- Personal log for alt
       if self.personalLogAdd then
         pcall(function()
-          self:personalLogAdd(alt, string.format("EP awarded to main %s (redirect): %s EP (Prev: %d, New: %d)", targetClean, deltaStr, old, newep))
+          self:personalLogAdd(alt, actionType, self:GetAdminName(), string.format("EP: %d -> %d (%s) -> main %s", old, newep, deltaStr, targetClean))
         end)
       end
     else
@@ -2840,7 +2854,9 @@ end
 function GuildRollMSG:OnCHAT_MSG_ADDON( prefix, text, channel, sender)
 		
 	
-	if ( GuildRollMSG.delayedinit) then  GuildRoll:addonComms(prefix,text,channel,sender) end
+	if prefix == "GR_ALOG" then
+		GuildRoll:addonComms(prefix,text,channel,sender)
+	elseif ( GuildRollMSG.delayedinit) then  GuildRoll:addonComms(prefix,text,channel,sender) end
 	 
 		if (channel == "RAID" or channel == "PARTY") then
 		
