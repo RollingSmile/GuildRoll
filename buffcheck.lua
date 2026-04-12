@@ -225,7 +225,7 @@ local function TextureNameFromPath(texturePath)
   -- Extract filename from path (e.g., "Interface\\Icons\\Spell_Holy_PowerWordFortitude" -> "Spell_Holy_PowerWordFortitude")
   -- Handle both backslashes and forward slashes (Lua 5.0 compatible: string.find + string.sub)
   local s, e = string.find(path, "[^/\\]+$")
-  local filename = s and string.sub(path, s, e) or nil
+  local filename = s and string.sub(path, s, e)
   if filename then
     return string.lower(filename)
   end

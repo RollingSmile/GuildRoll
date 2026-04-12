@@ -50,6 +50,7 @@ GuildRoll_AdminLog = GuildRoll:NewModule("GuildRoll_AdminLog", "AceDB-2.0", "Ace
 -- Local state
 local adminLogRuntime = {}      -- runtime cache indexed by entry id
 local orderSet = {}             -- hash set mirroring GuildRoll_adminLogOrder for O(1) duplicate checks
+                                -- Must be kept in sync with GuildRoll_adminLogOrder: update both together on insert/remove
 local filterAuthor = nil        -- for UI filtering by actor/author
 local filterTarget = nil        -- for UI filtering by target player
 local searchText = nil          -- for UI search

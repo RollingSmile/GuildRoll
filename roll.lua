@@ -468,6 +468,8 @@ eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
 
 -- Event handler: update button visibility on relevant events
+-- In WoW 1.12 (Lua 5.0), OnEvent handlers use no explicit parameters;
+-- the global `event` variable is set by the WoW engine before the handler runs.
 eventFrame:SetScript("OnEvent", function()
     -- Update roll popup visibility on all relevant events
     UpdateRollPopupVisibility()
