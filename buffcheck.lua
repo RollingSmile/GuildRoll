@@ -132,6 +132,14 @@ local BUFF_SHORT_TO_CLASS = {
   ["Sanc"]       = "PALADIN",
 }
 
+-- Buff exclusions by class: these buffs are not required for these classes.
+-- Key = buff short name (as in BUFF_SHORT_TO_CLASS), Value = set of uppercase class tokens.
+local BUFF_CLASS_EXCLUSIONS = {
+  ["Int"]    = { WARRIOR = true, ROGUE = true },
+  ["Wisdom"] = { WARRIOR = true, ROGUE = true },
+  ["Might"]  = { MAGE = true, PRIEST = true, WARLOCK = true },
+}
+
 -- Display name (title case) for each provider class token
 local PROVIDER_CLASS_DISPLAY = {
   PRIEST  = "Priest",
@@ -803,23 +811,29 @@ function GuildRoll_BuffCheck:CheckBuffs()
     local missingBuffs = {}
     local missingCount = 0
     
+    local playerClass = NormalizeClassToken(class)
+
     -- Check priest buffs (requires all 3 buff types)
     if providers["PRIEST"] then
       local _, missingPriestBuffs = GetPriestBuffInfo(unit)
       for _, shortName in ipairs(missingPriestBuffs) do
-        table.insert(missingBuffs, shortName)
-        missingCount = missingCount + 1
+        if not (BUFF_CLASS_EXCLUSIONS[shortName] and BUFF_CLASS_EXCLUSIONS[shortName][playerClass]) then
+          table.insert(missingBuffs, shortName)
+          missingCount = missingCount + 1
+        end
       end
     end
     
     -- Check regular buffs (non-paladin, non-priest) using HasAnyBuffByClass
     for providerClass, _ in pairs(providers) do
       if providerClass ~= "PALADIN" and providerClass ~= "PRIEST" then
-        local hasBuff, matchedBuff = HasAnyBuffByClass(unit, providerClass)
-        if not hasBuff then
-          local shortName = GetShortNameForClass(providerClass)
-          table.insert(missingBuffs, shortName)
-          missingCount = missingCount + 1
+        local shortName = GetShortNameForClass(providerClass)
+        if not (BUFF_CLASS_EXCLUSIONS[shortName] and BUFF_CLASS_EXCLUSIONS[shortName][playerClass]) then
+          local hasBuff, matchedBuff = HasAnyBuffByClass(unit, providerClass)
+          if not hasBuff then
+            table.insert(missingBuffs, shortName)
+            missingCount = missingCount + 1
+          end
         end
       end
     end
@@ -828,8 +842,10 @@ function GuildRoll_BuffCheck:CheckBuffs()
     if providers["PALADIN"] and requiredBlessings > 0 then
       local missingBlessings = GetMissingPaladinBlessings(unit, requiredBlessings)
       for _, shortName in ipairs(missingBlessings) do
-        table.insert(missingBuffs, shortName)
-        missingCount = missingCount + 1
+        if not (BUFF_CLASS_EXCLUSIONS[shortName] and BUFF_CLASS_EXCLUSIONS[shortName][playerClass]) then
+          table.insert(missingBuffs, shortName)
+          missingCount = missingCount + 1
+        end
       end
     end
     
