@@ -10,7 +10,8 @@ end
 function GuildRoll:strsplit(delimiter, subject)
   local delimiter, fields = delimiter or ":", {}
   local pattern = string.format("([^%s]+)", delimiter)
-  string.gsub(subject, pattern, function(c) fields[table.getn(fields)+1] = c end)
+  local n = 0
+  string.gsub(subject, pattern, function(c) n = n + 1; fields[n] = c end)
   return unpack(fields)
 end
 
@@ -77,6 +78,8 @@ function GuildRoll:parseVersion(version,otherVersion)
         end
       end
     end
+  else
+    GuildRoll._otherversion = nil
   end
 end
 

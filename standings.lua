@@ -249,8 +249,8 @@ function GuildRoll_standings:OnEnable()
         )
         end
         GuildRoll:SafeDewdropAddLine(
-          "text", "Close window",
-          "tooltipText", "Close this window",
+          "text", L["Close window"],
+          "tooltipText", L["Close this window"],
           "func", function()
             pcall(function() D:Close() end)
             local frame = GuildRoll:FindDetachedFrame("GuildRoll_standings")
@@ -369,21 +369,29 @@ function GuildRoll_standings:BuildStandingsTable()
   local r = { }
   local alt_to_main = {}  -- Maps alt name to main name
   local main_to_alts = {}  -- Maps main name to list of online alts in raid
-  
-  -- First pass: Build alt-to-main mapping and main-to-alts mapping
-  for i = 1, GetNumGuildMembers(1) do
+
+  -- Single pass: cache all roster data to avoid calling GetGuildRosterInfo twice per member
+  local numMembers = GetNumGuildMembers(1)
+  local roster = {}
+  for i = 1, numMembers do
     local name, g_rank, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
-    local main_name, main_class, main_rank = GuildRoll:parseAlt(name, officernote)
-    
+    roster[i] = {name = name, g_rank = g_rank, class = class, note = note, officernote = officernote}
+  end
+
+  -- Build alt-to-main and main-to-alts mappings from cached roster
+  for i = 1, numMembers do
+    local row = roster[i]
+    local main_name, main_class, main_rank = GuildRoll:parseAlt(row.name, row.officernote)
+
     if main_name then
       -- This character is an alt
-      alt_to_main[name] = {main = main_name, class = main_class, rank = main_rank}
-      
+      alt_to_main[row.name] = {main = main_name, class = main_class, rank = main_rank}
+
       -- Initialize main-to-alts mapping if needed
       if not main_to_alts[main_name] then
         main_to_alts[main_name] = {}
       end
-      table.insert(main_to_alts[main_name], name)
+      table.insert(main_to_alts[main_name], row.name)
     end
   end
   
@@ -405,12 +413,13 @@ function GuildRoll_standings:BuildStandingsTable()
     end
   end
   
-  -- Second pass: Build standings table
+  -- Build standings table from cached roster
   GuildRoll.alts = {}
-  for i = 1, GetNumGuildMembers(1) do
-    local name, g_rank, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
-    local ep = (GuildRoll:get_ep_v3(name,officernote) or 0) 
-    local main_name, main_class, main_rank = GuildRoll:parseAlt(name,officernote)
+  for i = 1, numMembers do
+    local row = roster[i]
+    local name, g_rank, class, officernote = row.name, row.g_rank, row.class, row.officernote
+    local ep = (GuildRoll:get_ep_v3(name, officernote) or 0)
+    local main_name, main_class, main_rank = GuildRoll:parseAlt(name, officernote)
     
     -- displayName starts as the character name
     local displayName = name
