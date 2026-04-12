@@ -153,7 +153,7 @@ function GuildRollAlts:BuildAltsTable()
       local mainName, mainClass = GuildRoll:parseAlt(name, officernote)
       if mainName then
         if not mainData[mainName] then
-          local mClass = mainClass or memberClass[mainName] or "WARRIOR"
+          local mClass = mainClass or memberClass[mainName] or ""
           mainData[mainName] = { mainName = mainName, mainClass = mClass, alts = {} }
         end
         table.insert(mainData[mainName].alts, { name = name, class = class })
@@ -176,15 +176,26 @@ function GuildRollAlts:OnTooltipUpdate()
       "text2", C:Yellow(L["Alts"]),  "child_text2R",   0, "child_text2G",   1, "child_text2B",   0, "child_justify2", "RIGHT"
     )
   local t = self:BuildAltsTable()
+  table.sort(t, function(a, b) return a.mainName < b.mainName end)
   for _, entry in ipairs(t) do
     local mainEP = GuildRoll:get_ep_v3(entry.mainName) or 0
-    local coloredMain = C:Colorize(BC:GetHexColor(entry.mainClass), entry.mainName)
+    local coloredMain
+    if entry.mainClass and entry.mainClass ~= "" then
+      coloredMain = C:Colorize(BC:GetHexColor(entry.mainClass), entry.mainName)
+    else
+      coloredMain = entry.mainName
+    end
     local mainStr = string.format("%s (%d)", coloredMain, mainEP)
 
     local altstring = ""
     for _, alt in ipairs(entry.alts) do
       local altEP = GuildRoll:get_ep_v3(alt.name) or 0
-      local coloredalt = C:Colorize(BC:GetHexColor(alt.class), alt.name)
+      local coloredalt
+      if alt.class and alt.class ~= "" then
+        coloredalt = C:Colorize(BC:GetHexColor(alt.class), alt.name)
+      else
+        coloredalt = alt.name
+      end
       local altStr = string.format("%s (%d)", coloredalt, altEP)
       if altstring == "" then
         altstring = altStr

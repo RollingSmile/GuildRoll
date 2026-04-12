@@ -44,41 +44,43 @@ function GuildRoll:parseVersion(version,otherVersion)
       GuildRoll._version.patch = tonumber(patch)
     end
   end
-  if (otherVersion) then
-    if not GuildRoll._otherversion then GuildRoll._otherversion = {} end
+  if otherVersion then
+    local ov = { major = 0, minor = 0, patch = 0 }
     for major,minor,patch in string.gfind(otherVersion,"(%d+)[^%d]?(%d*)[^%d]?(%d*)") do
-      GuildRoll._otherversion.major = tonumber(major)
-      GuildRoll._otherversion.minor = tonumber(minor)
-      GuildRoll._otherversion.patch = tonumber(patch)      
+      ov.major = tonumber(major)
+      ov.minor = tonumber(minor)
+      ov.patch = tonumber(patch)
     end
-    if (GuildRoll._otherversion.major ~= nil and GuildRoll._version ~= nil and GuildRoll._version.major ~= nil) then
-      if (GuildRoll._otherversion.major < GuildRoll._version.major) then -- we are newer
+    local sv = GuildRoll._version
+    if sv and ov.major ~= nil and sv.major ~= nil then
+      if ov.major < sv.major then -- we are newer
         return
-      elseif (GuildRoll._otherversion.major > GuildRoll._version.major) then -- they are newer
-        return true, "major"        
+      elseif ov.major > sv.major then -- they are newer
+        return true, "major"
       else -- tied on major, go minor
-        if (GuildRoll._otherversion.minor ~= nil and GuildRoll._version.minor ~= nil) then
-          if (GuildRoll._otherversion.minor < GuildRoll._version.minor) then -- we are newer
+        if ov.minor ~= nil and sv.minor ~= nil then
+          if ov.minor < sv.minor then -- we are newer
             return
-          elseif (GuildRoll._otherversion.minor > GuildRoll._version.minor) then -- they are newer
+          elseif ov.minor > sv.minor then -- they are newer
             return true, "minor"
           else -- tied on minor, go patch
-            if (GuildRoll._otherversion.patch ~= nil and GuildRoll._version.patch ~= nil) then
-              if (GuildRoll._otherversion.patch < GuildRoll._version.patch) then -- we are newer
+            if ov.patch ~= nil and sv.patch ~= nil then
+              if ov.patch < sv.patch then -- we are newer
                 return
-              elseif (GuildRoll._otherversion.patch > GuildRoll._version.patch) then -- they are newer
+              elseif ov.patch > sv.patch then -- they are newer
                 return true, "patch"
               end
-            elseif (GuildRoll._otherversion.patch ~= nil and GuildRoll._version.patch == nil) then -- they are newer
+            elseif ov.patch ~= nil and sv.patch == nil then -- they are newer
               return true, "patch"
             end
-          end    
-        elseif (GuildRoll._otherversion.minor ~= nil and GuildRoll._version.minor == nil) then -- they are newer
+          end
+        elseif ov.minor ~= nil and sv.minor == nil then -- they are newer
           return true, "minor"
         end
       end
     end
   else
+    -- no otherVersion: nothing to compare, clear old cached value if any
     GuildRoll._otherversion = nil
   end
 end
@@ -102,7 +104,7 @@ end
 -- Raid utility: Check if player is in raid
 function GuildRoll:inRaid(name)
   for i=1,GetNumRaidMembers() do
-    if name == (UnitName(raidUnit[i])) then
+    if name == UnitName("raid"..i) then
       return true
     end
   end
