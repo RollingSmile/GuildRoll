@@ -587,6 +587,18 @@ function GuildRoll:OnEnable() -- PLAYER_LOGIN (2)
       if (arg1) then -- member join /leave
         GuildRoll:SetRefresh(true)
       end
+      -- Flush pending GR_ALOG messages that arrived before roster was ready
+      if GuildRoll._alogPendingBuffer and table.getn(GuildRoll._alogPendingBuffer) > 0 then
+        local buf = GuildRoll._alogPendingBuffer
+        GuildRoll._alogPendingBuffer = {}
+        for i = 1, table.getn(buf) do
+          local item = buf[i]
+          local name_g = GuildRoll:verifyGuildMember(item.sender, true)
+          if name_g and GuildRoll_AdminLog and GuildRoll_AdminLog.handleSyncMessage then
+            pcall(function() GuildRoll_AdminLog:handleSyncMessage(item.message, item.sender) end)
+          end
+        end
+      end
     end)
  
   self:RegisterEvent("CHAT_MSG_ADDON",function() 
@@ -835,11 +847,24 @@ function GuildRoll:addonComms(prefix,message,channel,sender)
     if sender == self._playerName then return end
     -- Only admins process AdminLog sync messages
     if not GuildRoll:IsAdmin() then return end
-    local name_g = self:verifyGuildMember(sender, true)
-    -- If roster is not yet loaded (login in progress), accept the message without verification
-    if not name_g and GetNumGuildMembers(1) == 0 then
+
+    local rosterReady = (GetNumGuildMembers(1) > 0)
+    local name_g = rosterReady and self:verifyGuildMember(sender, true) or nil
+
+    if not name_g and not rosterReady then
+      -- Roster completely empty (login in progress): accept without verification
       name_g = sender
+    elseif not name_g and rosterReady then
+      -- Roster partially loaded: buffer for reprocessing after GUILD_ROSTER_UPDATE
+      if not GuildRoll._alogPendingBuffer then
+        GuildRoll._alogPendingBuffer = {}
+      end
+      if table.getn(GuildRoll._alogPendingBuffer) < 50 then
+        table.insert(GuildRoll._alogPendingBuffer, {message=message, sender=sender})
+      end
+      return
     end
+
     if not name_g then return end
     if GuildRoll_AdminLog and GuildRoll_AdminLog.handleSyncMessage then
       pcall(function() GuildRoll_AdminLog:handleSyncMessage(message, sender) end)
