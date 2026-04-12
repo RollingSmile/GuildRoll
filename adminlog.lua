@@ -86,6 +86,15 @@ local maxEntriesByType = {
   DEFAULT = 200,
 }
 
+-- Ordered list of explicitly tracked action types (all others share the DEFAULT limit)
+local trackedTypes = {"GIVE", "PENALTY", "RAID", "DECAY", "RESET"}
+
+-- Fast lookup set for the tracked types above
+local isTrackedType = {}
+for _, t in ipairs(trackedTypes) do
+  isTrackedType[t] = true
+end
+
 -- Helper: colorize numeric deltas in text
 local function colorizeText(txt)
   if not txt then return "" end
@@ -125,14 +134,11 @@ local function applyAdminLogEntry(entry)
     table.insert(GuildRoll_adminLogOrder, entry.id)
     -- Update per-type counter
     local actionType = entry.action or ""
-    local isTracked = (actionType == "GIVE" or actionType == "PENALTY" or
-                       actionType == "RAID" or actionType == "DECAY" or actionType == "RESET")
-    local counterKey = isTracked and actionType or "DEFAULT"
+    local counterKey = isTrackedType[actionType] and actionType or "DEFAULT"
     entryCountByType[counterKey] = (entryCountByType[counterKey] or 0) + 1
   end
 
   -- Per-type trimming: enforce separate limits for each tracked action type
-  local trackedTypes = {"GIVE", "PENALTY", "RAID", "DECAY", "RESET"}
   for _, actionType in ipairs(trackedTypes) do
     local limit = maxEntriesByType[actionType]
     if (entryCountByType[actionType] or 0) > limit then
@@ -173,11 +179,8 @@ local function applyAdminLogEntry(entry)
     for i = 1, table.getn(GuildRoll_adminLogOrder) do
       local id = GuildRoll_adminLogOrder[i]
       local e = adminLogRuntime[id]
-      if e then
-        local t = e.action or ""
-        if t ~= "GIVE" and t ~= "PENALTY" and t ~= "RAID" and t ~= "DECAY" and t ~= "RESET" then
-          table.insert(defaultIds, id)
-        end
+      if e and not isTrackedType[e.action or ""] then
+        table.insert(defaultIds, id)
       end
     end
     if table.getn(defaultIds) > defaultLimit then
@@ -212,9 +215,7 @@ local function loadSavedEntries()
     if entry then
       adminLogRuntime[id] = entry
       local actionType = entry.action or ""
-      local isTracked = (actionType == "GIVE" or actionType == "PENALTY" or
-                         actionType == "RAID" or actionType == "DECAY" or actionType == "RESET")
-      local counterKey = isTracked and actionType or "DEFAULT"
+      local counterKey = isTrackedType[actionType] and actionType or "DEFAULT"
       entryCountByType[counterKey] = (entryCountByType[counterKey] or 0) + 1
     end
   end
