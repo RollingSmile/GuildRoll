@@ -611,6 +611,8 @@ local function GetShortNameForClass(className)
   return className
 end
 
+-- Note: substring matching on blessing types (e.g. "Might", "Wisdom") covers both
+-- "Blessing of Might" and "Greater Blessing of Might" variants automatically.
 -- Helper: Get list of missing paladin blessings for a unit
 -- Returns the short names of missing blessings based on required count
 local function GetMissingPaladinBlessings(unit, requiredBlessings)
@@ -724,10 +726,20 @@ local function GetPriestBuffInfo(unit)
 end
 
 -- Helper: Check if class is present in raid
-local function IsClassInRaid(className)
+-- Accepts an optional raidSnapshot table (array of {name,subgroup,class,unit}).
+-- Falls back to live GetRaidRosterInfo queries when no snapshot is provided.
+local function IsClassInRaid(className, snapshot)
+  if snapshot then
+    for i = 1, table.getn(snapshot) do
+      local entry = snapshot[i]
+      if entry.class and NormalizeClassToken(entry.class) == className then
+        return true
+      end
+    end
+    return false
+  end
   local numRaid = GetNumRaidMembers()
   if numRaid == 0 then return false end
-  
   for i = 1, numRaid do
     local _, _, _, _, class = GetRaidRosterInfo(i)
     if class and NormalizeClassToken(class) == className then
@@ -738,10 +750,21 @@ local function IsClassInRaid(className)
 end
 
 -- Helper: Count members of a class in raid
-local function CountClassInRaid(className)
+-- Accepts an optional raidSnapshot table (array of {name,subgroup,class,unit}).
+-- Falls back to live GetRaidRosterInfo queries when no snapshot is provided.
+local function CountClassInRaid(className, snapshot)
+  if snapshot then
+    local count = 0
+    for i = 1, table.getn(snapshot) do
+      local entry = snapshot[i]
+      if entry.class and NormalizeClassToken(entry.class) == className then
+        count = count + 1
+      end
+    end
+    return count
+  end
   local numRaid = GetNumRaidMembers()
   if numRaid == 0 then return 0 end
-  
   local count = 0
   for i = 1, numRaid do
     local _, _, _, _, class = GetRaidRosterInfo(i)
@@ -762,11 +785,19 @@ end
 -- Main check functions
 function GuildRoll_BuffCheck:CheckBuffs()
   ClearReportState(self)
+  raidClassByName = nil
   
   local numRaid = GetNumRaidMembers()
   if numRaid == 0 then
     GuildRoll:defaultPrint(L["BuffCheck_NotInRaid"] or "You are not in a raid.")
     return
+  end
+
+  -- Build a single raid snapshot so GetRaidRosterInfo is called only once per check
+  local raidSnapshot = {}
+  for i = 1, numRaid do
+    local name, _, subgroup, _, class = GetRaidRosterInfo(i)
+    raidSnapshot[i] = { name = name, subgroup = subgroup, class = class, unit = "raid"..i }
   end
   
   -- Resolve spell IDs to localized names
@@ -778,13 +809,13 @@ function GuildRoll_BuffCheck:CheckBuffs()
   -- Dynamic buff requirement calculation based on raid composition
   local providers = {}
   for providerClass, _ in pairs(BUFF_REQUIREMENTS) do
-    if IsClassInRaid(providerClass) then
+    if IsClassInRaid(providerClass, raidSnapshot) then
       providers[providerClass] = true
     end
   end
   
   -- Calculate required buffs dynamically
-  local numPaladins = CountClassInRaid("PALADIN")
+  local numPaladins = CountClassInRaid("PALADIN", raidSnapshot)
   local requiredBlessings = math.min(numPaladins, 6) -- Up to 6 blessing types
   
   -- Calculate total required buffs for each player
@@ -803,10 +834,13 @@ function GuildRoll_BuffCheck:CheckBuffs()
     totalRequired = totalRequired + requiredBlessings
   end
   
-  -- Scan each raid member
+  -- Scan each raid member using the snapshot
   for i = 1, numRaid do
-    local name, _, subgroup, _, class = GetRaidRosterInfo(i)
-    local unit = "raid" .. i
+    local snap = raidSnapshot[i]
+    local name = snap.name
+    local subgroup = snap.subgroup
+    local class = snap.class
+    local unit = snap.unit
     
     local missingBuffs = {}
     local missingCount = 0
@@ -876,6 +910,7 @@ end
 
 function GuildRoll_BuffCheck:CheckConsumes()
   ClearReportState(self)
+  raidClassByName = nil
   
   local numRaid = GetNumRaidMembers()
   if numRaid == 0 then
@@ -943,6 +978,7 @@ end
 
 function GuildRoll_BuffCheck:CheckFlasks()
   ClearReportState(self)
+  raidClassByName = nil
   
   local numRaid = GetNumRaidMembers()
   if numRaid == 0 then
@@ -1120,6 +1156,7 @@ SlashCmdList["DUMPBUFFS"] = SlashCommandHandler
 
 -- Tablet integration
 function GuildRoll_BuffCheck:OnEnable()
+  self:InvalidateResolvedLists()
   -- Create the scan tooltip eagerly so it's ready before any buff scan
   if not self._scanTooltip then
     self._scanTooltip = CreateFrame("GameTooltip", "GuildRollBuffCheckTooltip", UIParent, "GameTooltipTemplate")
@@ -1353,7 +1390,8 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
       end
       if totalPlayers > BUFF_PLAYER_DISPLAY_LIMIT then
         local overflow = totalPlayers - BUFF_PLAYER_DISPLAY_LIMIT
-        table.insert(playerParts, string.format("|cffaaaaaa+%d more|r", overflow))
+        local moreStr = string.format(L["BuffCheck_MorePlayers"] or "+%d more", overflow)
+        table.insert(playerParts, "|cffaaaaaa" .. moreStr .. "|r")
       end
 
       local playerStr = table.concat(playerParts, "  ")

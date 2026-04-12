@@ -31,6 +31,21 @@ GuildRoll_logs.tmp = CP:Acquire()
 GuildRoll_personalLogSaved = GuildRoll_personalLogSaved or {} -- saved between sessions (SavedVariable if added to .toc)
 GuildRoll_personalLogs = GuildRoll_personalLogs or {} -- runtime cache
 
+-- Trim runtime cache on load to enforce 100-entry limit
+local _max_keep = 100
+for _pname, _plog in pairs(GuildRoll_personalLogs) do
+  local _n = table.getn(_plog)
+  if _n > _max_keep then
+    local _newlog = {}
+    local _start = _n - _max_keep + 1
+    for _i = _start, _n do
+      table.insert(_newlog, _plog[_i])
+    end
+    GuildRoll_personalLogs[_pname] = _newlog
+    GuildRoll_personalLogSaved[_pname] = _newlog
+  end
+end
+
 -- Colorize numeric deltas: +N green, -N red
 local function colorizeText(txt)
   if not txt then return "" end
