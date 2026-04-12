@@ -86,9 +86,10 @@ end
 -- Guild member verification: Check if player is in guild and meets requirements
 function GuildRoll:verifyGuildMember(name,silent,ignorelevel)
   ignorelevel = ignorelevel or false
+  local nameLower = string.lower(name)
   for i=1,GetNumGuildMembers(1) do
     local g_name, g_rank, g_rankIndex, g_level, g_class, g_zone, g_note, g_officernote, g_online = GetGuildRosterInfo(i)
-    if (string.lower(name) == string.lower(g_name)) and (ignorelevel or tonumber(g_level) >= GuildRoll.VARS.minlevel) then 
+    if (nameLower == string.lower(g_name)) and (ignorelevel or tonumber(g_level) >= GuildRoll.VARS.minlevel) then 
       return g_name, g_class, g_rank, g_officernote
     end
   end
