@@ -468,7 +468,7 @@ eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
 
 -- Event handler: update button visibility on relevant events
-eventFrame:SetScript("OnEvent", function(self, event, ...)
+eventFrame:SetScript("OnEvent", function()
     -- Update roll popup visibility on all relevant events
     UpdateRollPopupVisibility()
     

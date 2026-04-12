@@ -49,6 +49,7 @@ GuildRoll_AdminLog = GuildRoll:NewModule("GuildRoll_AdminLog", "AceDB-2.0", "Ace
 
 -- Local state
 local adminLogRuntime = {}      -- runtime cache indexed by entry id
+local orderSet = {}             -- hash set mirroring GuildRoll_adminLogOrder for O(1) duplicate checks
 local filterAuthor = nil        -- for UI filtering by actor/author
 local filterTarget = nil        -- for UI filtering by target player
 local searchText = nil          -- for UI search
@@ -121,17 +122,10 @@ local function applyAdminLogEntry(entry)
   -- Add to saved variables
   GuildRoll_adminLogSaved[entry.id] = entry
 
-  -- Add to order array if not present
-  local found = false
-  for i = 1, table.getn(GuildRoll_adminLogOrder) do
-    if GuildRoll_adminLogOrder[i] == entry.id then
-      found = true
-      break
-    end
-  end
-
-  if not found then
+  -- Add to order array if not present (O(1) via orderSet hash)
+  if not orderSet[entry.id] then
     table.insert(GuildRoll_adminLogOrder, entry.id)
+    orderSet[entry.id] = true
     -- Update per-type counter
     local actionType = entry.action or ""
     local counterKey = isTrackedType[actionType] and actionType or "DEFAULT"
@@ -162,6 +156,7 @@ local function applyAdminLogEntry(entry)
           if removeSet[id] then
             GuildRoll_adminLogSaved[id] = nil
             adminLogRuntime[id] = nil
+            orderSet[id] = nil
           else
             table.insert(newOrder, id)
           end
@@ -195,6 +190,7 @@ local function applyAdminLogEntry(entry)
         if removeSet[id] then
           GuildRoll_adminLogSaved[id] = nil
           adminLogRuntime[id] = nil
+          orderSet[id] = nil
         else
           table.insert(newOrder, id)
         end
@@ -209,11 +205,13 @@ end
 local function loadSavedEntries()
   adminLogRuntime = {}
   entryCountByType = {}
+  orderSet = {}
   for i = 1, table.getn(GuildRoll_adminLogOrder) do
     local id = GuildRoll_adminLogOrder[i]
     local entry = GuildRoll_adminLogSaved[id]
     if entry then
       adminLogRuntime[id] = entry
+      orderSet[id] = true
       local actionType = entry.action or ""
       local counterKey = isTrackedType[actionType] and actionType or "DEFAULT"
       entryCountByType[counterKey] = (entryCountByType[counterKey] or 0) + 1
@@ -543,8 +541,8 @@ function GuildRoll_AdminLog:OnEnable()
       "menu", function()
         -- Search
         GuildRoll:SafeDewdropAddLine(
-          "text", "Search",
-          "tooltipText", "Search admin log entries",
+          "text", L["AdminLog_Search"],
+          "tooltipText", L["AdminLog_SearchTooltip"],
           "func", function()
             StaticPopup_Show("GUILDROLL_ADMINLOG_SEARCH")
           end
@@ -553,8 +551,8 @@ function GuildRoll_AdminLog:OnEnable()
         -- Clear Search (only when active)
         if searchText then
           GuildRoll:SafeDewdropAddLine(
-            "text", "Clear Search",
-            "tooltipText", "Clear search filter",
+            "text", L["AdminLog_ClearSearch"],
+            "tooltipText", L["AdminLog_ClearSearchTooltip"],
             "func", function()
               searchText = nil
               pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -564,8 +562,8 @@ function GuildRoll_AdminLog:OnEnable()
 
         -- Filter by Author
         GuildRoll:SafeDewdropAddLine(
-          "text", "Filter by Author",
-          "tooltipText", "Filter log by officer name",
+          "text", L["AdminLog_FilterByAuthor"],
+          "tooltipText", L["AdminLog_FilterByAuthorTooltip"],
           "func", function()
             StaticPopup_Show("GUILDROLL_ADMINLOG_FILTER_AUTHOR")
           end
@@ -574,8 +572,8 @@ function GuildRoll_AdminLog:OnEnable()
         -- Remove Author Filter (only when active)
         if filterAuthor then
           GuildRoll:SafeDewdropAddLine(
-            "text", "Remove Author Filter",
-            "tooltipText", string.format("Remove author filter (%s)", filterAuthor),
+            "text", L["AdminLog_RemoveAuthorFilter"],
+            "tooltipText", string.format(L["AdminLog_RemoveAuthorFilterTooltip"], filterAuthor),
             "func", function()
               filterAuthor = nil
               pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -585,8 +583,8 @@ function GuildRoll_AdminLog:OnEnable()
 
         -- Filter by Target
         GuildRoll:SafeDewdropAddLine(
-          "text", "Filter by Target",
-          "tooltipText", "Filter log by target player name",
+          "text", L["AdminLog_FilterByTarget"],
+          "tooltipText", L["AdminLog_FilterByTargetTooltip"],
           "func", function()
             StaticPopup_Show("GUILDROLL_ADMINLOG_FILTER_TARGET")
           end
@@ -595,8 +593,8 @@ function GuildRoll_AdminLog:OnEnable()
         -- Remove Target Filter (only when active)
         if filterTarget then
           GuildRoll:SafeDewdropAddLine(
-            "text", "Remove Target Filter",
-            "tooltipText", string.format("Remove target filter (%s)", filterTarget),
+            "text", L["AdminLog_RemoveTargetFilter"],
+            "tooltipText", string.format(L["AdminLog_RemoveTargetFilterTooltip"], filterTarget),
             "func", function()
               filterTarget = nil
               pcall(function() T:Refresh("GuildRoll_AdminLog") end)
@@ -612,8 +610,8 @@ function GuildRoll_AdminLog:OnEnable()
 
         -- Reset Log
         GuildRoll:SafeDewdropAddLine(
-          "text", "Reset Log",
-          "tooltipText", "Clear all local admin log data",
+          "text", L["AdminLog_ResetLog"],
+          "tooltipText", L["AdminLog_ResetLogTooltip"],
           "func", function()
             StaticPopup_Show("GUILDROLL_ADMINLOG_CLEAR_CONFIRM")
           end
@@ -761,7 +759,7 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
   -- Display entries
   if table.getn(displayEntries) == 0 then
     cat:AddLine(
-      "text",  "No entries",
+      "text",  L["AdminLog_NoEntries"],
       "text2", "",
       "text3", "",
       "text4", ""
@@ -1126,16 +1124,17 @@ CreateTextInputDialog(
 
 -- Static popup for clear confirmation (local only)
 StaticPopupDialogs["GUILDROLL_ADMINLOG_CLEAR_CONFIRM"] = {
-  text = "Permanently delete all local Admin Log entries? This cannot be undone.",
+  text = L["AdminLog_ClearConfirm"],
   button1 = TEXT(ACCEPT),
   button2 = TEXT(CANCEL),
   OnAccept = function()
     GuildRoll_adminLogSaved = {}
     GuildRoll_adminLogOrder = {}
     adminLogRuntime = {}
+    orderSet = {}
     expandedRaidEntries = {}
     pcall(function() T:Refresh("GuildRoll_AdminLog") end)
-    GuildRoll:defaultPrint("Admin log cleared (local).")
+    GuildRoll:defaultPrint(L["AdminLog_Cleared"])
   end,
   timeout = 0,
   whileDead = 1,

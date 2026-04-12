@@ -223,8 +223,9 @@ local function TextureNameFromPath(texturePath)
   -- Convert to string if needed
   local path = tostring(texturePath)
   -- Extract filename from path (e.g., "Interface\\Icons\\Spell_Holy_PowerWordFortitude" -> "Spell_Holy_PowerWordFortitude")
-  -- Handle both backslashes and forward slashes (Lua pattern: any char except / or \)
-  local filename = string.match(path, "([^/\\]+)$")
+  -- Handle both backslashes and forward slashes (Lua 5.0 compatible: string.find + string.sub)
+  local s, e = string.find(path, "[^/\\]+$")
+  local filename = s and string.sub(path, s, e) or nil
   if filename then
     return string.lower(filename)
   end
@@ -232,42 +233,20 @@ local function TextureNameFromPath(texturePath)
 end
 
 -- Helper: Get spell icon/texture by spell ID
+-- On Turtle WoW 1.12 there is no reliable cross-class spell icon lookup.
+-- Texture-based detection is handled elsewhere by scanning active buffs on units.
 local function GetSpellIconByID(spellID)
-  -- Try GetSpellTexture if available (TBC+)
-  -- On Turtle WoW / 1.12, GetSpellTexture exists but expects different parameters.
-  -- Use pcall to guard against runtime errors when calling with spell ID.
-  if GetSpellTexture then
-    local ok, texture = pcall(GetSpellTexture, spellID)
-    if ok and texture and type(texture) == "string" then
-      return texture
-    end
-  end
-  
-  -- In 1.12, GetSpellTexture is not available and we would need to scan
-  -- the spellbook to find the texture. However, this won't work for cross-class
-  -- spells that aren't in the player's spellbook, so we simply return nil
-  -- and rely on scanning actual buffs on units to build the texture map.
   return nil
 end
 
--- Helper: Compatibility wrapper for GetSpellInfo (1.12 uses GetSpellName)
+-- Helper: Compatibility wrapper for spell name lookup (1.12 path only)
+-- GetSpellName only works for spells in the player's own spellbook.
+-- Cross-class buffs are resolved when they appear active on raid units.
 local function GetSpellNameByID(spellID)
-  -- Try GetSpellInfo first (TBC+)
-  if GetSpellInfo then
-    local name = GetSpellInfo(spellID)
-    return name
-  end
-  
-  -- Fallback: In 1.12, GetSpellName only works for spells in player's spellbook.
-  -- For cross-class buffs, we rely on detecting the buff when it's active on units.
-  -- The spell ID will be resolved when we scan actual buffs from raid members.
-  -- As a fallback, we'll return nil here and rely on CONSUMABLE_BUFF_KEYWORDS
-  -- for partial matching when spell IDs can't be resolved.
   if GetSpellName then
     local name = GetSpellName(spellID, BOOKTYPE_SPELL)
     if name then return name end
   end
-  
   return nil
 end
 
@@ -321,6 +300,74 @@ local function resolveIDLists()
 
   -- Mark as resolved
   localizedNamesResolved = true
+end
+
+-- Public method: force re-resolution of localized name lists on next check.
+-- Useful if BUFF_REQUIREMENTS or ROLE_CONSUMABLES are modified at runtime.
+function GuildRoll_BuffCheck:InvalidateResolvedLists()
+  localizedNamesResolved = false
+end
+
+-- Module-level cache for buff-tag-to-provider-class lookup (used by BuildBuffTagProviderClass)
+local buffTagProvider = nil
+
+-- Module-level raid class lookup (reset at the start of each OnTooltipUpdate call)
+local raidClassByName = nil
+
+-- Helper: return class-colored player name using Babble-Class (BC) for color lookup.
+-- BC is optional; if unavailable, player names are returned uncolored.
+-- raidClassByName must be reset before each full tooltip rebuild.
+local function coloredPlayer(entry)
+  local playerName = tostring(entry.player or "<unknown>")
+  if not BC then return playerName end
+  local class = entry.class
+  if not class then
+    if not raidClassByName then
+      raidClassByName = {}
+      for i = 1, GetNumRaidMembers() do
+        local rname, _, _, _, rclass = GetRaidRosterInfo(i)
+        if rname then raidClassByName[rname] = rclass end
+      end
+    end
+    class = raidClassByName[entry.player]
+  end
+  if class then
+    return C:Colorize(BC:GetHexColor(class), playerName)
+  end
+  return playerName
+end
+
+-- Helper: build a map from short tag -> providerClass, derived from BUFF_REQUIREMENTS and BUFF_SHORT_NAMES
+local function BuildBuffTagProviderClass()
+  if buffTagProvider then return buffTagProvider end
+  buffTagProvider = {}
+  for providerClass, buffList in pairs(BUFF_REQUIREMENTS) do
+    for _, buffName in ipairs(buffList) do
+      local shortTag = BUFF_SHORT_NAMES[buffName]
+      if shortTag and not buffTagProvider[shortTag] then
+        buffTagProvider[shortTag] = providerClass
+      end
+    end
+  end
+  return buffTagProvider
+end
+
+-- Helper: colorize each semicolon-separated tag in missingList by its provider class color
+local function ColorizeMissingTags(missingList)
+  if not BC then return missingList end
+  local tagMap = BuildBuffTagProviderClass()
+  local parts = {}
+  for tag in string.gmatch(missingList, "([^;]+)") do
+    tag = string.gsub(tag, "^%s*(.-)%s*$", "%1")
+    local providerClass = tagMap[tag]
+    if providerClass then
+      table.insert(parts, C:Colorize(BC:GetHexColor(providerClass), tag))
+    else
+      table.insert(parts, tag)
+    end
+  end
+  if table.getn(parts) == 0 then return missingList end
+  return table.concat(parts, ";")
 end
 
 -- StaticPopup dialogs (defined once at module initialization)
@@ -504,52 +551,6 @@ local function GetShortNameForClass(className)
   end
   
   return className
-end
-
--- Helper: Count distinct paladin blessings on a unit
-local function CountPaladinBlessings(unit)
-  local blessings = {}
-  local blessingTypes = {
-    ["Might"] = true,
-    ["Wisdom"] = true,
-    ["Kings"] = true,
-    ["Light"] = true,
-    ["Salvation"] = true,
-    ["Sanctuary"] = true,
-  }
-  
-  for i = 1, 32 do
-    local buffTexture = UnitBuff(unit, i)
-    if not buffTexture then break end
-    
-    local buffName = GetBuffName(unit, i)
-    if buffName then
-      -- Check if this is a paladin blessing using cached patterns
-      local isBlessing = false
-      for _, pattern in ipairs(PALADIN_BLESSING_PATTERNS) do
-        if MatchBuff(buffName, pattern) then
-          isBlessing = true
-          break
-        end
-      end
-      
-      if isBlessing then
-        -- Extract blessing type (Might, Wisdom, etc.)
-        for bType, _ in pairs(blessingTypes) do
-          if string.find(string.lower(buffName), string.lower(bType), 1, true) then
-            blessings[bType] = true
-            break
-          end
-        end
-      end
-    end
-  end
-  
-  local count = 0
-  for _, _ in pairs(blessings) do
-    count = count + 1
-  end
-  return count
 end
 
 -- Helper: Get list of missing paladin blessings for a unit
@@ -773,7 +774,7 @@ function GuildRoll_BuffCheck:CheckBuffs()
       end
     end
     
-    -- Check paladin blessings using improved CountPaladinBlessings
+    -- Check paladin blessings
     if providers["PALADIN"] and requiredBlessings > 0 then
       local missingBlessings = GetMissingPaladinBlessings(unit, requiredBlessings)
       for _, shortName in ipairs(missingBlessings) do
@@ -1053,6 +1054,11 @@ SlashCmdList["DUMPBUFFS"] = SlashCommandHandler
 
 -- Tablet integration
 function GuildRoll_BuffCheck:OnEnable()
+  -- Create the scan tooltip eagerly so it's ready before any buff scan
+  if not self._scanTooltip then
+    self._scanTooltip = CreateFrame("GameTooltip", "GuildRollBuffCheckTooltip", UIParent, "GameTooltipTemplate")
+    self._scanTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+  end
   if not T:IsRegistered("GuildRoll_BuffCheck") then
     T:Register("GuildRoll_BuffCheck",
       "children", function()
@@ -1068,8 +1074,8 @@ function GuildRoll_BuffCheck:OnEnable()
           "func", function() self:Refresh() end
         )
         GuildRoll:SafeDewdropAddLine(
-          "text", "Close window",
-          "tooltipText", "Close this window",
+          "text", L["Close window"],
+          "tooltipText", L["Close this window"],
           "func", function()
             pcall(function() D:Close() end)
             local frame = GuildRoll:FindDetachedFrame("GuildRoll_BuffCheck")
@@ -1156,64 +1162,9 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
   local isBuffFormat = sample and (sample.missingCount ~= nil)
   local isConsumeFormat = sample and (sample.type == "consume")
   local isFlaskFormat = sample and (sample.type == "flask")
-  
-  -- Helper: return class-colored player name using Babble-Class (BC) for color lookup.
-  -- BC is optional; if unavailable, player names are returned uncolored.
-  -- Build a name->class lookup from raid roster once (fallback when entry.class is nil).
-  local raidClassByName
-  local function coloredPlayer(entry)
-    local playerName = tostring(entry.player or "<unknown>")
-    if not BC then return playerName end
-    local class = entry.class
-    if not class then
-      if not raidClassByName then
-        raidClassByName = {}
-        for i = 1, GetNumRaidMembers() do
-          local rname, _, _, _, rclass = GetRaidRosterInfo(i)
-          if rname then raidClassByName[rname] = rclass end
-        end
-      end
-      class = raidClassByName[entry.player]
-    end
-    if class then
-      return C:Colorize(BC:GetHexColor(class), playerName)
-    end
-    return playerName
-  end
 
-  -- Helper: build a map from short tag -> providerClass, derived from BUFF_REQUIREMENTS and BUFF_SHORT_NAMES
-  local buffTagProvider
-  local function BuildBuffTagProviderClass()
-    if buffTagProvider then return buffTagProvider end
-    buffTagProvider = {}
-    for providerClass, buffList in pairs(BUFF_REQUIREMENTS) do
-      for _, buffName in ipairs(buffList) do
-        local shortTag = BUFF_SHORT_NAMES[buffName]
-        if shortTag and not buffTagProvider[shortTag] then
-          buffTagProvider[shortTag] = providerClass
-        end
-      end
-    end
-    return buffTagProvider
-  end
-
-  -- Helper: colorize each semicolon-separated tag in missingList by its provider class color
-  local function ColorizeMissingTags(missingList)
-    if not BC then return missingList end
-    local tagMap = BuildBuffTagProviderClass()
-    local parts = {}
-    for tag in string.gmatch(missingList, "([^;]+)") do
-      tag = string.gsub(tag, "^%s*(.-)%s*$", "%1")
-      local providerClass = tagMap[tag]
-      if providerClass then
-        table.insert(parts, C:Colorize(BC:GetHexColor(providerClass), tag))
-      else
-        table.insert(parts, tag)
-      end
-    end
-    if table.getn(parts) == 0 then return missingList end
-    return table.concat(parts, ";")
-  end
+  -- Reset the per-call raid roster cache for coloredPlayer
+  raidClassByName = nil
 
   if isBuffFormat then
     local cat = T:AddCategory(

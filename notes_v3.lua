@@ -6,6 +6,15 @@ local MAX_NOTE_LEN = 31
 local MIGRATION_THROTTLE_SECONDS = 30
 local MIGRATION_AUTO_DELAY_SECONDS = 5
 
+-- Cached Crayon-2.0 library reference (acquired once on first use)
+local _CrayonLib = nil
+local function getCrayon()
+  if not _CrayonLib then
+    pcall(function() _CrayonLib = AceLibrary("Crayon-2.0") end)
+  end
+  return _CrayonLib
+end
+
 -- Helper: trim public note with tag to ensure it fits within max length
 -- existing: current public note
 -- tag: tag to append
@@ -185,8 +194,7 @@ function GuildRoll:update_epgp_v3(ep,guild_index,name,officernote,special_action
       local changeEP = ep - prevEP
       
       -- Get Crayon library for coloring (with fallback if not available)
-      local C
-      pcall(function() C = AceLibrary("Crayon-2.0") end)
+      local C = getCrayon()
       
       -- Colorize delta: green for positive, red for negative
       local deltaStr
