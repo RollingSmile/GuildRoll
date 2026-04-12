@@ -233,6 +233,7 @@ function GuildRoll:update_ep_v3(getname,ep)
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
     if (name==getname) then 
       self:update_epgp_v3(ep,i,name,officernote)
+      break
     end
   end  
 end
@@ -251,14 +252,14 @@ function GuildRoll:get_ep_v3(getname,officernote)
   end
   for i = 1, GetNumGuildMembers(1) do
     local name, _, _, _, class, _, note, officernote, _, _ = GetGuildRosterInfo(i)
-    -- Try new {EP} format first
-    local _,_,ep = string.find(officernote,".*{(%d+)}.*")
-    if ep and (name==getname) then
-      return tonumber(ep)
+    if (name==getname) then
+      -- Try new {EP} format first
+      local _,_,ep = string.find(officernote,".*{(%d+)}.*")
+      if ep then return tonumber(ep) end
+      -- Fall back to legacy {EP:GP} format
+      local _,_,ep_legacy = string.find(officernote,".*{(%d+):%-?%d+}.*")
+      return tonumber(ep_legacy)
     end
-    -- Fall back to legacy {EP:GP} format
-    local _,_,ep_legacy = string.find(officernote,".*{(%d+):%-?%d+}.*")
-    if (name==getname) then return tonumber(ep_legacy) end
   end
   return
 end
