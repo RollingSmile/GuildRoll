@@ -143,6 +143,9 @@ local PROVIDER_CLASS_DISPLAY = {
 -- Maximum raid size constant
 local MAX_RAID_SIZE = 40
 
+-- Configuration: Maximum number of players shown per buff row in the tooltip
+local BUFF_PLAYER_DISPLAY_LIMIT = 10
+
 -- Role-based consumable requirements (name-based matching)
 -- Consumables are organized by role rather than class to reduce duplication
 local ROLE_CONSUMABLES = {
@@ -1313,10 +1316,16 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
       end)
 
       local playerParts = {}
-      for j = 1, table.getn(row.players) do
+      local totalPlayers = table.getn(row.players)
+      local displayCount = totalPlayers
+      if displayCount > BUFF_PLAYER_DISPLAY_LIMIT then
+        displayCount = BUFF_PLAYER_DISPLAY_LIMIT
+      end
+      for j = 1, displayCount do
         local p = row.players[j]
         local pColor = CLASS_COLORS[p.class]
-        local pText = string.format("%s(%d)", p.name or "?", p.group)
+        local shortName = (p.name and p.name ~= "" and string.sub(p.name, 1, 3)) or "?"
+        local pText = string.format("%s(%d)", shortName, p.group)
         if pColor then
           pText = string.format("|cff%02x%02x%02x%s|r",
             math.floor(pColor[1] * 255),
@@ -1325,6 +1334,10 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
             pText)
         end
         table.insert(playerParts, pText)
+      end
+      if totalPlayers > BUFF_PLAYER_DISPLAY_LIMIT then
+        local overflow = totalPlayers - BUFF_PLAYER_DISPLAY_LIMIT
+        table.insert(playerParts, string.format("|cffaaaaaa+%d more|r", overflow))
       end
 
       local playerStr = table.concat(playerParts, "  ")
