@@ -27,13 +27,14 @@ end
 GuildRoll_logs = GuildRoll:NewModule("GuildRoll_logs", "AceDB-2.0")
 GuildRoll_logs.tmp = CP:Acquire()
 
--- Persistent per-character saved-personal logs
-GuildRoll_personalLogSaved = GuildRoll_personalLogSaved or {} -- saved between sessions (SavedVariable if added to .toc)
-GuildRoll_personalLogs = GuildRoll_personalLogs or {} -- runtime cache
+-- Persistent per-character saved-personal logs (single source of truth)
+GuildRoll_personalLogSaved = GuildRoll_personalLogSaved or {}
+-- Remove any stale runtime cache; all reads/writes go through GuildRoll_personalLogSaved
+GuildRoll_personalLogs = nil
 
--- Trim runtime cache on load to enforce 100-entry limit
+-- Trim GuildRoll_personalLogSaved on load to enforce 100-entry limit
 local _max_keep = 100
-for _pname, _plog in pairs(GuildRoll_personalLogs) do
+for _pname, _plog in pairs(GuildRoll_personalLogSaved) do
   local _n = table.getn(_plog)
   if _n > _max_keep then
     local _newlog = {}
@@ -41,7 +42,6 @@ for _pname, _plog in pairs(GuildRoll_personalLogs) do
     for _i = _start, _n do
       table.insert(_newlog, _plog[_i])
     end
-    GuildRoll_personalLogs[_pname] = _newlog
     GuildRoll_personalLogSaved[_pname] = _newlog
   end
 end
@@ -61,7 +61,7 @@ function GuildRoll:personalLogAdd(target, action, actor, details)
   if GuildRoll and GuildRoll.StripRealm then name = GuildRoll:StripRealm(target) end
   local ts = date("%Y-%m-%d %H:%M:%S")
 
-  -- Build entry: 4-field format when actor/details provided, legacy 2-field otherwise
+  -- Build entry as a fresh table (value copy, not reference alias)
   local entry
   if actor ~= nil or details ~= nil then
     entry = {ts, action, actor or "", details or ""}
@@ -69,24 +69,20 @@ function GuildRoll:personalLogAdd(target, action, actor, details)
     entry = {ts, action}
   end
 
-  -- Add to runtime cache
-  GuildRoll_personalLogs[name] = GuildRoll_personalLogs[name] or {}
-  table.insert(GuildRoll_personalLogs[name], entry)
-
-  -- Add to persistent storage
+  -- Write ONLY to GuildRoll_personalLogSaved (single source of truth)
   GuildRoll_personalLogSaved[name] = GuildRoll_personalLogSaved[name] or {}
   table.insert(GuildRoll_personalLogSaved[name], entry)
 
-  -- Trim both logs to last 100 entries
+  -- Trim to last 100 entries
   local max_keep = 100
-  if table.getn(GuildRoll_personalLogSaved[name]) > max_keep then
+  local log = GuildRoll_personalLogSaved[name]
+  if table.getn(log) > max_keep then
     local newLog = {}
-    local startIdx = table.getn(GuildRoll_personalLogSaved[name]) - max_keep + 1
-    for i = startIdx, table.getn(GuildRoll_personalLogSaved[name]) do
-      table.insert(newLog, GuildRoll_personalLogSaved[name][i])
+    local startIdx = table.getn(log) - max_keep + 1
+    for i = startIdx, table.getn(log) do
+      table.insert(newLog, log[i])
     end
     GuildRoll_personalLogSaved[name] = newLog
-    GuildRoll_personalLogs[name] = newLog
   end
 end
 
@@ -203,7 +199,7 @@ end
 
 function GuildRoll_logs:BuildLogsTable()
   local playerName = UnitName("player") or "player"
-  local personalLog = GuildRoll_personalLogs[playerName] or {}
+  local personalLog = GuildRoll_personalLogSaved[playerName] or {}
   return self:reverse(personalLog)
 end
 
@@ -393,7 +389,7 @@ function GuildRoll_logs:OnTooltipUpdatePersonal()
     )
   local name = currentPersonalName or UnitName("player")
   if GuildRoll and GuildRoll.StripRealm then name = GuildRoll:StripRealm(name) end
-  local t = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
+  local t = GuildRoll_personalLogSaved[name] or {}
   -- use reverse (show newest first)
   local rev = GuildRoll_logs:reverse(t)
 
@@ -533,7 +529,7 @@ end
 -- Helper function to save personal log to chat for copy-paste (internal fallback only)
 function GuildRoll:SavePersonalLog(name)
   name = name or UnitName("player")
-  local logs = GuildRoll_personalLogs[name] or GuildRoll_personalLogSaved[name] or {}
+  local logs = GuildRoll_personalLogSaved[name] or {}
   
   -- If Tablet personal window is available and shown, refresh that instead
   if personalTabletRegistered then

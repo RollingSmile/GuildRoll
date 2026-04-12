@@ -204,6 +204,20 @@ end
 
 -- Load saved entries into runtime cache on startup
 local function loadSavedEntries()
+  -- De-duplicate GuildRoll_adminLogOrder (may contain duplicate IDs from previous sessions)
+  do
+    local seen = {}
+    local cleanOrder = {}
+    for i = 1, table.getn(GuildRoll_adminLogOrder) do
+      local id = GuildRoll_adminLogOrder[i]
+      if id and not seen[id] then
+        seen[id] = true
+        table.insert(cleanOrder, id)
+      end
+    end
+    GuildRoll_adminLogOrder = cleanOrder
+  end
+
   adminLogRuntime = {}
   entryCountByType = {}
   orderSet = {}
