@@ -62,7 +62,7 @@ function GuildRoll:personalLogAdd(target, action, actor, details)
   GuildRoll_personalLogSaved[name] = GuildRoll_personalLogSaved[name] or {}
   table.insert(GuildRoll_personalLogSaved[name], entry)
 
-  -- Trim to last 100 entries efficiently
+  -- Trim both logs to last 100 entries
   local max_keep = 100
   if table.getn(GuildRoll_personalLogSaved[name]) > max_keep then
     local newLog = {}
@@ -71,6 +71,7 @@ function GuildRoll:personalLogAdd(target, action, actor, details)
       table.insert(newLog, GuildRoll_personalLogSaved[name][i])
     end
     GuildRoll_personalLogSaved[name] = newLog
+    GuildRoll_personalLogs[name] = newLog
   end
 end
 
@@ -91,8 +92,8 @@ function GuildRoll_logs:OnEnable()
           "func", function() GuildRoll_logs:Refresh() end
         )
         GuildRoll:SafeDewdropAddLine(
-          "text", "Close window",
-          "tooltipText", "Close this window",
+          "text", L["Close window"],
+          "tooltipText", L["Close this window"],
           "func", function()
             pcall(function() D:Close() end)
             local frame = GuildRoll:FindDetachedFrame("GuildRoll_logs")
@@ -289,8 +290,8 @@ function GuildRoll_logs:registerPersonalTablet()
         "func", function() GuildRoll_logs:RefreshPersonal() end
       )
       GuildRoll:SafeDewdropAddLine(
-        "text", "Close window",
-        "tooltipText", "Close this window",
+        "text", L["Close window"],
+        "tooltipText", L["Close this window"],
         "func", function()
           pcall(function() D:Close() end)
           local frame = GuildRoll:FindDetachedFrame("GuildRoll_personal_logs")

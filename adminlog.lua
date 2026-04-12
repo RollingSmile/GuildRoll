@@ -86,7 +86,27 @@ local maxEntriesByType = {
   DEFAULT = 200,
 }
 
+-- Ordered list of explicitly tracked action types (all others share the DEFAULT limit)
+local trackedTypes = {"GIVE", "PENALTY", "RAID", "DECAY", "RESET"}
+
+-- Fast lookup set for the tracked types above
+local isTrackedType = {}
+for _, t in ipairs(trackedTypes) do
+  isTrackedType[t] = true
+end
+
+-- Helper: colorize numeric deltas in text
+local function colorizeText(txt)
+  if not txt then return "" end
+  local result = txt
+  result = string.gsub(result, "(%+%d+)", function(m) return C:Green(m) end)
+  result = string.gsub(result, "(-%d+)",  function(m) return C:Red(m) end)
+  return result
+end
+
 -- Apply an admin log entry locally (deduplicates by id)
+local entryCountByType = {}  -- counts per action type, maintained incrementally
+
 local function applyAdminLogEntry(entry)
   if not entry or not entry.id then return end
 
@@ -112,25 +132,62 @@ local function applyAdminLogEntry(entry)
 
   if not found then
     table.insert(GuildRoll_adminLogOrder, entry.id)
+    -- Update per-type counter
+    local actionType = entry.action or ""
+    local counterKey = isTrackedType[actionType] and actionType or "DEFAULT"
+    entryCountByType[counterKey] = (entryCountByType[counterKey] or 0) + 1
   end
 
   -- Per-type trimming: enforce separate limits for each tracked action type
-  local trackedTypes = {"GIVE", "PENALTY", "RAID", "DECAY", "RESET"}
   for _, actionType in ipairs(trackedTypes) do
     local limit = maxEntriesByType[actionType]
-    local typeIds = {}
+    if (entryCountByType[actionType] or 0) > limit then
+      local typeIds = {}
+      for i = 1, table.getn(GuildRoll_adminLogOrder) do
+        local id = GuildRoll_adminLogOrder[i]
+        local e = adminLogRuntime[id]
+        if e and e.action == actionType then
+          table.insert(typeIds, id)
+        end
+      end
+      if table.getn(typeIds) > limit then
+        local toRemove = table.getn(typeIds) - limit
+        local removeSet = {}
+        for i = 1, toRemove do
+          removeSet[typeIds[i]] = true
+        end
+        local newOrder = {}
+        for i = 1, table.getn(GuildRoll_adminLogOrder) do
+          local id = GuildRoll_adminLogOrder[i]
+          if removeSet[id] then
+            GuildRoll_adminLogSaved[id] = nil
+            adminLogRuntime[id] = nil
+          else
+            table.insert(newOrder, id)
+          end
+        end
+        GuildRoll_adminLogOrder = newOrder
+        entryCountByType[actionType] = limit
+      end
+    end
+  end
+
+  -- Default type trimming: all action types not in the tracked list share DEFAULT limit
+  local defaultLimit = maxEntriesByType.DEFAULT
+  if (entryCountByType["DEFAULT"] or 0) > defaultLimit then
+    local defaultIds = {}
     for i = 1, table.getn(GuildRoll_adminLogOrder) do
       local id = GuildRoll_adminLogOrder[i]
       local e = adminLogRuntime[id]
-      if e and e.action == actionType then
-        table.insert(typeIds, id)
+      if e and not isTrackedType[e.action or ""] then
+        table.insert(defaultIds, id)
       end
     end
-    if table.getn(typeIds) > limit then
-      local toRemove = table.getn(typeIds) - limit
+    if table.getn(defaultIds) > defaultLimit then
+      local toRemove = table.getn(defaultIds) - defaultLimit
       local removeSet = {}
       for i = 1, toRemove do
-        removeSet[typeIds[i]] = true
+        removeSet[defaultIds[i]] = true
       end
       local newOrder = {}
       for i = 1, table.getn(GuildRoll_adminLogOrder) do
@@ -143,50 +200,23 @@ local function applyAdminLogEntry(entry)
         end
       end
       GuildRoll_adminLogOrder = newOrder
+      entryCountByType["DEFAULT"] = defaultLimit
     end
-  end
-
-  -- Default type trimming: all action types not in the tracked list share DEFAULT limit
-  local defaultLimit = maxEntriesByType.DEFAULT
-  local defaultIds = {}
-  for i = 1, table.getn(GuildRoll_adminLogOrder) do
-    local id = GuildRoll_adminLogOrder[i]
-    local e = adminLogRuntime[id]
-    if e then
-      local t = e.action or ""
-      if t ~= "GIVE" and t ~= "PENALTY" and t ~= "RAID" and t ~= "DECAY" and t ~= "RESET" then
-        table.insert(defaultIds, id)
-      end
-    end
-  end
-  if table.getn(defaultIds) > defaultLimit then
-    local toRemove = table.getn(defaultIds) - defaultLimit
-    local removeSet = {}
-    for i = 1, toRemove do
-      removeSet[defaultIds[i]] = true
-    end
-    local newOrder = {}
-    for i = 1, table.getn(GuildRoll_adminLogOrder) do
-      local id = GuildRoll_adminLogOrder[i]
-      if removeSet[id] then
-        GuildRoll_adminLogSaved[id] = nil
-        adminLogRuntime[id] = nil
-      else
-        table.insert(newOrder, id)
-      end
-    end
-    GuildRoll_adminLogOrder = newOrder
   end
 end
 
 -- Load saved entries into runtime cache on startup
 local function loadSavedEntries()
   adminLogRuntime = {}
+  entryCountByType = {}
   for i = 1, table.getn(GuildRoll_adminLogOrder) do
     local id = GuildRoll_adminLogOrder[i]
     local entry = GuildRoll_adminLogSaved[id]
     if entry then
       adminLogRuntime[id] = entry
+      local actionType = entry.action or ""
+      local counterKey = isTrackedType[actionType] and actionType or "DEFAULT"
+      entryCountByType[counterKey] = (entryCountByType[counterKey] or 0) + 1
     end
   end
 end
@@ -672,15 +702,6 @@ function GuildRoll_AdminLog:OnTooltipUpdate()
     "child_justify4", "RIGHT"
   )
 
-  -- Helper: colorize numeric deltas in text
-  local function colorizeText(txt)
-    if not txt then return "" end
-    local result = txt
-    result = string.gsub(result, "(%+%d+)", function(m) return C:Green(m) end)
-    result = string.gsub(result, "(-%d+)",  function(m) return C:Red(m) end)
-    return result
-  end
-
   -- Pre-compute lowercase filter values once outside the loop
   local filterAuthorLower = filterAuthor and string.lower(filterAuthor) or nil
   local filterTargetLower = filterTarget and string.lower(filterTarget) or nil
@@ -941,6 +962,14 @@ end
 function GuildRoll_AdminLog:handleSyncMessage(message, sender)
   if not message then return end
 
+  -- Expire stale pending chunk assemblies (older than 120 seconds)
+  local now = GetTime()
+  for id, chunk in pairs(pendingChunks) do
+    if chunk.created and (now - chunk.created) > 120 then
+      pendingChunks[id] = nil
+    end
+  end
+
   local msgType, id, num, data = parseProtocolMsg(message)
   if not msgType or not id or not num or data == nil then return end
 
@@ -957,7 +986,7 @@ function GuildRoll_AdminLog:handleSyncMessage(message, sender)
       end
     else
       -- First chunk of a multi-chunk entry
-      pendingChunks[id] = {total=total, chunks={}, received=0}
+      pendingChunks[id] = {total=total, chunks={}, received=0, created=GetTime()}
       pendingChunks[id].chunks[1] = data
       pendingChunks[id].received = 1
     end
@@ -1009,157 +1038,91 @@ local function GetVisibleStaticPopupEditBox(dialog)
   return nil
 end
 
+-- Factory: create a text-input StaticPopup dialog
+local function CreateTextInputDialog(dialogName, promptText, getInitialValue, onAcceptFn)
+  StaticPopupDialogs[dialogName] = {
+    text = promptText,
+    button1 = TEXT(ACCEPT),
+    button2 = TEXT(CANCEL),
+    hasEditBox = 1,
+    maxLetters = 50,
+    OnAccept = function(self)
+      local editBox = GetVisibleStaticPopupEditBox(self)
+      local text = editBox and editBox.GetText and editBox:GetText() or nil
+      onAcceptFn(text)
+      pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
+    end,
+    OnShow = function(self)
+      local editBox = GetVisibleStaticPopupEditBox(self)
+      if editBox and editBox.SetText then
+        editBox:SetText(getInitialValue() or "")
+        if editBox.SetFocus then editBox:SetFocus() end
+      end
+    end,
+    OnHide = function(self)
+      if ChatFrameEditBox and ChatFrameEditBox.IsVisible and ChatFrameEditBox:IsVisible() then
+        ChatFrameEditBox:SetFocus()
+      end
+      local editBox = GetVisibleStaticPopupEditBox(self)
+      if editBox and editBox.SetText then editBox:SetText("") end
+    end,
+    EditBoxOnEnterPressed = function(editBox)
+      local text = editBox and editBox.GetText and editBox:GetText() or nil
+      onAcceptFn(text)
+      pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
+      local parent = editBox and editBox.GetParent and editBox:GetParent()
+      if parent and parent.Hide then parent:Hide() end
+    end,
+    EditBoxOnEscapePressed = function(editBox)
+      local parent = editBox and editBox.GetParent and editBox:GetParent()
+      if parent and parent.Hide then parent:Hide() end
+    end,
+    timeout = 0,
+    exclusive = 1,
+    whileDead = 1,
+    hideOnEscape = 1,
+  }
+end
+
 -- Static popup for search
-StaticPopupDialogs["GUILDROLL_ADMINLOG_SEARCH"] = {
-  text = "Search Admin Log:",
-  button1 = TEXT(ACCEPT),
-  button2 = TEXT(CANCEL),
-  hasEditBox = 1,
-  maxLetters = 50,
-  OnAccept = function(self)
-    local editBox = GetVisibleStaticPopupEditBox(self)
-    local text = editBox and editBox.GetText and editBox:GetText() or nil
+CreateTextInputDialog(
+  "GUILDROLL_ADMINLOG_SEARCH",
+  "Search Admin Log:",
+  function() return searchText end,
+  function(text)
     if text and text ~= "" then
       searchText = text
-      pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
     end
-  end,
-  OnShow = function(self)
-    local editBox = GetVisibleStaticPopupEditBox(self)
-    if editBox and editBox.SetText then
-      editBox:SetText(searchText or "")
-      if editBox.SetFocus then editBox:SetFocus() end
-    end
-  end,
-  OnHide = function(self)
-    if ChatFrameEditBox and ChatFrameEditBox.IsVisible and ChatFrameEditBox:IsVisible() then
-      ChatFrameEditBox:SetFocus()
-    end
-    local editBox = GetVisibleStaticPopupEditBox(self)
-    if editBox and editBox.SetText then editBox:SetText("") end
-  end,
-  EditBoxOnEnterPressed = function(editBox)
-    local text = editBox and editBox.GetText and editBox:GetText() or nil
-    if text and text ~= "" then
-      searchText = text
-      pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
-    end
-    local parent = editBox and editBox.GetParent and editBox:GetParent()
-    if parent and parent.Hide then parent:Hide() end
-  end,
-  EditBoxOnEscapePressed = function(editBox)
-    local parent = editBox and editBox.GetParent and editBox:GetParent()
-    if parent and parent.Hide then parent:Hide() end
-  end,
-  timeout = 0,
-  exclusive = 1,
-  whileDead = 1,
-  hideOnEscape = 1
-}
+  end
+)
 
 -- Static popup for filter by author
-StaticPopupDialogs["GUILDROLL_ADMINLOG_FILTER_AUTHOR"] = {
-  text = "Filter by Author:",
-  button1 = TEXT(ACCEPT),
-  button2 = TEXT(CANCEL),
-  hasEditBox = 1,
-  maxLetters = 50,
-  OnAccept = function(self)
-    local editBox = GetVisibleStaticPopupEditBox(self)
-    local text = editBox and editBox.GetText and editBox:GetText() or nil
+CreateTextInputDialog(
+  "GUILDROLL_ADMINLOG_FILTER_AUTHOR",
+  "Filter by Author:",
+  function() return filterAuthor end,
+  function(text)
     if text and text ~= "" then
       filterAuthor = text
     else
       filterAuthor = nil
     end
-    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
-  end,
-  OnShow = function(self)
-    local editBox = GetVisibleStaticPopupEditBox(self)
-    if editBox and editBox.SetText then
-      editBox:SetText(filterAuthor or "")
-      if editBox.SetFocus then editBox:SetFocus() end
-    end
-  end,
-  OnHide = function(self)
-    if ChatFrameEditBox and ChatFrameEditBox.IsVisible and ChatFrameEditBox:IsVisible() then
-      ChatFrameEditBox:SetFocus()
-    end
-    local editBox = GetVisibleStaticPopupEditBox(self)
-    if editBox and editBox.SetText then editBox:SetText("") end
-  end,
-  EditBoxOnEnterPressed = function(editBox)
-    local text = editBox and editBox.GetText and editBox:GetText() or nil
-    if text and text ~= "" then
-      filterAuthor = text
-    else
-      filterAuthor = nil
-    end
-    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
-    local parent = editBox and editBox.GetParent and editBox:GetParent()
-    if parent and parent.Hide then parent:Hide() end
-  end,
-  EditBoxOnEscapePressed = function(editBox)
-    local parent = editBox and editBox.GetParent and editBox:GetParent()
-    if parent and parent.Hide then parent:Hide() end
-  end,
-  timeout = 0,
-  exclusive = 1,
-  whileDead = 1,
-  hideOnEscape = 1
-}
+  end
+)
 
 -- Static popup for filter by target
-StaticPopupDialogs["GUILDROLL_ADMINLOG_FILTER_TARGET"] = {
-  text = "Filter by Target Player:",
-  button1 = TEXT(ACCEPT),
-  button2 = TEXT(CANCEL),
-  hasEditBox = 1,
-  maxLetters = 50,
-  OnAccept = function(self)
-    local editBox = GetVisibleStaticPopupEditBox(self)
-    local text = editBox and editBox.GetText and editBox:GetText() or nil
+CreateTextInputDialog(
+  "GUILDROLL_ADMINLOG_FILTER_TARGET",
+  "Filter by Target Player:",
+  function() return filterTarget end,
+  function(text)
     if text and text ~= "" then
       filterTarget = text
     else
       filterTarget = nil
     end
-    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
-  end,
-  OnShow = function(self)
-    local editBox = GetVisibleStaticPopupEditBox(self)
-    if editBox and editBox.SetText then
-      editBox:SetText(filterTarget or "")
-      if editBox.SetFocus then editBox:SetFocus() end
-    end
-  end,
-  OnHide = function(self)
-    if ChatFrameEditBox and ChatFrameEditBox.IsVisible and ChatFrameEditBox:IsVisible() then
-      ChatFrameEditBox:SetFocus()
-    end
-    local editBox = GetVisibleStaticPopupEditBox(self)
-    if editBox and editBox.SetText then editBox:SetText("") end
-  end,
-  EditBoxOnEnterPressed = function(editBox)
-    local text = editBox and editBox.GetText and editBox:GetText() or nil
-    if text and text ~= "" then
-      filterTarget = text
-    else
-      filterTarget = nil
-    end
-    pcall(function() if T and T:IsRegistered("GuildRoll_AdminLog") then T:Refresh("GuildRoll_AdminLog") end end)
-    local parent = editBox and editBox.GetParent and editBox:GetParent()
-    if parent and parent.Hide then parent:Hide() end
-  end,
-  EditBoxOnEscapePressed = function(editBox)
-    local parent = editBox and editBox.GetParent and editBox:GetParent()
-    if parent and parent.Hide then parent:Hide() end
-  end,
-  timeout = 0,
-  exclusive = 1,
-  whileDead = 1,
-  hideOnEscape = 1
-}
+  end
+)
 
 -- Static popup for clear confirmation (local only)
 StaticPopupDialogs["GUILDROLL_ADMINLOG_CLEAR_CONFIRM"] = {
