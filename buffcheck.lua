@@ -96,6 +96,53 @@ local BUFF_SHORT_NAMES = {
   ["Blessing of Sanctuary"] = "Sanc",
 }
 
+-- Provider class colors for buff column labels
+local PROVIDER_CLASS_COLORS = {
+  PRIEST  = {1.0,  1.0,  0.6},
+  DRUID   = {1.0,  0.49, 0.04},
+  MAGE    = {0.41, 0.8,  0.94},
+  PALADIN = {0.96, 0.55, 0.73},
+}
+
+-- Full WoW class colors for player name coloring
+local CLASS_COLORS = {
+  WARRIOR = {0.78, 0.61, 0.43},
+  PALADIN = {0.96, 0.55, 0.73},
+  HUNTER  = {0.67, 0.83, 0.45},
+  ROGUE   = {1.0,  0.96, 0.41},
+  PRIEST  = {1.0,  1.0,  1.0},
+  SHAMAN  = {0.0,  0.44, 0.87},
+  MAGE    = {0.41, 0.8,  0.94},
+  WARLOCK = {0.58, 0.51, 0.79},
+  DRUID   = {1.0,  0.49, 0.04},
+}
+
+-- Reverse lookup: buff short name -> provider class (uppercase)
+local BUFF_SHORT_TO_CLASS = {
+  ["Stam"]       = "PRIEST",
+  ["Spirit"]     = "PRIEST",
+  ["ShadowProt"] = "PRIEST",
+  ["MotW"]       = "DRUID",
+  ["Int"]        = "MAGE",
+  ["Might"]      = "PALADIN",
+  ["Wisdom"]     = "PALADIN",
+  ["Kings"]      = "PALADIN",
+  ["Lights"]     = "PALADIN",
+  ["Salv"]       = "PALADIN",
+  ["Sanc"]       = "PALADIN",
+}
+
+-- Display name (title case) for each provider class token
+local PROVIDER_CLASS_DISPLAY = {
+  PRIEST  = "Priest",
+  DRUID   = "Druid",
+  MAGE    = "Mage",
+  PALADIN = "Paladin",
+}
+
+-- Maximum raid size constant
+local MAX_RAID_SIZE = 40
+
 -- Role-based consumable requirements (name-based matching)
 -- Consumables are organized by role rather than class to reduce duplication
 local ROLE_CONSUMABLES = {
@@ -1168,44 +1215,129 @@ function GuildRoll_BuffCheck:OnTooltipUpdate()
 
   if isBuffFormat then
     local cat = T:AddCategory(
-      "columns", 4,
-      "text", C:Yellow("Grp"),
-      "text2", C:Yellow(L["Name"] or "Name"),
-      "text3", C:Yellow(L["Missing"] or "Missing"),
-      "text4", C:Yellow(L["Details"] or "Details")
+      "columns", 3,
+      "text",  C:Orange(L["Buff"] or "Buff"),          "child_justify",  "LEFT",
+      "text2", C:Orange(L["Missing"] or "Missing"),    "child_justify2", "CENTER",
+      "text3", C:Orange(L["PlayerGroup"] or "Player(group)"), "child_justify3", "LEFT"
     )
-    
-    for _, entry in ipairs(report) do
-      local missingCount = tonumber(entry.missingCount) or 0
-      local totalReq = tonumber(entry.totalRequired) or 0
-      local missingList = tostring(entry.missingList or "")
-      
-      local countText = string.format("%d/%d", missingCount, totalReq)
-      
-      local countColor = C:Red(countText)
-      if missingCount <= BUFF_MISSING_SEVERITY_THRESHOLD then
-        countColor = C:Orange(countText)
+
+    if allOk or table.getn(report) == 0 then
+      cat:AddLine("text", C:Green(L["BuffCheck_AllOk"] or "All members have all buffs!"), "text2", "", "text3", "")
+      T:SetHint(L["BuffCheck_AllOkHint"] or "Buff Check: all OK")
+      return
+    end
+
+    -- Build pivot: buffShortName -> {count, players[], providerClass}
+    local buffRows = {}
+    local buffOrder = {}
+
+    for i = 1, table.getn(report) do
+      local entry = report[i]
+      if entry.missingList and entry.missingList ~= "" then
+        local list = entry.missingList
+        local pos = 1
+        local len = string.len(list)
+        while pos <= len do
+          local sep = string.find(list, ";", pos, true)
+          local buffName
+          if sep then
+            buffName = string.sub(list, pos, sep - 1)
+            pos = sep + 1
+          else
+            buffName = string.sub(list, pos)
+            pos = len + 1
+          end
+          if buffName and buffName ~= "" then
+            if not buffRows[buffName] then
+              buffRows[buffName] = {
+                count = 0,
+                players = {},
+                providerClass = BUFF_SHORT_TO_CLASS[buffName] or "UNKNOWN",
+              }
+              table.insert(buffOrder, buffName)
+            end
+            buffRows[buffName].count = buffRows[buffName].count + 1
+            table.insert(buffRows[buffName].players, {
+              name  = entry.player,
+              group = entry.group or 0,
+              class = NormalizeClassToken(entry.class or ""),
+            })
+          end
+        end
       end
-      
-      local detailsColor = ColorizeMissingTags(missingList)
-      
-      local groupNum = tostring(entry.group or 0)
-      local groupText
-      if C.White then
-        groupText = C:White(groupNum)
-      elseif C.Colorize then
-        groupText = C:Colorize("ffffff", groupNum)
+    end
+
+    -- Sort buffOrder by count descending, then alphabetically
+    table.sort(buffOrder, function(a, b)
+      local ca = buffRows[a] and buffRows[a].count or 0
+      local cb = buffRows[b] and buffRows[b].count or 0
+      if ca ~= cb then return ca > cb end
+      return a < b
+    end)
+
+    local numRaid = GetNumRaidMembers()
+    local halfRaid = math.floor((numRaid > 0 and numRaid or MAX_RAID_SIZE) / 2)
+
+    for i = 1, table.getn(buffOrder) do
+      local buffLabel = buffOrder[i]
+      local row = buffRows[buffLabel]
+
+      -- Column 1: [ClassName] BuffLabel, colored by provider class
+      local provClass = row.providerClass
+      local col = PROVIDER_CLASS_COLORS[provClass]
+      local buffText
+      if col then
+        local displayClass = PROVIDER_CLASS_DISPLAY[provClass] or provClass
+        local label = string.format("[%s] %s", displayClass, buffLabel)
+        buffText = string.format("|cff%02x%02x%02x%s|r",
+          math.floor(col[1] * 255),
+          math.floor(col[2] * 255),
+          math.floor(col[3] * 255),
+          label)
       else
-        groupText = groupNum
+        buffText = string.format("[%s] %s", provClass, buffLabel)
       end
-      
+
+      -- Column 2: count, red if > half raid, orange otherwise
+      local countText
+      if row.count > halfRaid then
+        countText = C:Red(tostring(row.count))
+      else
+        countText = C:Orange(tostring(row.count))
+      end
+
+      -- Column 3: "Name(G) Name(G) ..." sorted by group then name, each colored by class
+      table.sort(row.players, function(a, b)
+        if a.group ~= b.group then return a.group < b.group end
+        return (a.name or "") < (b.name or "")
+      end)
+
+      local playerParts = {}
+      for j = 1, table.getn(row.players) do
+        local p = row.players[j]
+        local pColor = CLASS_COLORS[p.class]
+        local pText = string.format("%s(%d)", p.name or "?", p.group)
+        if pColor then
+          pText = string.format("|cff%02x%02x%02x%s|r",
+            math.floor(pColor[1] * 255),
+            math.floor(pColor[2] * 255),
+            math.floor(pColor[3] * 255),
+            pText)
+        end
+        table.insert(playerParts, pText)
+      end
+
+      local playerStr = table.concat(playerParts, "  ")
+
       cat:AddLine(
-        "text", groupText,
-        "text2", coloredPlayer(entry),
-        "text3", countColor,
-        "text4", detailsColor
+        "text",  buffText,
+        "text2", countText,
+        "text3", playerStr
       )
     end
+
+    local missingPlayers = table.getn(report)
+    T:SetHint(string.format(L["BuffCheck_Hint"] or "Buff Check: %d player(s) missing buffs", missingPlayers))
     return
   end
   
