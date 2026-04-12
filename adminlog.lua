@@ -291,7 +291,7 @@ end
 -- ── Serialization helpers for officer sync ──────────────────────────────────
 
 local FIELD_SEP = "\t"  -- tab between serialized fields
-local CHUNK_SIZE = 235  -- max bytes per sync message chunk (255 limit minus ~20 bytes protocol overhead)
+local CHUNK_SIZE = 248  -- max bytes per sync message chunk (prefix GR_ALOG = 6 chars, WoW 1.12 limit = 255 bytes total)
 local EM_DASH = "\226\128\148"  -- UTF-8 em dash used in player detail display lines
 
 -- Split str on tab characters; handles empty fields correctly
@@ -438,10 +438,20 @@ local function sendAdminLogSync(entry)
   local serialized = serializeEntry(entry)
   if not serialized then return end
 
+  local sendFn
+  if type(ChatThrottleLib) == "table" and ChatThrottleLib.SendAddonMessage then
+    sendFn = function(msg)
+      pcall(function() ChatThrottleLib:SendAddonMessage("NORMAL", ALOG_SYNC_PREFIX, msg, "GUILD") end)
+    end
+  else
+    sendFn = function(msg)
+      pcall(function() SendAddonMessage(ALOG_SYNC_PREFIX, msg, "GUILD") end)
+    end
+  end
+
   local len = string.len(serialized)
   if len <= CHUNK_SIZE then
-    local msg = "S|" .. entry.id .. "|1|" .. serialized
-    pcall(function() SendAddonMessage(ALOG_SYNC_PREFIX, msg, "GUILD") end)
+    sendFn("S|" .. entry.id .. "|1|" .. serialized)
   else
     local chunks = {}
     local pos = 1
@@ -457,7 +467,7 @@ local function sendAdminLogSync(entry)
       else
         msg = "C|" .. entry.id .. "|" .. ci .. "|" .. chunks[ci]
       end
-      pcall(function() SendAddonMessage(ALOG_SYNC_PREFIX, msg, "GUILD") end)
+      sendFn(msg)
     end
   end
 end
